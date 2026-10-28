@@ -259,7 +259,7 @@ fun VoiceBubble(m: Message, mine: Boolean) {
 @Composable
 fun TranscribeButton(mine: Boolean) {
     val p = P
-    val prem = ru.volshebnymir.lumo.core.AppModel.isPremium
+    val prem = ru.volshebnymir.lumo.core.AppModel.me?.premium == true
     val fg = if (mine) Color.White else p.a1
     Box(Modifier.size(width = 42.dp, height = 36.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
         .background(if (mine) Color.White.copy(alpha = 0.2f) else p.a1.copy(alpha = 0.14f))
