@@ -184,7 +184,6 @@ struct SettingsView: View {
 
 struct MyProfileView: View {
     @EnvironmentObject var model: AppModel
-    @State private var showExtra = false
     @State private var avatarPick: PhotosPickerItem?
     @State private var showPicker = false
     @State private var addStory = false
@@ -262,7 +261,6 @@ struct MyProfileView: View {
             }
         }
         .background(Theme.bg.ignoresSafeArea())
-        .sheet(isPresented: $showExtra) { ProfileExtraSheet().environmentObject(model) }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -363,6 +361,7 @@ struct ProfileEditView: View {
     @State private var dateSheet = false
     @State private var datePick = Date()
     @State private var channelSheet = false
+    @State private var showExtra = false
     @State private var pwSheet = false
     @State private var confirmDelete = false
     @State private var loaded = false
@@ -441,10 +440,7 @@ struct ProfileEditView: View {
                     }
                     .buttonStyle(RowButtonStyle())
                     Divider().overlay(Theme.line).padding(.leading, 68)
-                    Button { model.premium { showExtra = true } } label: {
-                        TGIconRow(icon: "link", color: Color(hex: 0xffb020), title: "Расширенный профиль", value: "Ссылки · Premium")
-                    }
-                    .buttonStyle(RowButtonStyle())
+                    ExtraProfileRow(show: $showExtra)
                     Divider().overlay(Theme.line).padding(.leading, 68)
                     Button { channelSheet = true } label: {
                         TGIconRow(icon: "megaphone.fill", color: Color(hex: 0xffa33a), title: "Канал", value: me?.channelTitle ?? "Добавить")
@@ -512,6 +508,7 @@ struct ProfileEditView: View {
             }
             .presentationDetents([.height(340)])
         }
+        .sheet(isPresented: $showExtra) { ProfileExtraSheet().environmentObject(model) }
         .sheet(isPresented: $channelSheet) { ChannelPickSheet().environmentObject(model).presentationDetents([.medium, .large]) }
         .sheet(isPresented: $pwSheet) { PasswordSheet().environmentObject(model).presentationDetents([.height(300)]) }
         .confirmationDialog("Удалить аккаунт навсегда? Вернуть его будет нельзя.", isPresented: $confirmDelete, titleVisibility: .visible) {

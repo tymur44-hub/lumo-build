@@ -44,6 +44,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import ru.volshebnymir.lumo.core.AppModel
 import ru.volshebnymir.lumo.core.premium
+import ru.volshebnymir.lumo.core.isPremium
 import ru.volshebnymir.lumo.core.Message
 import ru.volshebnymir.lumo.core.Screen
 import ru.volshebnymir.lumo.core.SearchResult

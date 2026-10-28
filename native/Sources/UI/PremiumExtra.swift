@@ -26,7 +26,7 @@ final class ExtraStore: ObservableObject {
         d.set(bub, forKey: "lm_bub")
     }
 
-    func bubFill(_ chat: String) -> AnyShapeStyle {
+    @MainActor func bubFill(_ chat: String) -> AnyShapeStyle {
         guard AppModel.shared.isPremium, let i = bub[chat], i > 0, i < ExtraStore.bubs.count, let c = ExtraStore.bubs[i] else { return AnyShapeStyle(Theme.out) }
         return AnyShapeStyle(LinearGradient(colors: [Color(hex: c.0), Color(hex: c.1)], startPoint: .topLeading, endPoint: .bottomTrailing))
     }
@@ -259,5 +259,18 @@ struct ProfileLinksView: View {
                 return (t, u)
             }
         }
+    }
+}
+
+/// Строка «Расширенный профиль» в редактировании профиля
+struct ExtraProfileRow: View {
+    @EnvironmentObject var model: AppModel
+    @Binding var show: Bool
+
+    var body: some View {
+        Button { model.premium { show = true } } label: {
+            TGIconRow(icon: "link", color: Color(hex: 0xffb020), title: "Расширенный профиль", value: "Ссылки · Premium")
+        }
+        .buttonStyle(RowButtonStyle())
     }
 }
