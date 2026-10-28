@@ -113,7 +113,7 @@ object Extra {
         androidx.biometric.BiometricManager.from(c).canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK) == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS
     }.getOrDefault(false)
 
-    fun setBio(on: Boolean) { bio = on; prefs().edit().putBoolean("bio", on).apply() }
+    fun chooseBio(on: Boolean) { bio = on; prefs().edit().putBoolean("bio", on).apply() }
 
     /** Запрос отпечатка или лица; onOk вызывается при успехе */
     fun askBio(c: Context, onOk: () -> Unit) {
@@ -293,12 +293,12 @@ fun LockSettingsDialog(onClose: () -> Unit) {
                 "menu" -> {
                     Text("Блокировка включена", color = p.text, fontWeight = FontWeight.Black, fontSize = 20.sp)
                     Text("Код спрашивается при входе и после сворачивания больше чем на минуту.", color = p.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 10.dp))
-                    if (Extra.canBio(LocalContext.current)) Row(Modifier.fillMaxWidth().clickable { Extra.setBio(!Extra.bio) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (Extra.canBio(LocalContext.current)) Row(Modifier.fillMaxWidth().clickable { Extra.chooseBio(!Extra.bio) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Отпечаток или лицо", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             Text("Разблокировка без ввода кода", color = p.muted, fontSize = 12.5.sp)
                         }
-                        androidx.compose.material3.Switch(checked = Extra.bio, onCheckedChange = { Extra.setBio(it) })
+                        androidx.compose.material3.Switch(checked = Extra.bio, onCheckedChange = { Extra.chooseBio(it) })
                     }
                     Text("Сменить код", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().clickable { step = "old-change" }.padding(10.dp), textAlign = TextAlign.Center)
                     Text("Выключить", color = p.danger, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().clickable { step = "old-off" }.padding(10.dp), textAlign = TextAlign.Center)
