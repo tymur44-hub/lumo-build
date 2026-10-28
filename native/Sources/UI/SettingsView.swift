@@ -3,7 +3,7 @@ import PhotosUI
 import UIKit
 
 enum SettingsPage: Hashable {
-    case premium, profile, profileEdit, calls, notifications, privacy, about, blocked, look, username, colors
+    case premium, profile, profileEdit, calls, notifications, privacy, about, blocked, look, username, colors, devices, language
     case privacyKey(String)
     case msgPrivacy
 }
@@ -75,6 +75,14 @@ struct SettingsView: View {
                             SettingsRow(icon: "paintpalette.fill", color: Color(hex: 0x22a6ff), title: "Оформление",
                                         subtitle: lookSubtitle)
                         }
+                        divider
+                        NavigationLink(value: SettingsPage.devices) {
+                            SettingsRow(icon: "laptopcomputer.and.iphone", color: Color(hex: 0x2bd67b), title: "Устройства", subtitle: "Активные сеансы")
+                        }
+                        divider
+                        NavigationLink(value: SettingsPage.language) {
+                            SettingsRow(icon: "globe", color: Color(hex: 0xa35bff), title: "Язык", subtitle: Lang.all.first { $0.code == Lang.current }?.title ?? "Русский")
+                        }
                     }
                     SettingsGroup {
                         Button { share = true } label: {
@@ -109,6 +117,8 @@ struct SettingsView: View {
                 case .blocked: BlockedView()
                 case .about: AboutView()
                 case .look: AppearanceView()
+                case .devices: DevicesView()
+                case .language: LanguageView()
                 case .username: UsernameEditView()
                 case .colors: ColorsEditView()
                 case .privacyKey(let k): PrivacyKeyView(key: k)

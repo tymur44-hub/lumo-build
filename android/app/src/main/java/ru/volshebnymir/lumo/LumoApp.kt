@@ -11,6 +11,7 @@ class LumoApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         ru.volshebnymir.lumo.ui.Look.init(this)
+        ru.volshebnymir.lumo.ui.Lang.load(this)
         ru.volshebnymir.lumo.ui.Extra.init(this)
         AppModel.init(this)
         AppModel.scope.launch { ru.volshebnymir.lumo.core.Net.pick(force = true) }

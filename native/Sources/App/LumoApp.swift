@@ -10,6 +10,7 @@ struct LumoApp: App {
     @StateObject private var calls = CallManager.shared
     @StateObject private var look = Appearance.shared
     @Environment(\.scenePhase) private var phase
+    @AppStorage("lm_lang") private var lang = "ru"
 
     var body: some Scene {
         WindowGroup {
@@ -18,8 +19,9 @@ struct LumoApp: App {
                 .environmentObject(calls)
                 .environmentObject(look)
                 .preferredColorScheme(look.scheme)
+                .environment(\.locale, Locale(identifier: lang))
                 .tint(Theme.a1)
-                .id(look.version)
+                .id("\(look.version)-\(lang)")
                 .fullScreenCover(item: $model.miniApp) { MiniAppView(req: $0).environmentObject(model).environmentObject(look) }
                 .onOpenURL { url in handle(url) }
                 .overlay { LockOverlayView() }

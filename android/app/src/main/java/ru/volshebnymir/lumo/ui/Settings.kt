@@ -25,7 +25,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -125,6 +124,10 @@ fun SettingsScreen() {
             Divider()
             SettingsRow(Icons.Filled.Palette, Color(0xFF22A6FF), "Оформление",
                 (when (Look.theme) { "light" -> "Светлая тема"; "dark" -> "Тёмная тема"; else -> "Как в системе" }) + " · цвет, текст") { AppModel.push(Screen.Appearance) }
+            Divider()
+            SettingsRow(Icons.Filled.Devices, Color(0xFF2BD67B), "Устройства", "Активные сеансы") { AppModel.push(Screen.Devices) }
+            Divider()
+            SettingsRow(Icons.Filled.Language, Color(0xFF3A7BFF), "Язык", Lang.all.first { it.first == Lang.code }.second) { AppModel.push(Screen.Language) }
         }
         Card {
             SettingsRow(Icons.Filled.PersonAdd, Color(0xFFFF5B8A), "Пригласить друзей", "Поделиться ссылкой на ваш профиль") { share(ctx, "Я в Lumo — напиши мне: " + AppModel.profileLink) }

@@ -37,14 +37,14 @@ struct AnimatedEmoji: View {
             ForEach(burst, id: \.self) { i in BurstParticle(emoji: emoji, size: size * 0.4, seed: i) }
         }
         .contentShape(Rectangle())
-        .onTapGesture {
+        .simultaneousGesture(TapGesture().onEnded {
             guard tappable else { return }
             tapAt = Date()
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             let base = Int(Date().timeIntervalSince1970 * 10) % 100000
             burst = (0..<7).map { base + $0 }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { burst = [] }
-        }
+        })
     }
 
     private func frame(_ t: TimeInterval, _ a: Double) -> (scale: CGFloat, rot: Double, y: CGFloat, anchor: UnitPoint) {

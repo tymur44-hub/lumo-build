@@ -57,7 +57,6 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -160,9 +159,9 @@ private val PLANS = listOf(
     Plan("month", "1 месяц", "199 ₽", "без скидки"),
 )
 
-private class Feat(val icon: androidx.compose.ui.graphics.vector.ImageVector, val color: Color, val title: String, val desc: String, val soon: Boolean = false)
+class Feat(val icon: androidx.compose.ui.graphics.vector.ImageVector, val color: Color, val title: String, val desc: String, val soon: Boolean = false)
 
-private val FEATURES = listOf(
+val FEATURES = listOf(
     Feat(Icons.Filled.AutoAwesome, Color(0xFFFF9F0A), "Анимированные смайлик-статусы", "Двигающийся значок рядом с именем"),
     Feat(Icons.Filled.Celebration, Color(0xFFFF5B7A), "Анимированные эффекты сообщений", "Удерживайте кнопку отправки и выберите эффект"),
     Feat(Icons.Filled.EmojiEmotions, Color(0xFFFFB020), "Анимированные эмодзи", "Вкладка «Анимации» в панели эмодзи: оживающие эмодзи в любом чате"),
@@ -216,12 +215,18 @@ fun PremiumScreen() {
     var until by remember { mutableStateOf<String?>(null) }
     var owner by remember { mutableStateOf(false) }
     var emo by remember { mutableStateOf(false) }
+    var detail by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(Unit) {
         val r = runCatching { Api.rpc("lm_my_premium") }.getOrNull()
         val o = (r as? JSONObject) ?: (r as? JSONArray)?.optJSONObject(0)
         if (o != null) { owner = o.optBoolean("owner"); until = o.optString("until").takeIf { it.isNotEmpty() && it != "null" } }
     }
     if (emo) EmojiPickerDialog { emo = false }
+    detail?.let { i ->
+        PremiumDetailDialog(i, owner, onClose = { detail = null }) {
+            if (owner) { detail = null; scope.launch { AppModel.openByUsername("lumo_premium") } } else AppModel.say("Оплата пока временно недоступна")
+        }
+    }
     Column(Modifier.fillMaxSize().background(p.bg)) {
         Box {
             TopBar("")
@@ -270,7 +275,7 @@ fun PremiumScreen() {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel)) {
                     FEATURES.forEachIndexed { i, f ->
                         if (i > 0) Box(Modifier.padding(start = 62.dp).fillMaxWidth().height(1.dp).background(p.line))
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().clickable { detail = i }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(f.color), contentAlignment = Alignment.Center) {
                                 Icon(f.icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
                             }

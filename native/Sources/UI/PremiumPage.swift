@@ -69,7 +69,7 @@ struct EmojiStatusSheet: View {
 
 // MARK: - Страница Lumo Premium
 
-private struct Feat: Identifiable {
+struct Feat: Identifiable {
     let id = UUID()
     let icon: String, color: UInt32, title: String, desc: String
     var soon = false
@@ -102,12 +102,15 @@ struct ShimmerButton: View {
     }
 }
 
+private struct DetailIdx: Identifiable { let i: Int; var id: Int { i } }
+
 struct PremiumPageView: View {
     @EnvironmentObject var model: AppModel
     @State private var plan = "year"
     @State private var until: String?
     @State private var owner = false
     @State private var showEmoji = false
+    @State private var detail: Int?
 
     private let plans: [(String, String, String, String)] = [
         ("year", "12 месяцев", "2 490 ₽", "около 207 ₽ в месяц · выгода 48%"),
@@ -198,6 +201,7 @@ struct PremiumPageView: View {
                         VStack(spacing: 0) {
                             ForEach(Array(features.enumerated()), id: \.element.id) { i, f in
                                 if i > 0 { Divider().overlay(Theme.line).padding(.leading, 62) }
+                                Button { detail = i } label: {
                                 HStack(spacing: 14) {
                                     Image(systemName: f.icon).font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
                                         .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: f.color)))
@@ -212,8 +216,11 @@ struct PremiumPageView: View {
                                         Text(f.desc).font(.system(size: 12.5)).foregroundColor(Theme.muted)
                                     }
                                     Spacer(minLength: 0)
+                                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.muted.opacity(0.6))
                                 }
-                                .padding(.horizontal, 14).padding(.vertical, 11)
+                                .padding(.horizontal, 14).padding(.vertical, 11).contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
@@ -239,6 +246,12 @@ struct PremiumPageView: View {
         .background(Theme.bg.ignoresSafeArea())
         .navigationTitle("Lumo Premium").navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showEmoji) { EmojiStatusSheet() }
+        .sheet(item: Binding(get: { detail.map { DetailIdx(i: $0) } }, set: { detail = $0?.i })) { d in
+            PremiumDetailSheet(features: features, index: d.i, owner: owner) {
+                if owner { detail = nil; Task { await model.openByUsername("lumo_premium") } } else { model.say("Оплата пока временно недоступна") }
+            }
+            .environmentObject(model)
+        }
         .task {
             if let r = try? await API.shared.rpc("lm_my_premium", [:]) {
                 let o = (r as? [String: Any]) ?? ((r as? [[String: Any]])?.first)

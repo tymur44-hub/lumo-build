@@ -83,7 +83,7 @@ struct GradientButton: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                if loading { ProgressView().tint(.white) } else { Text(title).font(.headline) }
+                if loading { ProgressView().tint(.white) } else { Text(Lang.tr(title)).font(.headline) }
             }
             .frame(maxWidth: .infinity, minHeight: 52)
             .background(Theme.accent, in: RoundedRectangle(cornerRadius: 16))
@@ -118,9 +118,9 @@ struct SearchField: View {
             Image(systemName: "magnifyingglass").foregroundColor(Theme.muted)
             Group {
                 if let f = focused {
-                    TextField(placeholder, text: $text).focused(f)
+                    TextField(Lang.tr(placeholder), text: $text).focused(f)
                 } else {
-                    TextField(placeholder, text: $text)
+                    TextField(Lang.tr(placeholder), text: $text)
                 }
             }
             .textInputAutocapitalization(.never)
@@ -154,8 +154,8 @@ struct SettingsRow<Trailing: View>: View {
                     .fill(LinearGradient(colors: [color.opacity(0.72), color], startPoint: .topLeading, endPoint: .bottomTrailing)))
                 .shadow(color: color.opacity(0.35), radius: 4, y: 2)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 16, weight: .semibold)).foregroundColor(titleColor)
-                if let s = subtitle { Text(s).font(.system(size: 12.5)).foregroundColor(Theme.muted).lineLimit(2) }
+                Text(Lang.tr(title)).font(.system(size: 16, weight: .semibold)).foregroundColor(titleColor)
+                if let s = subtitle { Text(Lang.tr(s)).font(.system(size: 12.5)).foregroundColor(Theme.muted).lineLimit(2) }
             }
             Spacer(minLength: 6)
             trailing()
@@ -195,7 +195,7 @@ struct SettingsGroup<Content: View>: View {
 struct SectionTitle: View {
     let text: String
     var body: some View {
-        Text(text.uppercased())
+        Text(Lang.tr(text).uppercased())
             .font(.system(size: 12, weight: .bold))
             .foregroundColor(Theme.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -340,7 +340,7 @@ enum QRCode {
 struct ScreenTitle: View {
     let text: String
     var body: some View {
-        Text(text).font(.system(size: 30, weight: .heavy)).foregroundColor(Theme.text)
+        Text(Lang.tr(text)).font(.system(size: 30, weight: .heavy)).foregroundColor(Theme.text)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18).padding(.top, 6)
     }

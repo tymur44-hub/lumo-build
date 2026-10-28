@@ -72,6 +72,9 @@ struct MessageRow: View {
     var onVideo: (URL) -> Void
     var onReport: (Message) -> Void
     var onMenu: (Message) -> Void = { _ in }
+    /// Системное меню (как при долгом нажатии на чат): пункты и превью собирает чат
+    var ctxItems: ((Message) -> AnyView)? = nil
+    var ctxPreview: ((Message) -> AnyView)? = nil
     var swipeEnabled = true
     /// Режим выбора нескольких сообщений
     var selecting = false
@@ -121,11 +124,11 @@ struct MessageRow: View {
                     content
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { Task { await model.react(m, "❤️") } }
-                        .onLongPressGesture(minimumDuration: 0.35) {
-                            guard !selecting, !m.deleted, m.id > 0 else { return }
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            onMenu(m)
-                        }
+                        .contextMenu(menuItems: {
+                            if let f = ctxItems, !selecting, !m.deleted, m.id > 0 { f(m) }
+                        }, preview: {
+                            if let p = ctxPreview { p(m) } else { Color.clear.frame(width: 1, height: 1) }
+                        })
                     reactionsRow
                     botButtons
                 }

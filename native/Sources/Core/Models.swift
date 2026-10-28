@@ -339,6 +339,25 @@ struct ChatWall: Equatable {
     var setBy: String?
 }
 
+struct DeviceSession: Identifiable {
+    var id: String
+    var deviceId: String
+    var name: String
+    var platform: String
+    var version: String
+    var createdAt: Date?
+    var lastActive: Date?
+    init(json j: JSON) {
+        id = j.str("id") ?? ""
+        deviceId = j.str("device_id") ?? ""
+        name = j.str("name") ?? "Устройство"
+        platform = j.str("platform") ?? ""
+        version = j.str("app_version") ?? ""
+        createdAt = j.date("created_at")
+        lastActive = j.date("last_active")
+    }
+}
+
 struct Reaction: Equatable {
     var messageId: Int
     var userId: String

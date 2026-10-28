@@ -107,7 +107,8 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func say(_ text: String) {
+    func say(_ raw: String) {
+        let text = Lang.tr(raw)
         toast = text
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 2_600_000_000)
@@ -190,9 +191,10 @@ final class AppModel: ObservableObject {
         }
         Notifier.askPermission()
         presence(true)
+        Task { await touchSession() }
         presenceTimer?.invalidate()
         presenceTimer = Timer.scheduledTimer(withTimeInterval: 45, repeats: true) { [weak self] _ in
-            Task { @MainActor in if let self = self, self.isActive { self.presence(true) } }
+            Task { @MainActor in if let self = self, self.isActive { self.presence(true); await self.touchSession() } }
         }
         storiesTimer?.invalidate()
         storiesTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
@@ -268,7 +270,47 @@ final class AppModel: ObservableObject {
         if Realtime.shared.isOpen { netStatus = nil }
     }
 
+    // MARK: - устройства (сеансы)
+
+    static var deviceId: String {
+        let d = UserDefaults.standard
+        if let s = d.string(forKey: "lm_device_id") { return s }
+        let s = UUID().uuidString
+        d.set(s, forKey: "lm_device_id")
+        return s
+    }
+
+    static var deviceName: String {
+        let m = UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"
+        return m + " · iOS " + UIDevice.current.systemVersion
+    }
+
+    /// Отметить это устройство в списке сеансов; если сеанс завершили на другом устройстве — выйти
+    func touchSession() async {
+        guard loggedIn else { return }
+        let d = UserDefaults.standard
+        let fresh = !d.bool(forKey: "lm_sess_active")
+        let p: JSON = ["p_device": Self.deviceId, "p_name": Self.deviceName, "p_platform": "ios",
+                       "p_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "", "p_fresh": fresh]
+        guard let r = try? await API.shared.rpc("lm_session_touch", p) as? JSON else { return }
+        if r.bool("revoked") {
+            d.set(false, forKey: "lm_sess_active")
+            await logout()
+            say("Сеанс завершён на другом устройстве")
+        } else { d.set(true, forKey: "lm_sess_active") }
+    }
+
+    func loadSessions() async -> [DeviceSession] {
+        let rows = (try? await API.shared.select("lm_sessions", ["select": "id,device_id,name,platform,app_version,created_at,last_active,revoked", "order": "last_active.desc"])) ?? []
+        return rows.filter { !$0.bool("revoked") }.map { DeviceSession(json: $0) }
+    }
+
+    func endSession(_ id: String) async {
+        _ = try? await API.shared.rpc("lm_session_kill", ["p_id": id])
+    }
+
     func resetAfterLogout() {
+        UserDefaults.standard.set(false, forKey: "lm_sess_active")
         if ProcessInfo.processInfo.environment["LUMO_SNAPSHOT"] != nil { NSLog("LUMODBG resetAfterLogout %@", Thread.callStackSymbols.prefix(14).joined(separator: " | ")) }
         netTask?.cancel()
         netStatus = nil

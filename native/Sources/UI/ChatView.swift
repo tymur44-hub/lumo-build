@@ -322,6 +322,36 @@ struct ChatView: View {
 
     // MARK: - меню сообщения (своё, вместо системного — системное переворачивало сообщение)
 
+    /// Пункты системного меню сообщения
+    private func ctxMenu(_ m: Message) -> AnyView {
+        let acts = actions(m)
+        return AnyView(Group {
+            ControlGroup {
+                ForEach(MessageRow.quick.prefix(5), id: \.self) { e in
+                    Button { Task { await model.react(m, e) } } label: { Text(e) }
+                }
+            }
+            ForEach(Array(acts.enumerated()), id: \.offset) { _, a in
+                if a.separated { Divider() }
+                Button(role: a.destructive ? .destructive : nil) { a.run() } label: { Label(a.title, systemImage: a.icon) }
+            }
+        })
+    }
+
+    /// Крупное превью сообщения над меню
+    private func ctxPreview(_ m: Message) -> AnyView {
+        AnyView(
+            MessageRow(m: m, chat: chat, first: true, last: true,
+                       onReply: { _ in }, onEdit: { _ in }, onForward: { _ in },
+                       onImage: { _ in }, onVideo: { _ in }, onReport: { _ in }, swipeEnabled: false)
+                .environmentObject(model).environmentObject(look)
+                .allowsHitTesting(false)
+                .padding(.horizontal, 8).padding(.vertical, 6)
+                .frame(width: UIScreen.main.bounds.width - 40)
+                .background(Theme.bg)
+        )
+    }
+
     private func closeMenu() { withAnimation(.easeOut(duration: 0.16)) { menuMsg = nil } }
 
     private func actions(_ m: Message) -> [MsgAction] {
@@ -503,7 +533,7 @@ struct ChatView: View {
                                        onImage: { imageURL = IdentifiedURL(url: $0) },
                                        onVideo: { videoURL = IdentifiedURL(url: $0) },
                                        onReport: { m in reporting = ReportTarget(user: m.senderId, chat: chatId, message: m.id) },
-                                       onMenu: { m in withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) { menuMsg = m } },
+                                       ctxItems: { ctxMenu($0) }, ctxPreview: { ctxPreview($0) },
                                        selecting: selecting, isSelected: selected.contains(f.id), onToggle: { toggle($0) })
                                 .background(RoundedRectangle(cornerRadius: 12).fill(highlight == f.id ? Theme.a1.opacity(0.25) : Color.clear))
                         }

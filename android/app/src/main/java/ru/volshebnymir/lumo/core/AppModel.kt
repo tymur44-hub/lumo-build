@@ -37,6 +37,8 @@ sealed class Screen {
     data object EditColor : Screen()
     data object Premium : Screen()
     data object MsgPrivacy : Screen()
+    data object Devices : Screen()
+    data object Language : Screen()
 }
 
 enum class Tab { Contacts, Chats, Settings }
@@ -213,8 +215,9 @@ object AppModel {
                 CallsBridge.attach(id)
             }
             presence(true)
+            scope.launch { touchSession() }
             presenceJob?.cancel()
-            presenceJob = scope.launch { while (true) { delay(45_000); if (isActive) presence(true) } }
+            presenceJob = scope.launch { while (true) { delay(45_000); if (isActive) { presence(true); touchSession() } } }
             botName = (runCatching { Api.function("/config", auth = false) }.getOrNull() as? JSONObject)?.str("bot")
             if (keepAlive) LumoService.start(ctx)
             loadExtras(); loadBlocks(); loadStories()
@@ -261,7 +264,41 @@ object AppModel {
         }
     }
 
+    // ---- сеансы (раздел «Устройства») ----
+    val deviceId: String
+        get() {
+            val p = ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE)
+            return p.getString("lm_device_id", null) ?: java.util.UUID.randomUUID().toString().also { p.edit().putString("lm_device_id", it).apply() }
+        }
+    val deviceName: String
+        get() = (android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() } + " " + android.os.Build.MODEL).trim() + " · Android " + android.os.Build.VERSION.RELEASE
+
+    /** Отметить это устройство в списке сеансов; если сеанс завершили на другом устройстве — выйти */
+    suspend fun touchSession() {
+        if (!loggedIn) return
+        val sp = ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE)
+        val fresh = !sp.getBoolean("lm_sess_active", false)
+        val ver = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
+        val r = runCatching {
+            Api.rpc("lm_session_touch", jsonOf("p_device" to deviceId, "p_name" to deviceName, "p_platform" to "android", "p_version" to ver, "p_fresh" to fresh)) as? JSONObject
+        }.getOrNull() ?: return
+        if (r.bool("revoked")) {
+            sp.edit().putBoolean("lm_sess_active", false).apply()
+            logout()
+            say("Сеанс завершён на другом устройстве")
+        } else sp.edit().putBoolean("lm_sess_active", true).apply()
+    }
+
+    suspend fun loadSessions(): List<DeviceSession> =
+        runCatching { Api.select("lm_sessions", mapOf("select" to "id,device_id,name,platform,app_version,created_at,last_active,revoked", "order" to "last_active.desc")) }
+            .getOrNull().orEmpty().filter { !it.bool("revoked") }.map {
+                DeviceSession(it.str("id") ?: "", it.str("device_id") ?: "", it.str("name") ?: "Устройство", it.str("platform") ?: "web", it.str("app_version") ?: "", it.date("last_active"))
+            }
+
+    suspend fun endSession(id: String) { runCatching { Api.rpc("lm_session_kill", jsonOf("p_id" to id)) } }
+
     fun resetAfterLogout() {
+        ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE).edit().putBoolean("lm_sess_active", false).apply()
         LumoService.stop(ctx)
         CallsBridge.detach()
         Realtime.disconnect()
