@@ -126,6 +126,9 @@ struct ChatView: View {
             }
         }
         .overlay {
+            if confirmDelete { deleteOverlay }
+        }
+        .overlay {
             if note.active { VideoNoteOverlay() }
             else if let mm = menuMsg { menuOverlay(mm) }
         }
@@ -240,17 +243,6 @@ struct ChatView: View {
         .sheet(isPresented: $showSearch) {
             ChatSearchView(chatId: chatId) { id in highlight = id }.environmentObject(model)
         }
-        .confirmationDialog(deleteList.count > 1 ? "Удалить \(deleteList.count) сообщ.?" : "Удалить сообщение?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            let l = deleteList
-            if canDeleteForAll && chat?.isPrivate == true && chat?.peerId != model.myId {
-                Button("Удалить у меня и у " + (chat?.displayName ?? "собеседника"), role: .destructive) { Task { await model.delete(l, everyone: true) } }
-            } else if canDeleteForAll && chat?.peerId != model.myId {
-                Button("Удалить у всех", role: .destructive) { Task { await model.delete(l, everyone: true) } }
-            }
-            Button(chat?.peerId == model.myId ? "Удалить" : "Удалить только у меня", role: .destructive) {
-                Task { await model.delete(l, everyone: chat?.peerId == model.myId) }
-            }
-        }
         .confirmationDialog("Очистить историю этого чата? Сообщения пропадут только у вас.", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Очистить", role: .destructive) { Task { await model.clearChat(chatId) } }
         }
@@ -352,6 +344,55 @@ struct ChatView: View {
         )
     }
 
+    /// Удаление: сообщение остаётся на размытом фоне, снизу карточка с красными пунктами
+    private var deleteOverlay: some View {
+        let l = deleteList
+        let mine = l.allSatisfy { $0.senderId == model.myId }
+        let all = canDeleteForAll && chat?.peerId != model.myId
+        let close = { withAnimation(.easeOut(duration: 0.16)) { confirmDelete = false } }
+        func item(_ t: String, _ run: @escaping () -> Void) -> some View {
+            Button { close(); run() } label: {
+                Text(t).font(.system(size: 19)).foregroundColor(Theme.danger).multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22).padding(.vertical, 14).contentShape(Rectangle())
+            }.buttonStyle(RowButtonStyle())
+        }
+        return ZStack {
+            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
+                .overlay(Color.black.opacity(0.12).ignoresSafeArea())
+                .onTapGesture { close() }
+            VStack(alignment: mine ? .trailing : .leading, spacing: 10) {
+                Spacer()
+                if l.count == 1, let m = l.first {
+                    MessageRow(m: m, chat: chat, first: true, last: true,
+                               onReply: { _ in }, onEdit: { _ in }, onForward: { _ in },
+                               onImage: { _ in }, onVideo: { _ in }, onReport: { _ in }, swipeEnabled: false)
+                        .allowsHitTesting(false).frame(maxHeight: 300, alignment: .top).clipped()
+                } else {
+                    Text("Удалить \(l.count) сообщ.?").font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                        .padding(.horizontal, 16).padding(.vertical, 10).background(Capsule().fill(Theme.panel))
+                }
+                VStack(spacing: 0) {
+                    if all && chat?.isPrivate == true {
+                        item("Удалить у меня и у " + (chat?.displayName ?? "собеседника")) { Task { await model.delete(l, everyone: true) } }
+                        Divider().overlay(Theme.line)
+                    } else if all {
+                        item("Удалить у всех") { Task { await model.delete(l, everyone: true) } }
+                        Divider().overlay(Theme.line)
+                    }
+                    item(chat?.peerId == model.myId ? "Удалить" : "Удалить у меня") { Task { await model.delete(l, everyone: chat?.peerId == model.myId) } }
+                }
+                .frame(width: 290)
+                .background(RoundedRectangle(cornerRadius: 28).fill(.regularMaterial))
+                .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.white.opacity(0.25), lineWidth: 0.8))
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+                .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
+            }
+            .padding(.horizontal, 10).padding(.bottom, 24)
+            .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.97)))
+    }
+
     private func closeMenu() { withAnimation(.easeOut(duration: 0.16)) { menuMsg = nil } }
 
     private func actions(_ m: Message) -> [MsgAction] {
@@ -398,7 +439,7 @@ struct ChatView: View {
 
     private func askDelete(_ list: [Message]) {
         deleteList = list.filter { $0.id > 0 }
-        if !deleteList.isEmpty { confirmDelete = true }
+        if !deleteList.isEmpty { withAnimation(.easeOut(duration: 0.18)) { confirmDelete = true } }
     }
 
     /// Можно ли удалить у всех: свои сообщения или я админ группы/канала

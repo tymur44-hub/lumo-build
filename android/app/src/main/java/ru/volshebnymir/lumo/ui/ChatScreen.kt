@@ -357,19 +357,25 @@ fun ChatScreen(chatId: String) {
             val saved = chat?.isPrivate == true && chat.peerId == AppModel.myId
             val forAll = !saved && (d.all { it.senderId == AppModel.myId } || (chat?.isAdmin == true && chat.isPrivate == false))
             fun go(everyone: Boolean) { deleting = null; selected.clear(); scope.launch { AppModel.delete(d, everyone) } }
-            AlertDialog(onDismissRequest = { deleting = null },
-                title = { Text(if (d.size > 1) "Удалить ${plural(d.size, "сообщение", "сообщения", "сообщений")}?" else "Удалить сообщение?") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (forAll) Text(if (chat?.isPrivate == true) "Удалить у меня и у ${chat.displayName}" else "Удалить у всех",
-                            color = p.danger, fontWeight = FontWeight.Bold, fontSize = 16.sp,
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(p.danger.copy(alpha = 0.1f)).clickable { go(true) }.padding(14.dp))
-                        Text(if (saved) "Удалить" else "Удалить только у меня", color = p.danger, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(p.panel2).clickable { go(saved) }.padding(14.dp))
+            BackHandler { deleting = null }
+            val mineAll = d.all { it.senderId == AppModel.myId }
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(remember { MutableInteractionSource() }, null) { deleting = null }) {
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 24.dp),
+                    horizontalAlignment = if (mineAll) Alignment.End else Alignment.Start, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.clip(RoundedCornerShape(18.dp)).background(p.panel2).padding(12.dp).widthIn(max = 300.dp)) {
+                        Text(if (d.size > 1) "Удалить ${plural(d.size, "сообщение", "сообщения", "сообщений")}?" else d[0].preview, color = p.text, maxLines = 4, overflow = TextOverflow.Ellipsis)
                     }
-                },
-                confirmButton = {},
-                dismissButton = { TextButton({ deleting = null }) { Text("Отмена") } })
+                    Column(Modifier.width(290.dp).clip(RoundedCornerShape(28.dp)).background(p.panel).clickable(remember { MutableInteractionSource() }, null) {}) {
+                        if (forAll) {
+                            Text(if (chat?.isPrivate == true) "Удалить у меня и у ${chat.displayName}" else "Удалить у всех", color = p.danger, fontSize = 18.sp,
+                                modifier = Modifier.fillMaxWidth().clickable { go(true) }.padding(horizontal = 22.dp, vertical = 15.dp))
+                            Box(Modifier.fillMaxWidth().height(1.dp).background(p.line))
+                        }
+                        Text(if (saved) "Удалить" else "Удалить у меня", color = p.danger, fontSize = 18.sp,
+                            modifier = Modifier.fillMaxWidth().clickable { go(saved) }.padding(horizontal = 22.dp, vertical = 15.dp))
+                    }
+                }
+            }
         }
     }
 }
