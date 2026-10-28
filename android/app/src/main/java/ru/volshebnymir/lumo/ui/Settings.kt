@@ -117,8 +117,6 @@ fun SettingsScreen() {
             SettingsRow(Icons.Filled.Bookmark, Color(0xFF3A7BFF), "Избранное", "Заметки и сохранённые сообщения") { scope.launch { AppModel.myId?.let { AppModel.openDM(it) } } }
             Divider()
             SettingsRow(Icons.Filled.Call, Color(0xFF2BD67B), "Звонки", "Недавние и пропущенные") { AppModel.push(Screen.CallsHistory) }
-            Divider()
-            SettingsRow(Icons.Filled.Computer, Color(0xFFFF8A3D), "Устройства", "Войти на компьютере по QR-коду") { Ui.qrScan = true }
         }
         Card {
             SettingsRow(Icons.Filled.Notifications, Color(0xFFFF5B5B), "Уведомления и звуки", if (AppModel.tgLinked) "Telegram подключён" else "Telegram не подключён") { AppModel.push(Screen.Notifications) }
@@ -130,8 +128,6 @@ fun SettingsScreen() {
         }
         Card {
             SettingsRow(Icons.Filled.PersonAdd, Color(0xFFFF5B8A), "Пригласить друзей", "Поделиться ссылкой на ваш профиль") { share(ctx, "Я в Lumo — напиши мне: " + AppModel.profileLink) }
-            Divider()
-            SettingsRow(Icons.Filled.QrCodeScanner, p.a1, "Сканировать QR-код", "Открыть профиль человека или войти на компьютере") { Ui.qrScan = true }
             Divider()
             SettingsRow(Icons.Filled.Info, Color(0xFF8E8EA8), "О Lumo") { AppModel.push(Screen.About) }
         }
@@ -302,6 +298,12 @@ fun PrivacyScreen() {
         Spacer(Modifier.height(6.dp))
         SectionTitle("Конфиденциальность")
         Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(p.panel)) {
+            Row(Modifier.fillMaxWidth().clickable { AppModel.push(Screen.MsgPrivacy) }.padding(horizontal = 20.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Сообщения", color = p.text, fontSize = 17.sp, modifier = Modifier.weight(1f))
+                Text(if (me?.privacy?.optString("msg_prem") == "premium") "Контакты и Premium" else "Все", color = p.muted, fontSize = 16.sp)
+                Icon(Icons.Filled.ChevronRight, null, tint = p.muted.copy(alpha = 0.6f), modifier = Modifier.size(22.dp))
+            }
+            Box(Modifier.padding(start = 20.dp).fillMaxWidth().height(1.dp).background(p.line))
             PRIVACY_ITEMS.forEachIndexed { i, it ->
                 Row(Modifier.fillMaxWidth().clickable { AppModel.push(Screen.PrivacyKey(it.key)) }.padding(horizontal = 20.dp, vertical = 17.dp),
                     verticalAlignment = Alignment.CenterVertically) {
@@ -313,25 +315,6 @@ fun PrivacyScreen() {
             }
         }
         Text("Вы можете выбрать, кому разрешаете приглашать Вас в группы и каналы.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 30.dp))
-        Spacer(Modifier.height(6.dp))
-        val scopeP = rememberCoroutineScope()
-        val msgPrem = me?.privacy?.optString("msg_prem") == "premium"
-        Card {
-            Row(Modifier.fillMaxWidth().clickable {
-                if (!AppModel.isPremium) AppModel.say(PREMIUM_SOON)
-                else scopeP.launch { AppModel.setPrivacyKey("msg_prem", if (msgPrem) "all" else "premium") }
-            }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFFFB020)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Star, null, tint = Color.White, modifier = Modifier.size(19.dp))
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Писать мне только Premium", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                    Text("Люди без Lumo Premium не смогут написать первыми. Контакты и уже начатые переписки не затрагиваются.", color = p.muted, fontSize = 12.5.sp)
-                }
-                androidx.compose.material3.Switch(checked = msgPrem, onCheckedChange = null)
-            }
-        }
         Spacer(Modifier.height(30.dp))
     }
 }
@@ -453,4 +436,35 @@ fun FullScreenPrompt() {
         text = { Text("Включите для Lumo «Поверх других приложений» — тогда экран звонка откроется сразу, даже если Lumo свёрнут или телефон заблокирован.") },
         confirmButton = { TextButton({ step = 0; prefs.edit().putBoolean("ovl_asked", true).apply(); openOverlaySettings(ctx) }) { Text("Открыть настройки") } },
         dismissButton = { TextButton({ step = 0; prefs.edit().putBoolean("ovl_asked", true).apply() }) { Text("Позже") } })
+}
+
+
+/** «Кто может отправлять мне сообщения»: все или контакты и подписчики Premium */
+@Composable
+fun MsgPrivacyScreen() {
+    val p = P
+    val scope = rememberCoroutineScope()
+    val cur = if (AppModel.me?.privacy?.optString("msg_prem") == "premium") "premium" else "all"
+    LaunchedEffect(Unit) { AppModel.loadMe() }
+    Column(Modifier.fillMaxSize().background(p.bg).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TopBar("Сообщения")
+        SectionTitle("Кто может отправлять мне сообщения")
+        Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(p.panel)) {
+            listOf("all" to "Все", "premium" to "Контакты и Premium-подписчики").forEachIndexed { i, (v, t) ->
+                val locked = v == "premium" && !AppModel.isPremium
+                Row(Modifier.fillMaxWidth().clickable {
+                    if (locked) AppModel.say(PREMIUM_SOON) else scope.launch { AppModel.setPrivacyKey("msg_prem", v) }
+                }.padding(horizontal = 20.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.width(34.dp)) {
+                        if (cur == v) Icon(Icons.Filled.Check, null, tint = p.a1, modifier = Modifier.size(22.dp))
+                        else if (locked) Icon(Icons.Filled.Lock, null, tint = p.muted, modifier = Modifier.size(20.dp))
+                    }
+                    Text(t, color = p.text, fontSize = 17.sp)
+                }
+                if (i == 0) Box(Modifier.padding(start = 54.dp).fillMaxWidth().height(1.dp).background(p.line))
+            }
+        }
+        Text("Вы можете запретить входящие сообщения от пользователей, которых нет в Вашем списке контактов и которым Вы не писали сами.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 30.dp))
+        Text("Подробнее о Lumo Premium", color = p.a1, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 30.dp, vertical = 8.dp).clickable { AppModel.push(Screen.Premium) })
+    }
 }

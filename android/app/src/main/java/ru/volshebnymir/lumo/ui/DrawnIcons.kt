@@ -213,28 +213,93 @@ private fun DrawScope.drawStatusIcon(k: String, t: Float) {
     }
 }
 
-/** Вращающаяся фиолетовая звезда Premium с мягкими углами: объёмный разворот по вертикальной оси */
+private val STAR3D: List<FloatArray> by lazy {
+    var pts = List(10) { i ->
+        val r = if (i % 2 == 0) 1f else 0.58f
+        val a = -PI / 2 + i * PI / 5
+        floatArrayOf((r * cos(a)).toFloat(), (r * sin(a)).toFloat())
+    }
+    repeat(3) {
+        val out = ArrayList<FloatArray>()
+        for (i in pts.indices) {
+            val p0 = pts[i]; val p1 = pts[(i + 1) % pts.size]
+            out.add(floatArrayOf(0.75f * p0[0] + 0.25f * p1[0], 0.75f * p0[1] + 0.25f * p1[1]))
+            out.add(floatArrayOf(0.25f * p0[0] + 0.75f * p1[0], 0.25f * p0[1] + 0.75f * p1[1]))
+        }
+        pts = out
+    }
+    pts
+}
+
+private fun mix(a: Color, b: Color, t: Float) = Color(a.red + (b.red - a.red) * t, a.green + (b.green - a.green) * t, a.blue + (b.blue - a.blue) * t, 1f)
+
+/** Объёмная звезда: настоящая призма с толщиной, вращается вокруг вертикальной оси, боковые грани освещены */
+private fun DrawScope.draw3dStar(deg: Float, tiltDeg: Float, pulse: Float) {
+    val th = Math.toRadians(deg.toDouble()); val c = cos(th).toFloat(); val sn = sin(th).toFloat()
+    val tl = Math.toRadians(tiltDeg.toDouble()); val ct = cos(tl).toFloat(); val st = sin(tl).toFloat()
+    val R = 36f * (0.97f + 0.03f * pulse); val D = 0.2f
+    fun proj(x: Float, y: Float, z: Float): Triple<Float, Float, Float> {
+        val x1 = x * c + z * sn; val z1 = -x * sn + z * c
+        val y2 = y * ct - z1 * st; val z2 = y * st + z1 * ct
+        val k = 1f / (1f - z2 * 0.28f)
+        return Triple(50f + x1 * R * k, 53f + y2 * R * k, z2)
+    }
+    val pts = STAR3D; val n = pts.size
+    var area = 0f
+    for (i in 0 until n) { val a = pts[i]; val b = pts[(i + 1) % n]; area += a[0] * b[1] - b[0] * a[1] }
+    val sgn = if (area > 0) 1f else -1f
+    // тень под звездой
+    drawOval(Color(0xFF6C4DFF).copy(alpha = 0.16f), Offset(26f, 90f), Size(48f, 6f))
+    val c1 = Color(0xFF5B8CFF); val c2 = Color(0xFFA066FF); val c3 = Color(0xFFFF6BCB)
+    // боковые грани (только повёрнутые к зрителю), дальние первыми
+    class Side(val path: Path, val color: Color, val z: Float)
+    val sides = ArrayList<Side>()
+    for (i in 0 until n) {
+        val a = pts[i]; val b = pts[(i + 1) % n]
+        val dx = b[0] - a[0]; val dy = b[1] - a[1]
+        val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1e-5f)
+        val nx = sgn * dy / len; val ny = -sgn * dx / len
+        val z1 = -nx * sn; val nz = ny * st + z1 * ct
+        if (nz <= 0f) continue
+        val pa = proj(a[0], a[1], D); val pb = proj(b[0], b[1], D); val qa = proj(a[0], a[1], -D); val qb = proj(b[0], b[1], -D)
+        val path = Path().apply { moveTo(pa.first, pa.second); lineTo(pb.first, pb.second); lineTo(qb.first, qb.second); lineTo(qa.first, qa.second); close() }
+        val t = i.toFloat() / n
+        val base = if (t < 0.5f) mix(c2, c3, t * 2f) else mix(c3, c1, (t - 0.5f) * 2f)
+        val light = (0.45f + 0.55f * nz).coerceIn(0f, 1f)
+        sides.add(Side(path, mix(Color(0xFF2B1D7A), base, light), (pa.third + qa.third) / 2))
+    }
+    sides.sortedBy { it.z }.forEach { drawPath(it.path, it.color); drawPath(it.path, it.color, style = Stroke(0.6f)) }
+    // лицевая или оборотная сторона
+    val front = c * ct > 0f
+    val zf = if (front) D else -D
+    val face = Path()
+    val inner = Path()
+    for (i in 0 until n) {
+        val q = proj(pts[i][0], pts[i][1], zf)
+        if (i == 0) face.moveTo(q.first, q.second) else face.lineTo(q.first, q.second)
+        val w = proj(pts[i][0] * 0.7f, pts[i][1] * 0.7f, zf + (if (front) 0.05f else -0.05f))
+        if (i == 0) inner.moveTo(w.first, w.second) else inner.lineTo(w.first, w.second)
+    }
+    face.close(); inner.close()
+    val g1 = proj(-1f, -1f, zf); val g2 = proj(1f, 1f, zf)
+    val br = Brush.linearGradient(listOf(c1, c2, c3), Offset(g1.first, g1.second), Offset(g2.first, g2.second))
+    drawPath(face, br)
+    drawPath(face, Color.White.copy(alpha = 0.35f), style = Stroke(0.8f))
+    drawPath(inner, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0.04f)), Offset(g1.first, g1.second), Offset(g2.first, g2.second)))
+    val hi = proj(-0.35f + 0.5f * sn, -0.45f, zf)
+    drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.55f), Color.Transparent), Offset(hi.first, hi.second), 15f), 15f, Offset(hi.first, hi.second))
+}
+
+/** Вращающаяся объёмная звезда Premium */
 @Composable
 fun PremiumStar(size: Dp, modifier: Modifier = Modifier) {
     val tr = rememberInfiniteTransition(label = "pstar")
-    val spin by tr.animateFloat(0f, 360f, infiniteRepeatable(tween(3600, easing = androidx.compose.animation.core.FastOutSlowInEasing), RepeatMode.Restart), label = "spin")
+    val spin by tr.animateFloat(0f, 360f, infiniteRepeatable(tween(4200, easing = androidx.compose.animation.core.FastOutSlowInEasing), RepeatMode.Restart), label = "spin")
+    val tilt by tr.animateFloat(-14f, 14f, infiniteRepeatable(tween(2600, easing = androidx.compose.animation.core.FastOutSlowInEasing), RepeatMode.Reverse), label = "tilt")
     val pulse by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Reverse), label = "pulse")
-    val dens = androidx.compose.ui.platform.LocalDensity.current.density
-    Box(modifier.size(size)) {
-        Canvas(Modifier.fillMaxSize().graphicsLayerSpin(spin, dens)) {
-            val s = this.size.minDimension / 100f
-            scale(s, Offset.Zero) {
-                val sc = 0.9f + 0.03f * pulse
-                scale(sc, sc, Offset(50f, 53f)) {
-                    val path = starPath(50f, 53f, 38f, 0.55f)
-                    val br = Brush.linearGradient(listOf(Color(0xFF5B8CFF), Color(0xFFA066FF), Color(0xFFFF6BCB)), Offset(15f, 10f), Offset(85f, 95f))
-                    drawPath(path, br)
-                    drawPath(path, br, style = Stroke(11f, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-                    drawPath(starPath(50f, 51f, 24f, 0.55f), Color.White.copy(alpha = 0.16f))
-                    drawOval(Color.White.copy(alpha = 0.35f + 0.2f * pulse), Offset(32f, 26f), Size(16f, 8f))
-                }
-            }
-        }
+    Canvas(modifier.size(size)) {
+        val s = this.size.minDimension / 100f
+        scale(s, Offset.Zero) { draw3dStar(spin, tilt, pulse) }
     }
 }
 

@@ -3,6 +3,7 @@ package ru.volshebnymir.lumo.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -54,6 +55,16 @@ fun BotButtons(m: Message, mine: Boolean) {
             }
         }
     }
+}
+
+/** Галочка верификации, затем значки бота / Premium — рядом с именем собеседника */
+@Composable
+fun PeerBadges(chat: ru.volshebnymir.lumo.core.ChatItem?) {
+    val p = P
+    val pr = chat?.peerId?.let { AppModel.profiles[it] }
+    if (pr?.verified == true || chat?.peerVerified == true) Icon(Icons.Filled.Verified, null, tint = p.a2, modifier = Modifier.padding(start = 4.dp).size(16.dp))
+    val (b, pm, e) = peerBadges(chat)
+    NameBadges(b, pm, e)
 }
 
 /** Бот и Premium для значков по профилю собеседника */

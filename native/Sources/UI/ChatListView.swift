@@ -164,13 +164,24 @@ struct ChatListView: View {
                                     Label(c.pinned ? "Открепить" : "Закрепить", systemImage: c.pinned ? "pin.slash" : "pin")
                                 }
                                 Button { Task { await model.setMuted(c.id, !c.muted) } } label: {
-                                    Label(c.muted ? "Включить уведомления" : "Без звука", systemImage: c.muted ? "bell" : "bell.slash")
+                                    Label(c.muted ? "Включить уведомления" : "Выключить уведомления", systemImage: c.muted ? "bell" : "bell.slash")
                                 }
                                 if c.unread > 0 {
                                     Button { Task { await model.loadMessages(c.id); model.markRead(c.id) } } label: {
                                         Label("Прочитано", systemImage: "checkmark.message")
                                     }
                                 }
+                                if c.isPrivate {
+                                    Button(role: .destructive) { Task { await model.clearChat(c.id) } } label: {
+                                        Label("Очистить историю", systemImage: "trash")
+                                    }
+                                } else {
+                                    Button(role: .destructive) { Task { await model.leave(c.id) } } label: {
+                                        Label(c.isChannel ? "Отписаться" : "Покинуть группу", systemImage: "rectangle.portrait.and.arrow.right")
+                                    }
+                                }
+                            } preview: {
+                                ChatPreviewCard(chat: c).environmentObject(model)
                             }
                     }
                 }
@@ -281,7 +292,7 @@ struct ChatRow: View {
                     else if chat.type == "group" { Image(systemName: "person.2.fill").font(.caption).foregroundColor(Theme.muted) }
                     Text(chat.isPrivate && chat.peerId == model.myId ? "Избранное" : chat.displayName)
                         .font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
-                    if chat.isPrivate && chat.peerId != model.myId { NameBadges(bot: chat.peerBot, premium: chat.peerPremium, emoji: chat.peerId.flatMap { model.profiles[$0]?.emojiStatus }) }
+                    if chat.isPrivate && chat.peerId != model.myId { NameBadges(bot: chat.peerBot, premium: chat.peerPremium, emoji: chat.peerId.flatMap { model.profiles[$0]?.emojiStatus }, verified: chat.peerVerified || (chat.peerId.flatMap { model.profiles[$0]?.verified } ?? false)) }
                     if chat.muted { Image(systemName: "speaker.slash.fill").font(.caption2).foregroundColor(Theme.muted) }
                     Spacer(minLength: 4)
                     if chat.lastSender == model.myId, chat.lastId != nil, chat.lastKind != "system" {
@@ -318,5 +329,47 @@ struct ChatRow: View {
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .contentShape(Rectangle())
+    }
+}
+
+
+/// Превью чата в меню по долгому нажатию: последние сообщения
+struct ChatPreviewCard: View {
+    @EnvironmentObject var model: AppModel
+    let chat: ChatItem
+
+    var body: some View {
+        let msgs = Array((model.messages[chat.id] ?? []).filter { !$0.deleted && $0.kind != "system" }.suffix(7))
+        VStack(spacing: 10) {
+            VStack(spacing: 0) {
+                Text(chat.isPrivate && chat.peerId == model.myId ? "Избранное" : chat.displayName)
+                    .font(.system(size: 16, weight: .bold)).lineLimit(1)
+                Text(chat.isPrivate ? (chat.peerBot ? "бот" : model.lastSeenText(chat.peerId, fallback: chat.peerLastSeen)) : "\(chat.membersCount) уч.")
+                    .font(.system(size: 12)).foregroundColor(Theme.muted)
+            }
+            .padding(.horizontal, 18).padding(.vertical, 6)
+            .background(Theme.panel.opacity(0.9), in: Capsule())
+            VStack(spacing: 5) {
+                if msgs.isEmpty {
+                    Text(chat.preview).font(.system(size: 14)).foregroundColor(Theme.muted).padding(.top, 30)
+                }
+                ForEach(msgs) { m in
+                    let mine = m.senderId == model.myId
+                    HStack {
+                        if mine { Spacer(minLength: 40) }
+                        Text((m.body ?? "").isEmpty ? Message.previewText(kind: m.kind, body: m.body) : String((m.body ?? "").prefix(160)))
+                            .font(.system(size: 15)).foregroundColor(mine ? .white : Theme.text).lineLimit(4)
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(mine ? AnyShapeStyle(Theme.out) : AnyShapeStyle(Theme.panel), in: RoundedRectangle(cornerRadius: 18))
+                        if !mine { Spacer(minLength: 40) }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(width: 320, height: 420, alignment: .top)
+        .background(Theme.bg)
+        .task { await model.loadMessages(chat.id) }
     }
 }

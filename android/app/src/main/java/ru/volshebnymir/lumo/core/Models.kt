@@ -140,7 +140,7 @@ data class ChatItem(
     val membersCount: Int, val lastId: Int?, val lastKind: String?, val lastBody: String?, val lastSender: String?,
     val lastSenderName: String?, val lastAt: Date?, val lastDeleted: Boolean, val unread: Int, val othersReadAt: Date?,
     val pinnedMessageId: Int?, val description: String?, val username: String?,
-    val peerBot: Boolean = false, val peerPremium: Boolean = false,
+    val peerBot: Boolean = false, val peerPremium: Boolean = false, val peerVerified: Boolean = false,
 ) {
     val isPrivate get() = type == "private"
     val isChannel get() = type == "channel"
@@ -167,7 +167,7 @@ data class ChatItem(
             j.int("members_count") ?: 0, j.int("last_id"), j.str("last_kind"), j.str("last_body"), j.str("last_sender"),
             j.str("last_sender_name"), j.date("last_at"), j.bool("last_deleted"), j.int("unread") ?: 0, j.date("others_read_at"),
             j.int("pinned_message_id"), j.str("description"), j.str("username"),
-            j.bool("peer_bot"), j.bool("peer_premium"),
+            j.bool("peer_bot"), j.bool("peer_premium"), j.bool("peer_verified"),
         )
     }
 }

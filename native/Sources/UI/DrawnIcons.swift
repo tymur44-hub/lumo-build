@@ -200,30 +200,107 @@ struct DrawnStatusView: View {
     }
 }
 
-/// Вращающаяся фиолетовая звезда Premium с мягкими углами
+private let star3D: [CGPoint] = {
+    var pts: [CGPoint] = (0..<10).map { i in
+        let r: CGFloat = i % 2 == 0 ? 1 : 0.58
+        let a = -Double.pi / 2 + Double(i) * Double.pi / 5
+        return CGPoint(x: r * CGFloat(cos(a)), y: r * CGFloat(sin(a)))
+    }
+    for _ in 0..<3 {
+        var out: [CGPoint] = []
+        for i in 0..<pts.count {
+            let p0 = pts[i], p1 = pts[(i + 1) % pts.count]
+            out.append(CGPoint(x: 0.75 * p0.x + 0.25 * p1.x, y: 0.75 * p0.y + 0.25 * p1.y))
+            out.append(CGPoint(x: 0.25 * p0.x + 0.75 * p1.x, y: 0.25 * p0.y + 0.75 * p1.y))
+        }
+        pts = out
+    }
+    return pts
+}()
+
+private func lerp3(_ a: (Double, Double, Double), _ b: (Double, Double, Double), _ t: Double) -> (Double, Double, Double) {
+    (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t, a.2 + (b.2 - a.2) * t)
+}
+
+private func mixC(_ a: (Double, Double, Double), _ b: (Double, Double, Double), _ t: Double) -> Color {
+    Color(red: a.0 + (b.0 - a.0) * t, green: a.1 + (b.1 - a.1) * t, blue: a.2 + (b.2 - a.2) * t)
+}
+
+/// Объёмная звезда: призма с толщиной, боковые грани освещены, вращается вокруг вертикальной оси
+private func draw3dStar(_ c: GraphicsContext, deg: Double, tiltDeg: Double, pulse: Double) {
+    let th = deg * Double.pi / 180, cs = CGFloat(cos(th)), sn = CGFloat(sin(th))
+    let tl = tiltDeg * Double.pi / 180, ct = CGFloat(cos(tl)), st = CGFloat(sin(tl))
+    let R: CGFloat = 36 * CGFloat(0.97 + 0.03 * pulse)
+    let D: CGFloat = 0.2
+    func proj(_ x: CGFloat, _ y: CGFloat, _ z: CGFloat) -> (CGPoint, CGFloat) {
+        let x1 = x * cs + z * sn
+        let z1 = -x * sn + z * cs
+        let y2 = y * ct - z1 * st
+        let z2 = y * st + z1 * ct
+        let k = 1 / (1 - z2 * 0.28)
+        return (CGPoint(x: 50 + x1 * R * k, y: 53 + y2 * R * k), z2)
+    }
+    let pts = star3D, n = pts.count
+    var area: CGFloat = 0
+    for i in 0..<n { let a = pts[i], b = pts[(i + 1) % n]; area += a.x * b.y - b.x * a.y }
+    let sgn: CGFloat = area > 0 ? 1 : -1
+    c.fill(Path(ellipseIn: CGRect(x: 26, y: 90, width: 48, height: 6)), with: .color(C(0x6C4DFF).opacity(0.16)))
+    let c1 = (0.357, 0.549, 1.0), c2 = (0.627, 0.4, 1.0), c3 = (1.0, 0.42, 0.796), dark = (0.169, 0.114, 0.478)
+    var sides: [(Path, Color, CGFloat)] = []
+    for i in 0..<n {
+        let a = pts[i], b = pts[(i + 1) % n]
+        let dx = b.x - a.x, dy = b.y - a.y
+        let len = max(1e-5, (dx * dx + dy * dy).squareRoot())
+        let nx = sgn * dy / len, ny = -sgn * dx / len
+        let z1 = -nx * sn
+        let nz = ny * st + z1 * ct
+        if nz <= 0 { continue }
+        let pa = proj(a.x, a.y, D), pb = proj(b.x, b.y, D), qa = proj(a.x, a.y, -D), qb = proj(b.x, b.y, -D)
+        var path = Path()
+        path.move(to: pa.0); path.addLine(to: pb.0); path.addLine(to: qb.0); path.addLine(to: qa.0); path.closeSubpath()
+        let t = Double(i) / Double(n)
+        let base = t < 0.5 ? lerp3(c2, c3, t * 2) : lerp3(c3, c1, (t - 0.5) * 2)
+        let light = min(1, max(0, 0.45 + 0.55 * Double(nz)))
+        sides.append((path, mixC(dark, base, light), (pa.1 + qa.1) / 2))
+    }
+    for sd in sides.sorted(by: { $0.2 < $1.2 }) {
+        c.fill(sd.0, with: .color(sd.1))
+        c.stroke(sd.0, with: .color(sd.1), lineWidth: 0.6)
+    }
+    let front = cs * ct > 0
+    let zf: CGFloat = front ? D : -D
+    var face = Path(), inner = Path()
+    for i in 0..<n {
+        let q = proj(pts[i].x, pts[i].y, zf).0
+        let w = proj(pts[i].x * 0.7, pts[i].y * 0.7, zf + (front ? 0.05 : -0.05)).0
+        if i == 0 { face.move(to: q); inner.move(to: w) } else { face.addLine(to: q); inner.addLine(to: w) }
+    }
+    face.closeSubpath(); inner.closeSubpath()
+    let g1 = proj(-1, -1, zf).0, g2 = proj(1, 1, zf).0
+    c.fill(face, with: .linearGradient(Gradient(colors: [C(0x5B8CFF), C(0xA066FF), C(0xFF6BCB)]), startPoint: g1, endPoint: g2))
+    c.stroke(face, with: .color(.white.opacity(0.35)), lineWidth: 0.8)
+    c.fill(inner, with: .linearGradient(Gradient(colors: [.white.opacity(0.32), .white.opacity(0.04)]), startPoint: g1, endPoint: g2))
+    let hi = proj(-0.35 + 0.5 * sn, -0.45, zf).0
+    c.fill(Path(ellipseIn: CGRect(x: hi.x - 15, y: hi.y - 15, width: 30, height: 30)),
+           with: .radialGradient(Gradient(colors: [.white.opacity(0.55), .clear]), center: hi, startRadius: 0, endRadius: 15))
+}
+
+/// Вращающаяся объёмная звезда Premium
 struct PremiumStarView: View {
     var size: CGFloat = 110
     var body: some View {
         TimelineView(.animation) { tl in
             let now = tl.date.timeIntervalSinceReferenceDate
-            let ph = (now / 3.6).truncatingRemainder(dividingBy: 1)
+            let ph = (now / 4.2).truncatingRemainder(dividingBy: 1)
             let eased = ph * ph * (3 - 2 * ph)
-            let spin = eased * 360
+            let tilt = 14 * sin(now * 2 * Double.pi / 5.2)
             let pulse = 0.5 + 0.5 * sin(now * 3.5)
             Canvas { ctx, sz in
                 var g = ctx
                 let s = min(sz.width, sz.height) / 100
                 g.scaleBy(x: s, y: s)
-                let sc = CGFloat(0.9 + 0.03 * pulse)
-                let h = xf(g, sx: sc, sy: sc, at: pt(50, 53))
-                let path = starPath(50, 53, 38, 0.55)
-                let br = GraphicsContext.Shading.linearGradient(Gradient(colors: [C(0x5B8CFF), C(0xA066FF), C(0xFF6BCB)]), startPoint: pt(15, 10), endPoint: pt(85, 95))
-                h.fill(path, with: br)
-                h.stroke(path, with: br, style: StrokeStyle(lineWidth: 11, lineJoin: .round))
-                h.fill(starPath(50, 51, 24, 0.55), with: .color(.white.opacity(0.16)))
-                h.fill(Path(ellipseIn: CGRect(x: 32, y: 26, width: 16, height: 8)), with: .color(.white.opacity(0.35 + 0.2 * pulse)))
+                draw3dStar(g, deg: eased * 360, tiltDeg: tilt, pulse: pulse)
             }
-            .rotation3DEffect(.degrees(spin), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
         }
         .frame(width: size, height: size)
     }

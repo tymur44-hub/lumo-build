@@ -66,7 +66,7 @@ fun Avatar(name: String, url: String?, color: Int, size: Dp, online: Boolean = f
 fun Modifier.bouncy(onClick: () -> Unit): Modifier {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
-    val s by animateFloatAsState(if (pressed) 0.88f else 1f, spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium), label = "b")
+    val s by animateFloatAsState(if (pressed) 0.95f else 1f, spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow), label = "b")
     return this.scale(s).clickable(src, null, onClick = onClick)
 }
 

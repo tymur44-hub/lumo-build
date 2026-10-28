@@ -470,14 +470,14 @@ fun MyQRScreen(onClose: () -> Unit) {
             Spacer(Modifier.height(12.dp))
             Image(bmp.asImageBitmap(), null, Modifier.size(240.dp))
             Spacer(Modifier.height(10.dp))
-            Text("Наведите камеру, чтобы открыть мой профиль в Lumo", color = Color(0xFF7276A0), fontSize = 13.sp, textAlign = TextAlign.Center)
+            Text("Покажите код, чтобы открыть мой профиль. Кнопка «Сканировать» — открыть чужой профиль или войти на компьютере", color = Color(0xFF7276A0), fontSize = 13.sp, textAlign = TextAlign.Center)
         }
         Row(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Pill("Поделиться ссылкой", true) {
                 runCatching { ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
                     .putExtra(android.content.Intent.EXTRA_TEXT, "Я в Lumo — напиши мне: $link"), "Поделиться").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
             }
-            Pill("Сканер", true) { onClose(); Ui.qrScan = true }
+            Pill("Сканировать", true) { onClose(); Ui.qrScan = true }
         }
     }
 }

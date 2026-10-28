@@ -5,6 +5,7 @@ import UIKit
 enum SettingsPage: Hashable {
     case premium, profile, profileEdit, calls, notifications, privacy, about, blocked, look, username, colors
     case privacyKey(String)
+    case msgPrivacy
 }
 
 struct SettingsView: View {
@@ -59,10 +60,6 @@ struct SettingsView: View {
                         NavigationLink(value: SettingsPage.calls) {
                             SettingsRow(icon: "phone.fill", color: Color(hex: 0x2bd67b), title: "Звонки", subtitle: "Недавние и пропущенные")
                         }
-                        divider
-                        Button { showScan = true } label: {
-                            SettingsRow(icon: "laptopcomputer", color: Color(hex: 0xff8a3d), title: "Устройства", subtitle: "Войти на компьютере по QR-коду")
-                        }
                     }
                     SettingsGroup {
                         NavigationLink(value: SettingsPage.notifications) {
@@ -82,10 +79,6 @@ struct SettingsView: View {
                     SettingsGroup {
                         Button { share = true } label: {
                             SettingsRow(icon: "person.badge.plus", color: Color(hex: 0xff5b8a), title: "Пригласить друзей", subtitle: "Поделиться ссылкой на ваш профиль")
-                        }
-                        divider
-                        Button { showScan = true } label: {
-                            SettingsRow(icon: "qrcode.viewfinder", color: Theme.a1, title: "Сканировать QR-код", subtitle: "Открыть профиль человека или войти на компьютере")
                         }
                         divider
                         NavigationLink(value: SettingsPage.about) {
@@ -119,6 +112,7 @@ struct SettingsView: View {
                 case .username: UsernameEditView()
                 case .colors: ColorsEditView()
                 case .privacyKey(let k): PrivacyKeyView(key: k)
+                case .msgPrivacy: MsgPrivacyView()
                 }
             }
             .onChange(of: avatarPick) { item in
@@ -889,6 +883,17 @@ struct PrivacyView: View {
                 Text("КОНФИДЕНЦИАЛЬНОСТЬ").font(.system(size: 13)).foregroundColor(Theme.muted)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 32).padding(.top, 26).padding(.bottom, 8)
                 TGCard {
+                    NavigationLink(value: SettingsPage.msgPrivacy) {
+                        HStack {
+                            Text("Сообщения").font(.system(size: 17)).foregroundColor(Theme.text)
+                            Spacer()
+                            Text(model.me?.privacy["msg_prem"] == "premium" ? "Контакты и Premium" : "Все").font(.system(size: 17)).foregroundColor(Theme.muted)
+                            Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.muted.opacity(0.6))
+                        }
+                        .padding(.horizontal, 20).frame(height: 58).contentShape(Rectangle())
+                    }
+                    .buttonStyle(RowButtonStyle())
+                    Divider().overlay(Theme.line).padding(.leading, 20)
                     ForEach(Array(privacyItems.enumerated()), id: \.offset) { i, it in
                         NavigationLink(value: SettingsPage.privacyKey(it.key)) {
                             HStack {
@@ -904,27 +909,6 @@ struct PrivacyView: View {
                     }
                 }
                 TGHint(text: "Вы можете выбрать, кому разрешаете приглашать Вас в группы и каналы.")
-                TGCard {
-                    Button {
-                        if !model.isPremium { model.say(premiumSoon) }
-                        else { Task { await model.setPrivacyKey("msg_prem", model.me?.privacy["msg_prem"] == "premium" ? "all" : "premium") } }
-                    } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "star.fill").font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
-                                .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color(hex: 0xffb020)))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Писать мне только Premium").font(.system(size: 17)).foregroundColor(Theme.text)
-                                Text("Люди без Lumo Premium не смогут написать первыми. Контакты и уже начатые переписки не затрагиваются.")
-                                    .font(.system(size: 12.5)).foregroundColor(Theme.muted)
-                            }
-                            Spacer(minLength: 8)
-                            Toggle("", isOn: .constant(model.me?.privacy["msg_prem"] == "premium")).labelsHidden().allowsHitTesting(false)
-                        }
-                        .padding(.horizontal, 16).padding(.vertical, 10).contentShape(Rectangle())
-                    }
-                    .buttonStyle(RowButtonStyle())
-                }
-                .padding(.top, 12).padding(.bottom, 30)
             }
         }
         .background(Theme.bg.ignoresSafeArea())
@@ -970,6 +954,55 @@ struct PrivacyKeyView: View {
         .background(Theme.bg.ignoresSafeArea())
         .navigationTitle(item?.title ?? "")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// «Кто может отправлять мне сообщения»: все или контакты и подписчики Premium
+struct MsgPrivacyView: View {
+    @EnvironmentObject var model: AppModel
+    @State private var goPremium = false
+
+    private func row(_ title: String, value: String, locked: Bool) -> some View {
+        let cur = model.me?.privacy["msg_prem"] == "premium" ? "premium" : "all"
+        return Button {
+            UISelectionFeedbackGenerator().selectionChanged()
+            if value == "premium" && !model.isPremium { model.say(premiumSoon); return }
+            Task { await model.setPrivacyKey("msg_prem", value) }
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    if cur == value { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.a1) }
+                    else if locked { Image(systemName: "lock.fill").font(.system(size: 16)).foregroundColor(Theme.muted) }
+                }.frame(width: 28)
+                Text(title).font(.system(size: 17)).foregroundColor(Theme.text)
+                Spacer()
+            }
+            .padding(.horizontal, 20).frame(height: 58).contentShape(Rectangle())
+        }
+        .buttonStyle(RowButtonStyle())
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                Text("КТО МОЖЕТ ОТПРАВЛЯТЬ МНЕ СООБЩЕНИЯ").font(.system(size: 13)).foregroundColor(Theme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 32).padding(.top, 20).padding(.bottom, 8)
+                TGCard {
+                    row("Все", value: "all", locked: false)
+                    Divider().overlay(Theme.line).padding(.leading, 62)
+                    row("Контакты и Premium-подписчики", value: "premium", locked: !model.isPremium)
+                }
+                TGHint(text: "Вы можете запретить входящие сообщения от пользователей, которых нет в Вашем списке контактов и которым Вы не писали сами.")
+                NavigationLink(value: SettingsPage.premium) {
+                    Text("Подробнее о Lumo Premium").font(.system(size: 16)).foregroundColor(Theme.a1)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 32).padding(.top, 8)
+                }
+            }
+        }
+        .background(Theme.bg.ignoresSafeArea())
+        .navigationTitle("Сообщения")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await model.loadMe() }
     }
 }
 

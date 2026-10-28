@@ -231,7 +231,7 @@ fun VoiceBubble(m: Message, mine: Boolean) {
     val p = P
     val cur = Voice.current == m.id
     LaunchedEffect(cur, Voice.playing) { while (cur && Voice.playing) { Voice.tick(); delay(80) } }
-    Row(Modifier.width(290.dp).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.width(252.dp).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(42.dp).clip(CircleShape).background(if (mine) Color.White.copy(alpha = 0.22f) else p.a1).clickable { Voice.toggle(m) }, contentAlignment = Alignment.Center) {
             Icon(if (cur && Voice.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(26.dp))
         }
@@ -261,7 +261,7 @@ fun TranscribeButton(mine: Boolean) {
     val p = P
     val prem = ru.volshebnymir.lumo.core.AppModel.me?.premium == true
     val fg = if (mine) Color.White else p.a1
-    Box(Modifier.size(width = 42.dp, height = 36.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+    Box(Modifier.size(width = 38.dp, height = 32.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
         .background(if (mine) Color.White.copy(alpha = 0.2f) else p.a1.copy(alpha = 0.14f))
         .clickable {
             if (!prem) ru.volshebnymir.lumo.core.AppModel.say(ru.volshebnymir.lumo.core.PREMIUM_SOON)
@@ -269,7 +269,7 @@ fun TranscribeButton(mine: Boolean) {
         }, contentAlignment = Alignment.Center) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = fg, modifier = Modifier.size(13.dp))
-            Text("A", color = fg, fontWeight = FontWeight.Black, fontSize = 17.sp)
+            Text("A", color = fg, fontWeight = FontWeight.Black, fontSize = 15.sp)
         }
         if (!prem) Icon(Icons.Filled.Lock, null, tint = fg, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 3.dp).size(11.dp))
     }
@@ -278,6 +278,15 @@ fun TranscribeButton(mine: Boolean) {
 /** Видеокружок: по нажатию воспроизводится со звуком и плавно увеличивается */
 @Composable
 fun VideoNoteBubble(m: Message) {
+    Row(verticalAlignment = Alignment.Bottom) {
+        VideoNoteCircle(m)
+        Spacer(Modifier.width(8.dp))
+        TranscribeButton(false)
+    }
+}
+
+@Composable
+private fun VideoNoteCircle(m: Message) {
     val p = P
     val ctx = LocalContext.current
     var playing by remember { mutableStateOf(false) }

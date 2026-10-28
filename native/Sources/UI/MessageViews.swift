@@ -7,9 +7,7 @@ struct VoiceView: View {
     let m: Message
     let mine: Bool
     @ObservedObject private var player = AudioPlayer.shared
-    @EnvironmentObject var model: AppModel
     @State private var text: String?
-    @State private var busy = false
 
     private var isCurrent: Bool { player.currentId == m.id }
 
@@ -31,24 +29,33 @@ struct VoiceView: View {
                     Text(isCurrent && player.position > 0 ? Fmt.duration(player.position) : Fmt.duration(m.duration))
                         .font(.caption).foregroundColor(mine ? .white.opacity(0.75) : Theme.muted)
                 }
-                transcribeButton
+                TranscribeButton(m: m, mine: mine, ext: "m4a", text: $text)
             }
             if let t = text {
                 Text(t).font(.system(size: 15)).foregroundColor(mine ? .white : Theme.text).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(width: 290, alignment: .leading)
+        .frame(width: 252, alignment: .leading)
     }
+}
 
-    /// Кнопка расшифровки справа от голосового; со значком замка, пока нет Premium
-    private var transcribeButton: some View {
+/// Кнопка расшифровки справа от голосового или кружка; со значком замка, пока нет Premium
+struct TranscribeButton: View {
+    let m: Message
+    let mine: Bool
+    let ext: String
+    @Binding var text: String?
+    @EnvironmentObject var model: AppModel
+    @State private var busy = false
+
+    var body: some View {
         Button {
             if !model.isPremium { model.say(premiumSoon); return }
             if text != nil { text = nil; return }
             guard let u = m.mediaURL, !busy else { return }
             busy = true
             Task {
-                switch await Transcriber.run(urlString: u, ext: "m4a") {
+                switch await Transcriber.run(urlString: u, ext: ext) {
                 case .success(let t): text = t
                 case .failure(let e): model.say(e.localizedDescription)
                 }
@@ -59,16 +66,16 @@ struct VoiceView: View {
                 if busy { ProgressView().tint(mine ? .white : Theme.a1) }
                 else {
                     HStack(spacing: 1) {
-                        Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold))
-                        Text("A").font(.system(size: 17, weight: .heavy))
+                        Image(systemName: "arrow.right").font(.system(size: 10, weight: .bold))
+                        Text("A").font(.system(size: 15, weight: .heavy))
                     }
                 }
             }
             .foregroundColor(mine ? .white : Theme.a1)
-            .frame(width: 42, height: 36)
-            .background(RoundedRectangle(cornerRadius: 12).fill(mine ? Color.white.opacity(0.2) : Theme.a1.opacity(0.14)))
+            .frame(width: 38, height: 32)
+            .background(RoundedRectangle(cornerRadius: 11).fill(mine ? Color.white.opacity(0.2) : Theme.a1.opacity(0.14)))
             .overlay(alignment: .bottomTrailing) {
-                if !model.isPremium { Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold)).foregroundColor(mine ? .white : Theme.a1).padding(.trailing, 4).padding(.bottom, 3) }
+                if !model.isPremium { Image(systemName: "lock.fill").font(.system(size: 9, weight: .bold)).foregroundColor(mine ? .white : Theme.a1).padding(.trailing, 4).padding(.bottom, 3) }
             }
         }
         .buttonStyle(.plain)

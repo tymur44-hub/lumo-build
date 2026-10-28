@@ -129,7 +129,7 @@ struct PremiumPageView: View {
         Feat(icon: "paintpalette.fill", color: 0xe05bff, title: "Свои цвета и фоны чатов", desc: "Цвет сообщений, обои и акценты оформления"),
         Feat(icon: "shield.lefthalf.filled", color: 0x2b8cff, title: "Запрет пересылки и скриншотов", desc: "Защищённый чат: пересылка и копирование отключены, экран скрывается при записи"),
         Feat(icon: "person.3.fill", color: 0x34c759, title: "Групповые голосовые и видеозвонки", desc: "Звонок с несколькими участниками", soon: true),
-        Feat(icon: "person.crop.rectangle.fill", color: 0x64d2ff, title: "Размытие и замена фона в звонке", desc: "Скройте комнату за спиной", soon: true),
+        Feat(icon: "person.crop.rectangle.fill", color: 0x64d2ff, title: "Размытие фона в видеозвонке", desc: "Кнопка «Фон» в звонке открывает системные эффекты камеры")),
         Feat(icon: "record.circle.fill", color: 0xff453a, title: "Запись звонка с согласия собеседника", desc: "Собеседник должен подтвердить запись", soon: true),
         Feat(icon: "star.fill", color: 0xffb020, title: "Значок Premium", desc: "Звезда рядом с именем в чатах и профиле"),
     ]

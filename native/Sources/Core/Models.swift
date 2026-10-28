@@ -131,10 +131,12 @@ struct ChatItem: Identifiable, Equatable {
     var isPublic: Bool
     var peerBot = false
     var peerPremium = false
+    var peerVerified = false
 
     init(json j: JSON) {
         peerBot = j.bool("peer_bot")
         peerPremium = j.bool("peer_premium")
+        peerVerified = j.bool("peer_verified")
         id = j.str("chat_id") ?? ""
         type = j.str("type") ?? "private"
         title = j.str("title")

@@ -1,6 +1,14 @@
 package ru.volshebnymir.lumo.ui
 
 import android.content.Intent
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.SideEffect
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MarkChatRead
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import ru.volshebnymir.lumo.core.Message
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -155,6 +163,7 @@ fun MainScreen() {
             Screen.EditUsername -> EditUsernameScreen()
             Screen.EditColor -> EditColorScreen()
             Screen.Premium -> PremiumScreen()
+            Screen.MsgPrivacy -> MsgPrivacyScreen()
         }
     }
 }
@@ -164,7 +173,7 @@ fun Tabs() {
     val p = P
     Box(Modifier.fillMaxSize().background(p.bg)) {
         AnimatedContent(AppModel.tab, transitionSpec = {
-            (fadeIn(tween(240)) + androidx.compose.animation.scaleIn(tween(240), initialScale = 0.97f)) togetherWith fadeOut(tween(160))
+            (fadeIn(tween(320)) + androidx.compose.animation.scaleIn(tween(320), initialScale = 0.985f)) togetherWith fadeOut(tween(220))
         }, label = "tabs") { t ->
             when (t) {
                 Tab.Chats -> ChatListScreen()
@@ -205,11 +214,11 @@ fun androidx.compose.foundation.layout.RowScope.TabItem(t: Tab, icon: ImageVecto
         Modifier.weight(1f).clip(RoundedCornerShape(30.dp)).background(if (on) p.a1.copy(alpha = 0.16f) else Color.Transparent)
             .clickable {
                 AppModel.tab = t
-                scope.launch { pop.snapTo(1f); pop.animateTo(1.3f, tween(120)); pop.animateTo(1f, spring(0.4f, Spring.StiffnessMedium)) }
+                scope.launch { pop.animateTo(1.1f, tween(200)); pop.animateTo(1f, spring(0.85f, Spring.StiffnessLow)) }
                 when (t) {
-                    Tab.Settings -> scope.launch { rot.animateTo(rot.value + 180f, spring(0.6f, Spring.StiffnessLow)) }
-                    Tab.Chats -> scope.launch { for (a in listOf(-14f, 12f, -8f, 0f)) rot.animateTo(a, tween(90)) }
-                    Tab.Contacts -> scope.launch { dy.animateTo(-7f, tween(120)); dy.animateTo(0f, spring(0.4f, Spring.StiffnessMedium)) }
+                    Tab.Settings -> scope.launch { rot.animateTo(rot.value + 120f, spring(0.85f, Spring.StiffnessVeryLow)) }
+                    Tab.Chats -> scope.launch { for (a in listOf(-7f, 6f, 0f)) rot.animateTo(a, tween(200)) }
+                    Tab.Contacts -> scope.launch { dy.animateTo(-3f, tween(200)); dy.animateTo(0f, spring(0.85f, Spring.StiffnessLow)) }
                 }
             }
             .padding(vertical = 7.dp),
@@ -266,7 +275,7 @@ fun ChatListScreen() {
         NetStatusBar()
         Row(Modifier.padding(start = 18.dp, end = 14.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Lumo", fontWeight = FontWeight.Black, fontSize = 30.sp, style = TextStyle(brush = p.accent), modifier = Modifier.weight(1f))
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(16.dp)).background(p.panel2).bouncy { Ui.qrScan = true }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(16.dp)).background(p.panel2).bouncy { Ui.qrMine = true }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.QrCodeScanner, null, tint = p.text, modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(8.dp))
@@ -343,7 +352,7 @@ fun ChatRow(c: ChatItem, modifier: Modifier = Modifier) {
                     if (c.isChannel) Icon(Icons.Filled.Campaign, null, tint = p.muted, modifier = Modifier.size(16.dp).padding(end = 3.dp))
                     Text(if (saved) "Избранное" else c.displayName, color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.5.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (c.isPrivate && !saved) { val (bb, pp, ee) = peerBadges(c); NameBadges(bb, pp, ee) }
+                    if (c.isPrivate && !saved) PeerBadges(c)
                     if (c.muted) Icon(Icons.Filled.NotificationsOff, null, tint = p.muted, modifier = Modifier.size(15.dp).padding(start = 3.dp))
                     Spacer(Modifier.weight(1f))
                     val mine = c.lastSender == AppModel.myId && c.lastKind != "system" && !saved && !c.isChannel
@@ -368,11 +377,61 @@ fun ChatRow(c: ChatItem, modifier: Modifier = Modifier) {
                 }
             }
         }
-        DropdownMenu(menu, { menu = false }) {
-            DropdownMenuItem(text = { Text(if (c.muted) "Включить звук" else "Без звука") }, onClick = { menu = false; scope.launch { AppModel.setMuted(c.id, !c.muted) } })
-            DropdownMenuItem(text = { Text(if (c.pinned) "Открепить" else "Закрепить") }, onClick = { menu = false; scope.launch { AppModel.setPinned(c.id, !c.pinned) } })
-            if (c.unread > 0) DropdownMenuItem(text = { Text("Прочитано") }, onClick = { menu = false; scope.launch { AppModel.loadMessages(c.id); AppModel.markRead(c.id) } })
-            if (!c.isPrivate) DropdownMenuItem(text = { Text(if (c.isChannel) "Отписаться" else "Покинуть группу", color = p.danger) }, onClick = { menu = false; scope.launch { AppModel.leave(c.id) } })
+        if (menu) ChatPreviewMenu(c) { menu = false }
+    }
+}
+
+/** Меню по долгому нажатию на чат: превью последних сообщений и действия под ним */
+@Composable
+fun ChatPreviewMenu(c: ChatItem, onClose: () -> Unit) {
+    val p = P
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(c.id) { AppModel.loadMessages(c.id) }
+    val msgs = (AppModel.messages[c.id] ?: emptyList()).filter { !it.deleted && it.kind != "system" }.takeLast(6)
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        val w = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        SideEffect {
+            try {
+                w?.setDimAmount(0.25f)
+                if (android.os.Build.VERSION.SDK_INT >= 31 && w != null) {
+                    w.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                    val lp = w.attributes; lp.blurBehindRadius = 40; w.attributes = lp
+                }
+            } catch (_: Throwable) {}
+        }
+        Box(Modifier.fillMaxSize().clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onClose() }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+            Column(Modifier.statusBarsPadding().navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.fillMaxWidth().heightIn(max = 430.dp).clip(RoundedCornerShape(30.dp)).background(p.chatBg).padding(12.dp)) {
+                    Column(Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(22.dp)).background(p.panel.copy(alpha = 0.9f)).padding(horizontal = 22.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(c.displayName, color = p.text, fontWeight = FontWeight.Black, fontSize = 17.sp, maxLines = 1)
+                        Text(if (c.isPrivate) (if (c.peerBot) "бот" else AppModel.lastSeenText(c.peerId, c.peerLastSeen)) else plural(c.membersCount, "участник", "участника", "участников"), color = p.muted, fontSize = 12.sp)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Column(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        msgs.forEach { m ->
+                            val mine = m.senderId == AppModel.myId
+                            Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
+                                Text(if (m.body.isNullOrEmpty()) Message.previewText(m.kind, m.body) else m.body!!.take(160), color = if (mine) Color.White else p.text, fontSize = 15.sp, maxLines = 4, overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.widthIn(max = 280.dp).clip(RoundedCornerShape(18.dp)).background(if (mine) p.accent else SolidColor(p.bubble)).padding(horizontal = 12.dp, vertical = 7.dp))
+                            }
+                        }
+                    }
+                }
+                Column(Modifier.width(270.dp).align(Alignment.End).clip(RoundedCornerShape(26.dp)).background(p.panel2.copy(alpha = 0.97f)).padding(6.dp)) {
+                    @Composable fun row(icon: ImageVector, t: String, danger: Boolean = false, f: () -> Unit) {
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).clickable { onClose(); f() }.padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(icon, null, tint = if (danger) p.danger else p.text, modifier = Modifier.size(22.dp))
+                            Spacer(Modifier.width(14.dp))
+                            Text(t, color = if (danger) p.danger else p.text, fontSize = 16.sp)
+                        }
+                    }
+                    if (c.unread > 0) row(Icons.Filled.MarkChatRead, "Прочитано") { scope.launch { AppModel.loadMessages(c.id); AppModel.markRead(c.id) } }
+                    row(Icons.Filled.PushPin, if (c.pinned) "Открепить" else "Закрепить") { scope.launch { AppModel.setPinned(c.id, !c.pinned) } }
+                    row(if (c.muted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff, if (c.muted) "Включить уведомления" else "Выключить уведомления") { scope.launch { AppModel.setMuted(c.id, !c.muted) } }
+                    if (!c.isPrivate) row(Icons.AutoMirrored.Filled.ExitToApp, if (c.isChannel) "Отписаться" else "Покинуть группу", danger = true) { scope.launch { AppModel.leave(c.id) } }
+                    else row(Icons.Filled.Delete, "Очистить историю", danger = true) { scope.launch { AppModel.clearChat(c.id) } }
+                }
+            }
         }
     }
 }

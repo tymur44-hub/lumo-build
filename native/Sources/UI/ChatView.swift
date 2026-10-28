@@ -586,7 +586,7 @@ struct ChatView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 4) {
                     Text(saved ? "Избранное" : (chat?.displayName ?? "")).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
-                    if chat?.isPrivate == true { NameBadges(bot: chat?.peerBot == true || (chat?.peerId.flatMap { model.profiles[$0]?.isBot } ?? false), premium: chat?.peerPremium == true || (chat?.peerId.flatMap { model.profiles[$0]?.premium } ?? false), emoji: chat?.peerId.flatMap { model.profiles[$0]?.emojiStatus }) }
+                    if chat?.isPrivate == true { NameBadges(bot: chat?.peerBot == true || (chat?.peerId.flatMap { model.profiles[$0]?.isBot } ?? false), premium: chat?.peerPremium == true || (chat?.peerId.flatMap { model.profiles[$0]?.premium } ?? false), emoji: chat?.peerId.flatMap { model.profiles[$0]?.emojiStatus }, verified: chat?.peerVerified == true || (chat?.peerId.flatMap { model.profiles[$0]?.verified } ?? false)) }
                     if chat?.isPrivate == true && e2e.active(chatId) { Image(systemName: "lock.fill").font(.system(size: 11)).foregroundColor(Theme.a2) }
                 }
                 if let n = model.netStatus {

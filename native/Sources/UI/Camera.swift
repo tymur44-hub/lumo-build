@@ -32,7 +32,7 @@ struct MyQRView: View {
                 }
                 .padding(.vertical, 20).frame(maxWidth: .infinity)
                 .background(RoundedRectangle(cornerRadius: 24).fill(LinearGradient(colors: [Theme.a1.opacity(0.18), Theme.a2.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing)))
-                Text("Покажите код другу: он отсканирует его в Lumo (Настройки → «Сканировать QR-код») и сразу попадёт в ваш профиль.")
+                Text("Покажите код другу: он отсканирует его в Lumo и сразу попадёт в ваш профиль. Кнопка «Сканировать» — открыть чужой профиль или войти на компьютере.")
                     .font(.subheadline).foregroundColor(Theme.muted).multilineTextAlignment(.center)
                 HStack(spacing: 10) {
                     Button { scan = true } label: {

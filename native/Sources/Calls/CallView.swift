@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 import Combine
 import WebRTC
 
@@ -112,6 +113,11 @@ struct CallView: View {
                     if camOn {
                         roundButton("arrow.triangle.2.circlepath.camera.fill", color: Color.white.opacity(0.18), label: "Повернуть") { calls.flipCamera() }
                             .transition(.scale.combined(with: .opacity))
+                        roundButton("person.crop.rectangle.fill", color: Color.white.opacity(0.18), label: "Фон") {
+                            if AppModel.shared.isPremium { AVCaptureDevice.showSystemUserInterface(.videoEffects) }
+                            else { AppModel.shared.say("Размытие фона — функция Lumo Premium (пока временно недоступна)") }
+                        }
+                        .transition(.scale.combined(with: .opacity))
                     }
                     roundButton("speaker.wave.2.fill", color: calls.speaker ? .white : Color.white.opacity(0.18),
                                 fg: calls.speaker ? .black : .white, label: "Динамик") { calls.toggleSpeaker() }
@@ -143,8 +149,8 @@ struct CallView: View {
 struct BouncyButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.86 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.55), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: configuration.isPressed)
     }
 }
 

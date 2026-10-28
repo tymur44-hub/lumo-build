@@ -248,8 +248,8 @@ struct TabItemButton: View {
         } label: {
             VStack(spacing: 2) {
                 Image(systemName: icon).font(.system(size: 22, weight: .semibold)).frame(height: 28)
-                    .scaleEffect(pop ? 1.3 : 1)
-                    .offset(y: pop && t == .contacts ? -6 : 0)
+                    .scaleEffect(pop ? 1.1 : 1)
+                    .offset(y: pop && t == .contacts ? -3 : 0)
                     .rotationEffect(.degrees(t == .settings ? spin : tilt))
                 Text(label).font(.system(size: 11.5, weight: .bold))
             }
@@ -273,20 +273,19 @@ struct TabItemButton: View {
     }
 
     private func animate() {
-        withAnimation(.spring(response: 0.22, dampingFraction: 0.5)) { pop = true }
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { pop = true }
         switch t {
         case .settings:
-            withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) { spin += 180 }
+            withAnimation(.spring(response: 0.9, dampingFraction: 0.85)) { spin += 120 }
         case .chats:
-            withAnimation(.easeInOut(duration: 0.08)) { tilt = -14 }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { withAnimation(.easeInOut(duration: 0.1)) { tilt = 12 } }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { withAnimation(.easeInOut(duration: 0.1)) { tilt = -8 } }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) { withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { tilt = 0 } }
+            withAnimation(.easeInOut(duration: 0.18)) { tilt = -7 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { withAnimation(.easeInOut(duration: 0.22)) { tilt = 6 } }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { tilt = 0 } }
         case .contacts:
             break
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.45)) { pop = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { pop = false }
         }
     }
 }
@@ -501,7 +500,14 @@ struct NameBadges: View {
     var bot: Bool
     var premium: Bool
     var emoji: String? = nil
+    var verified = false
     var body: some View {
+        HStack(spacing: 4) {
+            if verified { Image(systemName: "checkmark.seal.fill").font(.system(size: 14)).foregroundColor(Theme.a2) }
+            badge
+        }
+    }
+    @ViewBuilder private var badge: some View {
         if bot {
             Text("БОТ").font(.system(size: 10, weight: .heavy)).foregroundColor(Theme.muted)
                 .padding(.horizontal, 5).padding(.vertical, 1)

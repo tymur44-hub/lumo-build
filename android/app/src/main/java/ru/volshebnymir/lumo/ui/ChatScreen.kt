@@ -380,7 +380,7 @@ private fun ChatHeader(chatId: String, chat: ChatItem?) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (saved) "Избранное" else chat?.displayName ?: "Чат", color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (chat?.isPrivate == true) { val (bb, pp, ee) = peerBadges(chat); NameBadges(bb, pp, ee) }
+                    if (chat?.isPrivate == true) PeerBadges(chat)
                     if (chat?.isPrivate == true && ru.volshebnymir.lumo.core.E2E.active(chatId)) {
                         Spacer(Modifier.width(5.dp))
                         Icon(androidx.compose.material.icons.Icons.Filled.Lock, null, tint = p.a2, modifier = Modifier.size(14.dp))

@@ -80,6 +80,7 @@ struct MessageRow: View {
     @State private var swipe: CGFloat = 0
     @State private var swipeHit = false
     @State private var swipeActive = false
+    @State private var noteText: String?
 
     private var mine: Bool { m.senderId == model.myId }
     private var isGroup: Bool { chat?.type == "group" }
@@ -250,8 +251,15 @@ struct MessageRow: View {
             }
         } else if m.kind == "video_note" {
             VStack(alignment: mine ? .trailing : .leading, spacing: 4) {
-                if let u = m.mediaURL.flatMap(URL.init(string:)) { VideoNoteView(url: u) }
-                else { ZStack { Circle().fill(Theme.panel2); ProgressView() }.frame(width: 210, height: 210) }
+                HStack(alignment: .bottom, spacing: 8) {
+                    if let u = m.mediaURL.flatMap(URL.init(string:)) { VideoNoteView(url: u) }
+                    else { ZStack { Circle().fill(Theme.panel2); ProgressView() }.frame(width: 210, height: 210) }
+                    TranscribeButton(m: m, mine: false, ext: "mp4", text: $noteText)
+                }
+                if let t = noteText {
+                    Text(t).font(.system(size: 15)).foregroundColor(Theme.text).padding(10)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panel2)).frame(maxWidth: 260, alignment: .leading)
+                }
                 timeLine(onMedia: true)
             }
         } else {

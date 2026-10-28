@@ -110,22 +110,35 @@ object Extra {
     }
 
     fun canBio(c: Context): Boolean = runCatching {
-        androidx.biometric.BiometricManager.from(c).canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK) == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS
+        androidx.biometric.BiometricManager.from(c.applicationContext).canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK) == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS
     }.getOrDefault(false)
 
     fun chooseBio(on: Boolean) { bio = on; prefs().edit().putBoolean("bio", on).apply() }
 
-    /** Запрос отпечатка или лица; onOk вызывается при успехе */
+    private var asking = false
+
+    private fun activityOf(c: Context): androidx.fragment.app.FragmentActivity? {
+        var x: Context? = c
+        while (x is android.content.ContextWrapper) { if (x is androidx.fragment.app.FragmentActivity) return x; x = x.baseContext }
+        return x as? androidx.fragment.app.FragmentActivity
+    }
+
+    /** Запрос отпечатка или лица; onOk вызывается при успехе. Повторные вызовы, пока окно открыто, игнорируются */
     fun askBio(c: Context, onOk: () -> Unit) {
-        val act = c as? androidx.fragment.app.FragmentActivity ?: return
+        val act = activityOf(c) ?: return
+        if (asking) return
+        asking = true
         val cb = object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) { onOk() }
+            override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) { asking = false; onOk() }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { asking = false }
         }
         val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
             .setTitle("Lumo").setSubtitle("Разблокируйте приложение")
             .setNegativeButtonText("Код доступа")
+            .setConfirmationRequired(false)
             .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK).build()
-        runCatching { androidx.biometric.BiometricPrompt(act, androidx.core.content.ContextCompat.getMainExecutor(c), cb).authenticate(info) }
+        val ok = runCatching { androidx.biometric.BiometricPrompt(act, androidx.core.content.ContextCompat.getMainExecutor(act), cb).authenticate(info) }.isSuccess
+        if (!ok) asking = false
     }
 
     fun check(pin: String): Boolean = prefs().getString("lock", null) == hash(pin)
@@ -268,7 +281,7 @@ fun LockOverlay() {
     }
     if (!(Extra.hasLock && Extra.locked)) return
     var err by remember { mutableStateOf<String?>(null) }
-    androidx.compose.runtime.LaunchedEffect(Extra.locked) { if (Extra.bio) Extra.askBio(ctx) { Extra.locked = false } }
+    androidx.compose.runtime.LaunchedEffect(Extra.locked) { if (Extra.bio) { kotlinx.coroutines.delay(450); Extra.askBio(ctx) { Extra.locked = false } } }
     Box(Modifier.fillMaxSize().background(p.bg).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {}, contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             PinPad("Введите код доступа", err) { pin ->

@@ -36,6 +36,7 @@ sealed class Screen {
     data object EditUsername : Screen()
     data object EditColor : Screen()
     data object Premium : Screen()
+    data object MsgPrivacy : Screen()
 }
 
 enum class Tab { Contacts, Chats, Settings }

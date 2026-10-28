@@ -30,11 +30,26 @@ final class ExtraStore: ObservableObject {
 
     func setFaceId(_ on: Bool) { faceId = on; d.set(on, forKey: "lm_faceid") }
 
+    private var bioRunning = false
+    private var bioShownAt = Date.distantPast
+
+    /// Запрос Face ID / Touch ID. Системное окно нельзя показывать, пока приложение не активно, поэтому ждём активности
     func unlockWithBio() {
+        guard hasLock, locked, faceId, !bioRunning else { return }
+        guard UIApplication.shared.applicationState == .active else { return }
+        bioRunning = true
         let c = LAContext()
         c.localizedCancelTitle = "Код доступа"
-        c.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "Разблокировать Lumo") { ok, _ in
-            DispatchQueue.main.async { if ok { self.locked = false } }
+        var err: NSError?
+        let policy: LAPolicy = c.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err) ? .deviceOwnerAuthenticationWithBiometrics : .deviceOwnerAuthentication
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            c.evaluatePolicy(policy, localizedReason: "Разблокировать Lumo") { ok, _ in
+                DispatchQueue.main.async {
+                    self.bioRunning = false
+                    self.bioShownAt = Date()
+                    if ok { withAnimation(.easeOut(duration: 0.25)) { self.locked = false } }
+                }
+            }
         }
     }
 
@@ -60,8 +75,13 @@ final class ExtraStore: ObservableObject {
     func check(_ pin: String) -> Bool { d.string(forKey: "lm_lock") == hash(pin) }
 
     func scene(active: Bool) {
-        if !active { lastStop = Date(); return }
+        if !active {
+            // окно Face ID само делает приложение неактивным — это не уход из приложения
+            if !bioRunning && Date().timeIntervalSince(bioShownAt) > 2 { lastStop = Date() }
+            return
+        }
         if hasLock, let t = lastStop, Date().timeIntervalSince(t) > 60 { locked = true }
+        if hasLock && locked && faceId { DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { self.unlockWithBio() } }
     }
 }
 
@@ -154,7 +174,7 @@ struct LockOverlayView: View {
                     }
                 }
             }
-            .onAppear { if ex.faceId { ex.unlockWithBio() } }
+            .onAppear { if ex.faceId { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { ex.unlockWithBio() } } }
             .transition(.opacity)
         }
     }
