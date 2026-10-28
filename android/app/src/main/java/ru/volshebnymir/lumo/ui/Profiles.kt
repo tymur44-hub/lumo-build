@@ -753,7 +753,7 @@ fun AppearanceScreen() {
                     Box(Modifier.size(width = 52.dp, height = 70.dp).clip(RoundedCornerShape(12.dp))
                         .background(if (w == null) Brush.linearGradient(listOf(p.chatBg, p.chatBg)) else Brush.verticalGradient(listOf(Color(w.first), Color(w.second))))
                         .border(3.dp, if (Extra.wall == i) p.text else Color.Transparent, RoundedCornerShape(12.dp))
-                        .bouncy { if (i > 0 && !AppModel.isPremium) AppModel.say(ru.volshebnymir.lumo.core.PREMIUM_SOON) else Extra.setWall(i) })
+                        .bouncy { if (i > 0 && !AppModel.isPremium) AppModel.say(ru.volshebnymir.lumo.core.PREMIUM_SOON) else Extra.chooseWall(i) })
                 }
             }
         }

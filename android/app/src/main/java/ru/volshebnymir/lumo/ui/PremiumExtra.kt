@@ -81,7 +81,7 @@ object Extra {
         p.all.forEach { (k, v) -> if (k.startsWith("bub_") && v is Int) bub[k.removePrefix("bub_")] = v }
     }
 
-    fun setWall(i: Int) { wall = i; prefs().edit().putInt("wall", i).apply() }
+    fun chooseWall(i: Int) { wall = i; prefs().edit().putInt("wall", i).apply() }
     fun setBub(chat: String, i: Int) {
         if (i == 0) { bub.remove(chat); prefs().edit().remove("bub_$chat").apply() } else { bub[chat] = i; prefs().edit().putInt("bub_$chat", i).apply() }
     }
