@@ -351,7 +351,7 @@ struct ChatPreviewCard: View {
             .background(Theme.panel.opacity(0.9), in: Capsule())
             VStack(spacing: 5) {
                 if msgs.isEmpty {
-                    Text(chat.preview).font(.system(size: 14)).foregroundColor(Theme.muted).padding(.top, 30)
+                    Text(chat.preview(myId: model.myId)).font(.system(size: 14)).foregroundColor(Theme.muted).padding(.top, 30)
                 }
                 ForEach(msgs) { m in
                     let mine = m.senderId == model.myId
