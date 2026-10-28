@@ -7,28 +7,71 @@ struct VoiceView: View {
     let m: Message
     let mine: Bool
     @ObservedObject private var player = AudioPlayer.shared
+    @EnvironmentObject var model: AppModel
+    @State private var text: String?
+    @State private var busy = false
 
     private var isCurrent: Bool { player.currentId == m.id }
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button {
-                if let u = m.mediaURL { player.toggle(id: m.id, url: u) }
-            } label: {
-                Image(systemName: isCurrent && player.playing ? "pause.fill" : "play.fill")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 42, height: 42)
-                    .background(Circle().fill(mine ? Color.white.opacity(0.25) : Theme.a1))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Button {
+                    if let u = m.mediaURL { player.toggle(id: m.id, url: u) }
+                } label: {
+                    Image(systemName: isCurrent && player.playing ? "pause.fill" : "play.fill")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 42, height: 42)
+                        .background(Circle().fill(mine ? Color.white.opacity(0.25) : Theme.a1))
+                }
+                .disabled(m.mediaURL == nil)
+                VStack(alignment: .leading, spacing: 5) {
+                    WaveBars(wave: m.wave, progress: isCurrent ? player.progress : 0, mine: mine)
+                    Text(isCurrent && player.position > 0 ? Fmt.duration(player.position) : Fmt.duration(m.duration))
+                        .font(.caption).foregroundColor(mine ? .white.opacity(0.75) : Theme.muted)
+                }
+                transcribeButton
             }
-            .disabled(m.mediaURL == nil)
-            VStack(alignment: .leading, spacing: 5) {
-                WaveBars(wave: m.wave, progress: isCurrent ? player.progress : 0, mine: mine)
-                Text(isCurrent && player.position > 0 ? Fmt.duration(player.position) : Fmt.duration(m.duration))
-                    .font(.caption).foregroundColor(mine ? .white.opacity(0.75) : Theme.muted)
+            if let t = text {
+                Text(t).font(.system(size: 15)).foregroundColor(mine ? .white : Theme.text).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(width: 230, alignment: .leading)
+        .frame(width: 290, alignment: .leading)
+    }
+
+    /// Кнопка расшифровки справа от голосового; со значком замка, пока нет Premium
+    private var transcribeButton: some View {
+        Button {
+            if !model.isPremium { model.say(premiumSoon); return }
+            if text != nil { text = nil; return }
+            guard let u = m.mediaURL, !busy else { return }
+            busy = true
+            Task {
+                switch await Transcriber.run(urlString: u, ext: "m4a") {
+                case .success(let t): text = t
+                case .failure(let e): model.say(e.localizedDescription)
+                }
+                busy = false
+            }
+        } label: {
+            ZStack {
+                if busy { ProgressView().tint(mine ? .white : Theme.a1) }
+                else {
+                    HStack(spacing: 1) {
+                        Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold))
+                        Text("A").font(.system(size: 17, weight: .heavy))
+                    }
+                }
+            }
+            .foregroundColor(mine ? .white : Theme.a1)
+            .frame(width: 42, height: 36)
+            .background(RoundedRectangle(cornerRadius: 12).fill(mine ? Color.white.opacity(0.2) : Theme.a1.opacity(0.14)))
+            .overlay(alignment: .bottomTrailing) {
+                if !model.isPremium { Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold)).foregroundColor(mine ? .white : Theme.a1).padding(.trailing, 4).padding(.bottom, 3) }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 

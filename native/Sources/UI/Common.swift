@@ -219,6 +219,9 @@ struct FloatingTabBar: View {
         .lumoGlass(Capsule(), interactive: true)
         .shadow(color: .black.opacity(0.3), radius: 17, y: 12)
         .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture { }   // касание между кнопками не должно проваливаться в чат под панелью
     }
 
     private func item(_ t: AppTab, _ icon: String, _ label: String, _ badge: Int) -> some View {
@@ -252,6 +255,7 @@ struct TabItemButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
+            .contentShape(Rectangle())
             .foregroundColor(tab == t ? Theme.a1 : Theme.text)
             .modifier(TabPill(selected: tab == t))
             .overlay(alignment: .top) {

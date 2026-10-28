@@ -69,31 +69,69 @@ struct EmojiStatusSheet: View {
 
 // MARK: - Страница Lumo Premium
 
+private struct Feat: Identifiable {
+    let id = UUID()
+    let icon: String, color: UInt32, title: String, desc: String
+    var soon = false
+}
+
+/// Кнопка с градиентом и бегущим бликом
+struct ShimmerButton: View {
+    let title: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            TimelineView(.animation) { tl in
+                let x = ((tl.date.timeIntervalSinceReferenceDate / 2.2).truncatingRemainder(dividingBy: 1)) * 1.8 - 0.4
+                Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .background(
+                        GeometryReader { geo in
+                            ZStack {
+                                LinearGradient(colors: [Color(hex: 0x5b8cff), Color(hex: 0xa066ff), Color(hex: 0xd86bff)], startPoint: .leading, endPoint: .trailing)
+                                LinearGradient(colors: [.clear, .white.opacity(0.38), .clear], startPoint: .leading, endPoint: .trailing)
+                                    .frame(width: geo.size.width * 0.36)
+                                    .offset(x: geo.size.width * (x - 0.5))
+                            }
+                        }
+                    )
+                    .clipShape(Capsule())
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct PremiumPageView: View {
     @EnvironmentObject var model: AppModel
     @State private var plan = "year"
     @State private var until: String?
     @State private var owner = false
+    @State private var showEmoji = false
 
     private let plans: [(String, String, String, String)] = [
         ("year", "12 месяцев", "2 490 ₽", "около 207 ₽ в месяц · выгода 48%"),
         ("half", "6 месяцев", "1 490 ₽", "около 248 ₽ в месяц"),
         ("month", "1 месяц", "199 ₽", "без скидки"),
     ]
-    private let features: [(String, String, String)] = [
-        ("✨", "Анимированные смайлик-статусы", "Двигающийся значок рядом с именем"),
-        ("🎉", "Анимированные эффекты сообщений", "Удерживайте кнопку отправки и выберите эффект"),
-        ("🔕", "Отправка без звука", "Сообщение придёт тихо"),
-        ("⏰", "Отложенные сообщения", "Уйдут сами в нужное время"),
-        ("⏳", "Исчезающие сообщения", "Автоудаление в чате через час, день, неделю или месяц"),
-        ("📊", "Статистика каналов", "Подписчики и посты по дням"),
-        ("🤖", "Создание своих ботов", "Через @botfather командой /newbot"),
-        ("🎙", "Расшифровка голосовых и кружков", "Текст под голосовым сообщением — кнопка в меню сообщения"),
-        ("🎨", "Иконки приложения", "Шесть оформлений иконки с премиум-значком"),
-        ("🔐", "Блокировка и Face ID", "Код или Face ID при входе в Lumo"),
-        ("✉️", "Писать мне только Premium", "Ограничьте входящие сообщения в «Конфиденциальности»"),
-        ("🖼", "Свои цвета и фоны чатов", "Цвет сообщений, обои и акценты оформления"),
-        ("⭐", "Значок Premium", "Звезда рядом с именем в чатах и профиле"),
+    private let features: [Feat] = [
+        Feat(icon: "sparkles", color: 0xff9f0a, title: "Анимированные смайлик-статусы", desc: "Двигающийся значок рядом с именем"),
+        Feat(icon: "party.popper.fill", color: 0xff5b7a, title: "Анимированные эффекты сообщений", desc: "Удерживайте кнопку отправки и выберите эффект"),
+        Feat(icon: "bell.slash.fill", color: 0x8e8e93, title: "Отправка без звука", desc: "Сообщение придёт тихо"),
+        Feat(icon: "clock.fill", color: 0x2bd67b, title: "Отложенные сообщения", desc: "Уйдут сами в нужное время"),
+        Feat(icon: "timer", color: 0x1fb6a6, title: "Исчезающие сообщения", desc: "Автоудаление в чате через час, день, неделю или месяц"),
+        Feat(icon: "chart.bar.fill", color: 0x22a6ff, title: "Статистика каналов", desc: "Подписчики и посты по дням"),
+        Feat(icon: "cpu.fill", color: 0xff8a3d, title: "Создание своих ботов", desc: "Через @botfather командой /newbot"),
+        Feat(icon: "waveform", color: 0xa35bff, title: "Расшифровка голосовых и кружков", desc: "Кнопка справа от голосового сообщения"),
+        Feat(icon: "square.grid.2x2.fill", color: 0x5b6cff, title: "Иконки приложения", desc: "Шесть оформлений иконки с премиум-значком"),
+        Feat(icon: "faceid", color: 0x5b6cff, title: "Блокировка и Face ID", desc: "Код или Face ID при входе в Lumo"),
+        Feat(icon: "envelope.fill", color: 0xffb020, title: "Писать мне только Premium", desc: "Ограничьте входящие сообщения в «Конфиденциальности»"),
+        Feat(icon: "paintpalette.fill", color: 0xe05bff, title: "Свои цвета и фоны чатов", desc: "Цвет сообщений, обои и акценты оформления"),
+        Feat(icon: "shield.lefthalf.filled", color: 0x2b8cff, title: "Запрет пересылки и скриншотов", desc: "Защищённый чат: пересылка и копирование отключены, экран скрывается при записи"),
+        Feat(icon: "person.3.fill", color: 0x34c759, title: "Групповые голосовые и видеозвонки", desc: "Звонок с несколькими участниками", soon: true),
+        Feat(icon: "person.crop.rectangle.fill", color: 0x64d2ff, title: "Размытие и замена фона в звонке", desc: "Скройте комнату за спиной", soon: true),
+        Feat(icon: "record.circle.fill", color: 0xff453a, title: "Запись звонка с согласия собеседника", desc: "Собеседник должен подтвердить запись", soon: true),
+        Feat(icon: "star.fill", color: 0xffb020, title: "Значок Premium", desc: "Звезда рядом с именем в чатах и профиле"),
     ]
     private let about: [(String, String)] = [
         ("Что это", "Lumo Premium — необязательная подписка с дополнительными возможностями для общения. Основные функции мессенджера остаются бесплатными."),
@@ -102,103 +140,104 @@ struct PremiumPageView: View {
         ("Безопасность", "Шифрование медиа остаётся бесплатным для всех. Premium не даёт доступа к чужим перепискам."),
         ("Скоро", "Функции с пометкой «в разработке» появятся в следующих обновлениях."),
     ]
-    @State private var showEmoji = false
-    @State private var showIcons = false
-    private var gold: LinearGradient {
-        LinearGradient(colors: [Color(hex: 0x7c5cff), Color(hex: 0xff5bb8), Color(hex: 0xffb020)], startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(spacing: 10) {
-                    PremiumStarView(size: 120).padding(.top, 10)
-                    Text("Lumo Premium").font(.system(size: 26, weight: .heavy)).foregroundColor(Theme.text)
-                    Text("Больше возможностей для общения").font(.system(size: 15)).foregroundColor(Theme.muted)
-                    if model.isPremium {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("У вас активен Premium").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
-                            Text(owner ? "Бессрочно — вы владелец Lumo" : (until.map { "Действует до " + String($0.prefix(10)) } ?? "Подписка активна"))
-                                .font(.system(size: 14)).foregroundColor(Theme.muted)
-                            HStack(spacing: 8) {
-                                Text("Ваш смайлик-статус:").font(.system(size: 14)).foregroundColor(Theme.muted)
-                                if let e = model.me?.emojiStatus { StatusEmojiView(s: e, size: 22) } else { Text("не выбран").font(.system(size: 14)).foregroundColor(Theme.muted) }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-                        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
-                        .padding(.top, 6)
-                    }
-                    VStack(spacing: 8) {
-                        ForEach(plans, id: \.0) { pl in
-                            let on = plan == pl.0
-                            Button { plan = pl.0 } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: on ? "largecircle.fill.circle" : "circle").font(.system(size: 22)).foregroundColor(on ? Theme.a1 : Theme.muted)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(pl.1).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
-                                        Text(pl.3).font(.system(size: 13)).foregroundColor(Theme.muted)
-                                    }
-                                    Spacer()
-                                    Text(pl.2).font(.system(size: 17, weight: .heavy)).foregroundColor(Theme.text)
-                                }
-                                .padding(14)
-                                .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(on ? Theme.a1 : Color.clear, lineWidth: 2))
-                            }
+                VStack(spacing: 0) {
+                    ZStack(alignment: .top) {
+                        LinearGradient(colors: [Color(hex: 0x9b6bff).opacity(0.22), .clear], startPoint: .top, endPoint: .bottom).frame(height: 240)
+                        SparkleFieldView().frame(height: 240)
+                        VStack(spacing: 4) {
+                            PremiumStarView(size: 130)
+                            Text("Lumo Premium").font(.system(size: 26, weight: .heavy)).foregroundColor(Theme.text)
+                            Text("Больше свободы и десятки эксклюзивных функций").font(.system(size: 14)).foregroundColor(Theme.muted)
+                                .multilineTextAlignment(.center).padding(.horizontal, 40)
                         }
                     }
-                    .padding(.top, 6)
-                    VStack(spacing: 0) {
-                        ForEach(Array(features.enumerated()), id: \.offset) { i, f in
-                            if i > 0 { Divider().overlay(Theme.line).padding(.leading, 56) }
-                            HStack(spacing: 12) {
-                                Text(f.0).font(.system(size: 26)).frame(width: 34)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(f.1).font(.system(size: 15, weight: .bold)).foregroundColor(Theme.text)
-                                    Text(f.2).font(.system(size: 13)).foregroundColor(Theme.muted)
-                                }
-                                Spacer()
-                            }
-                            .padding(.horizontal, 14).padding(.vertical, 10)
-                        }
-                    }
-                    .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
-                    .padding(.top, 6)
-                    VStack(spacing: 0) {
+                    VStack(spacing: 12) {
                         if model.isPremium {
-                            Button { showEmoji = true } label: { HStack { Text("Смайлик-статус").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text); Spacer() }.padding(16) }
-                            Divider().overlay(Theme.line).padding(.leading, 16)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("У вас активен Premium").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
+                                Text(owner ? "Бессрочно — вы владелец Lumo" : (until.map { "Действует до " + String($0.prefix(10)) } ?? "Подписка активна"))
+                                    .font(.system(size: 14)).foregroundColor(Theme.muted)
+                                Button { showEmoji = true } label: {
+                                    HStack(spacing: 8) {
+                                        Text("Ваш смайлик-статус:").font(.system(size: 14)).foregroundColor(Theme.muted)
+                                        if let e = model.me?.emojiStatus { StatusEmojiView(s: e, size: 22) } else { Text("выбрать").font(.system(size: 14, weight: .bold)).foregroundColor(Theme.a1) }
+                                    }
+                                }
+                                .padding(.top, 4)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                            .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
                         }
-                        Button { showIcons = true } label: { HStack { Text(model.isPremium ? "Иконка приложения" : "Посмотреть иконки приложения").font(.system(size: 16, weight: .bold)).foregroundColor(model.isPremium ? Theme.text : Theme.a1); Spacer() }.padding(16) }
-                    }
-                    .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
-                    .padding(.top, 6)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("О Lumo Premium").font(.system(size: 18, weight: .heavy)).foregroundColor(Theme.text)
-                        ForEach(Array(about.enumerated()), id: \.offset) { _, a in
-                            Text(a.0).font(.system(size: 13, weight: .bold)).foregroundColor(Theme.a1).padding(.top, 12)
-                            Text(a.1).font(.system(size: 14)).foregroundColor(Theme.muted)
+                        VStack(spacing: 0) {
+                            ForEach(Array(plans.enumerated()), id: \.element.0) { i, pl in
+                                let on = plan == pl.0
+                                if i > 0 { Divider().overlay(Theme.line).padding(.leading, 50) }
+                                Button { plan = pl.0 } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.system(size: 24)).foregroundColor(on ? Theme.a1 : Theme.muted)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(pl.1).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
+                                            Text(pl.3).font(.system(size: 12.5)).foregroundColor(Theme.muted)
+                                        }
+                                        Spacer()
+                                        Text(pl.2).font(.system(size: 16, weight: .heavy)).foregroundColor(Theme.text)
+                                    }
+                                    .padding(14).contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
+                        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
+                        Text("ПРЕИМУЩЕСТВА ПОДПИСКИ").font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.muted)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 14).padding(.top, 6)
+                        VStack(spacing: 0) {
+                            ForEach(Array(features.enumerated()), id: \.element.id) { i, f in
+                                if i > 0 { Divider().overlay(Theme.line).padding(.leading, 62) }
+                                HStack(spacing: 14) {
+                                    Image(systemName: f.icon).font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
+                                        .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: f.color)))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text(f.title).font(.system(size: 15, weight: .bold)).foregroundColor(Theme.text)
+                                            if f.soon {
+                                                Text("в разработке").font(.system(size: 11, weight: .bold)).foregroundColor(Theme.a1)
+                                                    .padding(.horizontal, 6).padding(.vertical, 1).background(Theme.a1.opacity(0.14), in: RoundedRectangle(cornerRadius: 6))
+                                            }
+                                        }
+                                        Text(f.desc).font(.system(size: 12.5)).foregroundColor(Theme.muted)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(.horizontal, 14).padding(.vertical, 11)
+                            }
+                        }
+                        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("О Lumo Premium").font(.system(size: 18, weight: .heavy)).foregroundColor(Theme.text)
+                            ForEach(Array(about.enumerated()), id: \.offset) { _, a in
+                                Text(a.0).font(.system(size: 13, weight: .bold)).foregroundColor(Theme.a1).padding(.top, 12)
+                                Text(a.1).font(.system(size: 14)).foregroundColor(Theme.muted)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
+                        .padding(.bottom, 20)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(16)
-                    .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
-                    .padding(.top, 6).padding(.bottom, 20)
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 16)
             }
-            Button {
+            ShimmerButton(title: model.isPremium ? "Продлить подписку" : "Оформить Premium") {
                 if owner { Task { await model.openByUsername("lumo_premium") } } else { model.say("Оплата пока временно недоступна") }
-            } label: {
-                Text(model.isPremium ? "Продлить подписку" : "Оформить Premium").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
-                    .frame(maxWidth: .infinity).frame(height: 52).background(gold, in: RoundedRectangle(cornerRadius: 16))
             }
             .padding(12).background(Theme.panel)
         }
         .background(Theme.bg.ignoresSafeArea())
         .navigationTitle("Lumo Premium").navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showEmoji) { EmojiStatusSheet() }
-        .sheet(isPresented: $showIcons) { AppIconSheet() }
         .task {
             if let r = try? await API.shared.rpc("lm_my_premium", [:]) {
                 let o = (r as? [String: Any]) ?? ((r as? [[String: Any]])?.first)

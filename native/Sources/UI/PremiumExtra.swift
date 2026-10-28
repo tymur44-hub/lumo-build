@@ -307,3 +307,33 @@ struct ExtraProfileRow: View {
         .buttonStyle(RowButtonStyle())
     }
 }
+
+// MARK: - Защищённые чаты
+
+/// Запрет пересылки, копирования и скриншотов: серверный флаг чата. iOS не позволяет блокировать скриншот, поэтому экран скрывается при записи
+final class ProtStore: ObservableObject {
+    static let shared = ProtStore()
+    @Published var map: [String: Bool] = [:]
+    @Published var captured = UIScreen.main.isCaptured
+    private var obs: NSObjectProtocol?
+
+    private init() {
+        obs = NotificationCenter.default.addObserver(forName: UIScreen.capturedDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.captured = UIScreen.main.isCaptured
+        }
+    }
+
+    func on(_ id: String?) -> Bool { id.map { map[$0] == true } ?? false }
+
+    func load(_ id: String) async {
+        let r = try? await API.shared.select("lm_chats", ["select": "protected", "id": "eq." + id]).first
+        if let v = r?["protected"] as? Bool { await MainActor.run { map[id] = v } }
+    }
+
+    func set(_ id: String, _ on: Bool) async {
+        do {
+            _ = try await API.shared.rpc("lm_set_protected", ["p_chat": id, "p_on": on])
+            await MainActor.run { map[id] = on }
+        } catch { await MainActor.run { AppModel.shared.say((error as? APIError)?.message ?? "Не удалось изменить") } }
+    }
+}

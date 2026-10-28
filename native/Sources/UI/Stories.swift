@@ -328,8 +328,130 @@ struct AddStoryView: View {
     @State private var hours = 24
     @State private var busy = false
     @State private var duration: Double = 0
+    @StateObject private var cam = StoryCam()
+    @State private var videoMode = false
+    @State private var grid = false
+    @State private var secs = 0
 
     var body: some View {
+        Group {
+            if data == nil { cameraView } else { editorView }
+        }
+        .onChange(of: pick) { item in
+            guard let item = item else { return }
+            Task { await load(item) }
+        }
+    }
+
+    // MARK: камера (ФОТО / ВИДЕО, сетка, вспышка, галерея, переворот)
+
+    private func circleBtn(_ icon: String, on: Bool = false, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 18, weight: .semibold)).foregroundColor(on ? .black : .white)
+                .frame(width: 46, height: 46).background(Circle().fill(on ? Color.white : Color.black.opacity(0.35)))
+        }
+    }
+
+    private var cameraView: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 0) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 28).fill(Color(white: 0.1))
+                    CameraPreview(session: cam.session).clipShape(RoundedRectangle(cornerRadius: 28))
+                    if grid {
+                        Canvas { ctx, sz in
+                            var p = Path()
+                            for i in 1...2 {
+                                let x = sz.width * CGFloat(i) / 3, y = sz.height * CGFloat(i) / 3
+                                p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: sz.height))
+                                p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: sz.width, y: y))
+                            }
+                            ctx.stroke(p, with: .color(.white.opacity(0.45)), lineWidth: 1)
+                        }
+                        .allowsHitTesting(false)
+                    }
+                    VStack {
+                        HStack(spacing: 10) {
+                            if cam.recording {
+                                Text(String(format: "%d:%02d", secs / 60, secs % 60)).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                                    .padding(.horizontal, 10).padding(.vertical, 4).background(Capsule().fill(Color.red))
+                            }
+                            Spacer()
+                            circleBtn("grid", on: grid) { grid.toggle() }
+                            circleBtn(cam.flash ? "bolt.fill" : "bolt.slash.fill", on: cam.flash) { cam.flash.toggle(); cam.applyTorch(video: videoMode) }
+                            circleBtn("xmark") { cam.stop(); dismiss() }
+                        }
+                        .padding(12)
+                        Spacer()
+                    }
+                }
+                .padding(.top, 4)
+                VStack(spacing: 14) {
+                    Button { shoot() } label: {
+                        ZStack {
+                            Circle().stroke(Color.white.opacity(0.55), lineWidth: 4).frame(width: 78, height: 78)
+                            Circle().fill(videoMode ? Color.red : Color.white).frame(width: 64, height: 64)
+                            if cam.recording { RoundedRectangle(cornerRadius: 5).fill(Color.white).frame(width: 24, height: 24) }
+                        }
+                    }
+                    HStack {
+                        PhotosPicker(selection: $pick, matching: .any(of: [.images, .videos])) {
+                            Image(systemName: "photo.on.rectangle").font(.system(size: 22)).foregroundColor(.white)
+                                .frame(width: 54, height: 54).background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.18)))
+                        }
+                        Spacer()
+                        HStack(spacing: 0) {
+                            ForEach([(true, "ВИДЕО"), (false, "ФОТО")], id: \.1) { m in
+                                Text(m.1).font(.system(size: 15, weight: .bold)).foregroundColor(videoMode == m.0 ? Color(hex: 0xffd60a) : .white)
+                                    .padding(.horizontal, 22).padding(.vertical, 12)
+                                    .background(Capsule().fill(videoMode == m.0 ? Color.white.opacity(0.18) : Color.clear))
+                                    .onTapGesture { if !cam.recording { videoMode = m.0; cam.applyTorch(video: m.0) } }
+                            }
+                        }
+                        .padding(4).background(Capsule().fill(Color.white.opacity(0.16)))
+                        Spacer()
+                        Button { if !cam.recording { cam.flip() } } label: {
+                            Image(systemName: "arrow.triangle.2.circlepath.camera").font(.system(size: 22)).foregroundColor(.white)
+                                .frame(width: 54, height: 54).background(Circle().fill(Color.white.opacity(0.18)))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .padding(.vertical, 12)
+            }
+        }
+        .task {
+            cam.onPhoto = { d in
+                if let img = UIImage(data: d), let res = Media.jpeg(img) { image = img; data = res.0; isVideo = false }
+            }
+            cam.onVideo = { u in Task { await ingestVideo(u) } }
+            await cam.start()
+        }
+        .task(id: cam.recording) {
+            secs = 0
+            while cam.recording { try? await Task.sleep(nanoseconds: 1_000_000_000); if cam.recording { secs += 1 } }
+        }
+        .onDisappear { cam.stop() }
+        .preferredColorScheme(.dark)
+    }
+
+    private func shoot() {
+        if videoMode { cam.recording ? cam.stopRecording() : cam.startRecording() }
+        else { cam.takePhoto() }
+    }
+
+    private func ingestVideo(_ u: URL) async {
+        let asset = AVURLAsset(url: u.px)
+        let dur = (try? await asset.load(.duration))?.seconds ?? 0
+        guard let d = try? Data(contentsOf: u) else { model.say("Не удалось открыть видео"); return }
+        if d.count > 60 * 1024 * 1024 { model.say("Видео слишком большое (до 60 МБ)"); return }
+        isVideo = true; duration = dur; videoURL = u; data = d
+    }
+
+    // MARK: подготовка и публикация
+
+    private var editorView: some View {
         NavigationStack {
             VStack(spacing: 14) {
                 ZStack {
@@ -365,11 +487,7 @@ struct AddStoryView: View {
             .background(Theme.bg.ignoresSafeArea())
             .navigationTitle("Новая история")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
-            .onChange(of: pick) { item in
-                guard let item = item else { return }
-                Task { await load(item) }
-            }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Назад") { data = nil; image = nil; videoURL = nil; pick = nil; isVideo = false } } }
         }
     }
 
@@ -401,6 +519,101 @@ struct AddStoryView: View {
                                           caption: caption, meta: isVideo ? ["dur": duration] : [:], hours: hours)
             busy = false
             if ok { dismiss() }
+        }
+    }
+}
+
+/// Камера для историй: фото и видео, вспышка, переворот
+final class StoryCam: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate, AVCaptureFileOutputRecordingDelegate {
+    let session = AVCaptureSession()
+    private let photoOut = AVCapturePhotoOutput()
+    private let movieOut = AVCaptureMovieFileOutput()
+    private var position: AVCaptureDevice.Position = .back
+    private var device: AVCaptureDevice?
+    private var started = false
+    @Published var flash = false
+    @Published var recording = false
+    var onPhoto: ((Data) -> Void)?
+    var onVideo: ((URL) -> Void)?
+
+    func start() async {
+        guard await AVCaptureDevice.requestAccess(for: .video) else { return }
+        _ = await AVCaptureDevice.requestAccess(for: .audio)
+        configure()
+        if !started {
+            started = true
+            DispatchQueue.global(qos: .userInitiated).async { self.session.startRunning() }
+        } else if !session.isRunning {
+            DispatchQueue.global(qos: .userInitiated).async { self.session.startRunning() }
+        }
+    }
+
+    func stop() {
+        if recording { movieOut.stopRecording() }
+        applyTorchOff()
+        DispatchQueue.global(qos: .userInitiated).async { if self.session.isRunning { self.session.stopRunning() } }
+    }
+
+    private func configure() {
+        session.beginConfiguration()
+        session.sessionPreset = .high
+        for i in session.inputs { session.removeInput(i) }
+        if let d = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position), let inp = try? AVCaptureDeviceInput(device: d), session.canAddInput(inp) {
+            session.addInput(inp); device = d
+        }
+        if let a = AVCaptureDevice.default(for: .audio), let inp = try? AVCaptureDeviceInput(device: a), session.canAddInput(inp) { session.addInput(inp) }
+        if !session.outputs.contains(photoOut), session.canAddOutput(photoOut) { session.addOutput(photoOut) }
+        if !session.outputs.contains(movieOut), session.canAddOutput(movieOut) {
+            movieOut.maxRecordedDuration = CMTime(seconds: 60, preferredTimescale: 600)
+            session.addOutput(movieOut)
+        }
+        session.commitConfiguration()
+        for o in [photoOut as AVCaptureOutput, movieOut as AVCaptureOutput] {
+            if let c = o.connection(with: .video), c.isVideoOrientationSupported { c.videoOrientation = .portrait }
+            if let c = o.connection(with: .video), c.isVideoMirroringSupported { c.automaticallyAdjustsVideoMirroring = false; c.isVideoMirrored = position == .front }
+        }
+    }
+
+    func flip() {
+        position = position == .back ? .front : .back
+        applyTorchOff()
+        configure()
+    }
+
+    func applyTorch(video: Bool) {
+        guard let d = device, d.hasTorch, position == .back else { return }
+        try? d.lockForConfiguration()
+        d.torchMode = (flash && video) ? .on : .off
+        d.unlockForConfiguration()
+    }
+    private func applyTorchOff() {
+        guard let d = device, d.hasTorch else { return }
+        try? d.lockForConfiguration(); d.torchMode = .off; d.unlockForConfiguration()
+    }
+
+    func takePhoto() {
+        let s = AVCapturePhotoSettings()
+        if photoOut.supportedFlashModes.contains(flash ? .on : .off) { s.flashMode = flash ? .on : .off }
+        photoOut.capturePhoto(with: s, delegate: self)
+    }
+
+    func startRecording() {
+        let u = FileManager.default.temporaryDirectory.appendingPathComponent("story-cam-\(UUID().uuidString).mov")
+        movieOut.startRecording(to: u, recordingDelegate: self)
+        DispatchQueue.main.async { self.recording = true }
+    }
+    func stopRecording() { movieOut.stopRecording() }
+
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        guard let d = photo.fileDataRepresentation() else { return }
+        DispatchQueue.main.async { self.onPhoto?(d) }
+    }
+
+    func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
+        DispatchQueue.main.async {
+            self.recording = false
+            self.applyTorchOff()
+            self.onVideo?(outputFileURL)
         }
     }
 }

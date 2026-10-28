@@ -57,6 +57,7 @@ struct ChatWallpaper: View {
 struct AppearanceView: View {
     @EnvironmentObject var look: Appearance
     @EnvironmentObject var model: AppModel
+    @State private var showIcons = false
 
     var body: some View {
         ScrollView {
@@ -89,6 +90,15 @@ struct AppearanceView: View {
                 .padding(4)
                 .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 18))
                 .padding(.horizontal, 14)
+
+                SectionTitle(text: "Иконка приложения")
+                SettingsGroup {
+                    Button { showIcons = true } label: {
+                        SettingsRow(icon: "square.grid.2x2.fill", color: Color(hex: 0x5b6cff), title: "Иконка приложения", subtitle: "Шесть оформлений, часть — с премиум-значком")
+                    }
+                    .buttonStyle(.plain)
+                }
+                .sheet(isPresented: $showIcons) { AppIconSheet().environmentObject(model) }
 
                 SectionTitle(text: "Цвет")
                 SettingsGroup {

@@ -32,6 +32,8 @@ struct ChatView: View {
     @State private var selected: Set<Int> = []
     @State private var reporting: ReportTarget?
     @State private var transcript: String?
+    @ObservedObject private var prot = ProtStore.shared
+    private var isProt: Bool { prot.map[chatId] == true }
     @State private var showSearch = false
     @State private var confirmClear = false
     @State private var confirmLeave = false
@@ -191,6 +193,22 @@ struct ChatView: View {
         }
         .sheet(item: $forwarding) { b in ForwardView(messages: b.messages).environmentObject(model) }
         .sheet(item: $reporting) { t in ReportView(target: t).environmentObject(model) }
+        .task(id: chatId) { await prot.load(chatId) }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
+            if isProt { model.say("В этом чате запрещены скриншоты") }
+        }
+        .overlay {
+            if isProt && prot.captured {
+                ZStack {
+                    Theme.bg.ignoresSafeArea()
+                    VStack(spacing: 10) {
+                        Image(systemName: "shield.lefthalf.filled").font(.system(size: 40)).foregroundColor(Theme.a1)
+                        Text("Содержимое защищённого чата скрыто, пока идёт запись экрана").font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(Theme.text).multilineTextAlignment(.center).padding(.horizontal, 40)
+                    }
+                }
+            }
+        }
         .alert("Расшифровка", isPresented: Binding(get: { transcript != nil }, set: { if !$0 { transcript = nil } })) {
             Button("Копировать") { UIPasteboard.general.string = transcript; model.say("Скопировано") }
             Button("Закрыть", role: .cancel) {}
@@ -245,7 +263,7 @@ struct ChatView: View {
                 endSelecting()
                 askDelete(l)
             }
-            selButton("doc.on.doc", "Копировать", enabled: !texts.isEmpty) {
+            selButton("doc.on.doc", "Копировать", enabled: !texts.isEmpty && !isProt) {
                 UIPasteboard.general.string = texts.joined(separator: "\n\n")
                 model.say(texts.count > 1 ? "Сообщения скопированы" : "Скопировано")
                 endSelecting()
@@ -257,7 +275,7 @@ struct ChatView: View {
                     endSelecting()
                 }
             }
-            selButton("arrowshape.turn.up.right", "Переслать", enabled: !list.isEmpty) {
+            selButton("arrowshape.turn.up.right", "Переслать", enabled: !list.isEmpty && !isProt) {
                 forwarding = ForwardBatch(messages: list)
                 endSelecting()
             }
@@ -286,7 +304,7 @@ struct ChatView: View {
         let mine = m.senderId == model.myId
         var a: [MsgAction] = []
         if chat?.canPost ?? true { a.append(MsgAction(title: "Ответить", icon: "arrowshape.turn.up.left") { reply = m; editing = nil }) }
-        if let b = m.body, !b.isEmpty {
+        if let b = m.body, !b.isEmpty, !isProt {
             a.append(MsgAction(title: "Копировать", icon: "doc.on.doc") { UIPasteboard.general.string = b; model.say("Скопировано") })
         }
         if ["voice", "video_note"].contains(m.kind), let u = m.mediaURL {
@@ -311,7 +329,7 @@ struct ChatView: View {
                 Task { await model.pin(pinned ? nil : m, in: m.chatId) }
             })
         }
-        a.append(MsgAction(title: "Переслать", icon: "arrowshape.turn.up.right") { forwarding = ForwardBatch(messages: [m]) })
+        if !isProt { a.append(MsgAction(title: "Переслать", icon: "arrowshape.turn.up.right") { forwarding = ForwardBatch(messages: [m]) }) }
         if !mine {
             a.append(MsgAction(title: "Пожаловаться", icon: "exclamationmark.bubble") {
                 reporting = ReportTarget(user: m.senderId, chat: chatId, message: m.id)
@@ -609,6 +627,12 @@ struct ChatView: View {
                     Label(c.pinned ? "Открепить чат" : "Закрепить чат", systemImage: c.pinned ? "pin.slash" : "pin")
                 }
                 Button { model.premium { showBubSheet = true } } label: { Label("Цвет сообщений ★", systemImage: "paintpalette") }
+                if !c.isChannel, c.isPrivate || c.isAdmin {
+                    let on = prot.map[c.id] == true
+                    Button {
+                        if on { Task { await prot.set(c.id, false) } } else { model.premium { Task { await prot.set(c.id, true) } } }
+                    } label: { Label(on ? "Разрешить пересылку и скриншоты" : "Запретить пересылку и скриншоты ★", systemImage: "shield.lefthalf.filled") }
+                }
                 Button { confirmClear = true } label: { Label("Очистить историю", systemImage: "eraser") }
                 if c.isPrivate, let p = c.peerId, p != model.myId {
                     let blocked = model.blockedByMe.contains(p)

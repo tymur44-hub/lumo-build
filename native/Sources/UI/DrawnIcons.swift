@@ -200,40 +200,58 @@ struct DrawnStatusView: View {
     }
 }
 
-/// Большая вращающаяся золотая звезда Premium
+/// Вращающаяся фиолетовая звезда Premium с мягкими углами
 struct PremiumStarView: View {
     var size: CGFloat = 110
     var body: some View {
         TimelineView(.animation) { tl in
             let now = tl.date.timeIntervalSinceReferenceDate
-            let spin = (now / 4.2).truncatingRemainder(dividingBy: 1) * 360
-            let pulse = 0.5 + 0.5 * sin(now * 3.9)
-            let orbit = (now / 6).truncatingRemainder(dividingBy: 1) * 360
-            ZStack {
-                Canvas { ctx, sz in
-                    var g = ctx
-                    let s = min(sz.width, sz.height) / 100
-                    g.scaleBy(x: s, y: s)
-                    g.fill(Path(ellipseIn: CGRect(x: 4, y: 4, width: 92, height: 92)), with: .color(C(0xFFB020).opacity(0.18 + 0.14 * pulse)))
-                    g.fill(Path(ellipseIn: CGRect(x: 16 - 2 * pulse, y: 16 - 2 * pulse, width: 68 + 4 * pulse, height: 68 + 4 * pulse)), with: .color(C(0xFFE066).opacity(0.18)))
-                    for i in 0..<3 {
-                        let a = (orbit + Double(i) * 120) * Double.pi / 180
-                        sparkle(g, 50 + 44 * CGFloat(cos(a)), 50 + 44 * CGFloat(sin(a)), CGFloat(5 + 2 * i), 0.5 + 0.5 * pulse)
-                    }
-                }
-                Canvas { ctx, sz in
-                    var g = ctx
-                    let s = min(sz.width, sz.height) / 100
-                    g.scaleBy(x: s, y: s)
-                    let sc = CGFloat(0.62 + 0.04 * pulse)
-                    let h = xf(g, sx: sc, sy: sc, at: pt(50, 52))
-                    h.fill(starPath(50, 52, 48, 0.48), with: vg(4, 100, [0xFFF08A, 0xFFB020, 0xFF7A00]))
-                    h.stroke(starPath(50, 52, 48, 0.48), with: .color(.white.opacity(0.7)), lineWidth: 2)
-                    h.fill(starPath(50, 52, 22, 0.48), with: .color(.white.opacity(0.22)))
-                }
-                .rotation3DEffect(.degrees(spin), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
+            let ph = (now / 3.6).truncatingRemainder(dividingBy: 1)
+            let eased = ph * ph * (3 - 2 * ph)
+            let spin = eased * 360
+            let pulse = 0.5 + 0.5 * sin(now * 3.5)
+            Canvas { ctx, sz in
+                var g = ctx
+                let s = min(sz.width, sz.height) / 100
+                g.scaleBy(x: s, y: s)
+                let sc = CGFloat(0.9 + 0.03 * pulse)
+                let h = xf(g, sx: sc, sy: sc, at: pt(50, 53))
+                let path = starPath(50, 53, 38, 0.55)
+                let br = GraphicsContext.Shading.linearGradient(Gradient(colors: [C(0x5B8CFF), C(0xA066FF), C(0xFF6BCB)]), startPoint: pt(15, 10), endPoint: pt(85, 95))
+                h.fill(path, with: br)
+                h.stroke(path, with: br, style: StrokeStyle(lineWidth: 11, lineJoin: .round))
+                h.fill(starPath(50, 51, 24, 0.55), with: .color(.white.opacity(0.16)))
+                h.fill(Path(ellipseIn: CGRect(x: 32, y: 26, width: 16, height: 8)), with: .color(.white.opacity(0.35 + 0.2 * pulse)))
             }
+            .rotation3DEffect(.degrees(spin), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
         }
         .frame(width: size, height: size)
+    }
+}
+
+/// Поле мерцающих искр в шапке Premium
+struct SparkleFieldView: View {
+    private let pts: [(CGFloat, CGFloat, CGFloat, Double)] = {
+        var seed: UInt64 = 7
+        func rnd() -> Double { seed = seed &* 6364136223846793005 &+ 1442695040888963407; return Double((seed >> 33) % 10000) / 10000 }
+        return (0..<46).map { _ in (CGFloat(rnd()), CGFloat(rnd()), CGFloat(3 + rnd() * 6), rnd()) }
+    }()
+    var body: some View {
+        TimelineView(.animation) { tl in
+            let t = (tl.date.timeIntervalSinceReferenceDate / 3.2).truncatingRemainder(dividingBy: 1)
+            Canvas { ctx, sz in
+                for q in pts {
+                    let ph = (t + q.3).truncatingRemainder(dividingBy: 1)
+                    let a = min(1, 0.25 + 0.75 * sin(Double.pi * ph))
+                    let x = q.0 * sz.width, y = q.1 * sz.height
+                    let r = q.2 * CGFloat(0.7 + 0.5 * a)
+                    let col = q.3 > 0.5 ? C(0x9B6BFF) : C(0x6C8CFF)
+                    var p = Path()
+                    p.move(to: pt(x - r, y)); p.addLine(to: pt(x + r, y)); p.move(to: pt(x, y - r)); p.addLine(to: pt(x, y + r))
+                    ctx.stroke(p, with: .color(col.opacity(a * 0.8)), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
