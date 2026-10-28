@@ -274,7 +274,7 @@ fun LockOverlay() {
         val owner = ctx as? LifecycleOwner
         val obs = LifecycleEventObserver { _, e ->
             if (e == Lifecycle.Event.ON_STOP) Extra.lastStop = System.currentTimeMillis()
-            if (e == Lifecycle.Event.ON_START && Extra.hasLock && Extra.lastStop > 0 && System.currentTimeMillis() - Extra.lastStop > 60_000) Extra.locked = true
+            if (e == Lifecycle.Event.ON_START) { if (Extra.hasLock && Extra.lastStop > 0 && System.currentTimeMillis() - Extra.lastStop > 60_000) Extra.locked = true; Extra.lastStop = 0 }
         }
         owner?.lifecycle?.addObserver(obs)
         onDispose { owner?.lifecycle?.removeObserver(obs) }

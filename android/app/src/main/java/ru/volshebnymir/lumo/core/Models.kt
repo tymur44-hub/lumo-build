@@ -97,7 +97,7 @@ data class Profile(
     fun priv(key: String): String = privacy.str(key) ?: when (key) {
         "seen" -> if (showSeen) "all" else "none"
         "calls" -> callsFrom
-        "birthday" -> "contacts"
+        "birthday" -> "all"
         else -> "all"
     }
 
@@ -187,7 +187,7 @@ data class Message(
     val isVideoCall get() = meta.bool("video")
     /** Кнопки под сообщением бота: строки по [текст, data|url] */
     val buttons: List<List<BotBtn>> get() = meta.optJSONArray("buttons")?.let { rows ->
-        (0 until rows.length()).mapNotNull { i -> rows.optJSONArray(i)?.let { r -> (0 until r.length()).mapNotNull { k -> r.optJSONObject(k)?.let { b -> BotBtn(b.str("text") ?: "", b.str("data"), b.str("url")) } } } }
+        (0 until rows.length()).mapNotNull { i -> rows.optJSONArray(i)?.let { r -> (0 until r.length()).mapNotNull { k -> r.optJSONObject(k)?.let { b -> BotBtn(b.str("text") ?: "", b.str("data"), b.str("url"), b.str("web_app")) } } } }
     } ?: emptyList()
     val preview: String get() = if (deleted) "Сообщение удалено" else if (kind == "file") "Файл: $fileName" else previewText(kind, body)
 
@@ -217,7 +217,10 @@ data class Message(
     }
 }
 
-data class BotBtn(val text: String, val data: String?, val url: String?)
+data class BotBtn(val text: String, val data: String?, val url: String?, val webApp: String? = null)
+
+/** Запрос на открытие мини-приложения бота */
+data class MiniAppReq(val botId: String, val url: String? = null)
 
 data class Reaction(val messageId: Int, val userId: String, val emoji: String) {
     companion object { fun from(j: JSONObject) = Reaction(j.int("message_id") ?: 0, j.str("user_id") ?: "", j.str("emoji") ?: "") }

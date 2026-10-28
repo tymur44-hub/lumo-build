@@ -24,6 +24,24 @@ final class AppModel: ObservableObject {
     @Published var settingsPath: [SettingsPage] = []
     @Published var tab: AppTab = .chats
     @Published var toast: String?
+    /// Открытое мини-приложение бота
+    @Published var miniApp: MiniAppReq?
+    /// Кнопка мини-приложения у бота: id бота → [текст, адрес] (пустой массив — нет кнопки)
+    @Published var botMenus: [String: [String]] = [:]
+
+    func loadBotMenu(_ botId: String) async {
+        if botMenus[botId] != nil { return }
+        let j = (try? await API.shared.rpc("lm_bot_info", ["p_id": botId])) as? [String: Any]
+        if let u = j?["web_app_url"] as? String, !u.isEmpty { botMenus[botId] = [(j?["menu_text"] as? String) ?? "Открыть", u] }
+        else { botMenus[botId] = [] }
+    }
+
+    /// «Создать бота»: открывает конструктор в BotFather
+    func openBotFather() async {
+        let r = await search("botfather").first { $0.username == "botfather" }
+        guard let r else { say("Конструктор ботов пока недоступен"); return }
+        miniApp = MiniAppReq(botId: r.id, url: nil)
+    }
 
     @Published var contacts: [String] = []
     @Published var aliases: [String: String] = [:]
@@ -78,6 +96,7 @@ final class AppModel: ObservableObject {
 
     /// Нажатие кнопки под сообщением бота
     func botPress(_ m: Message, _ b: BotButton) {
+        if let w = b.webApp, !w.isEmpty, let sid = m.senderId { miniApp = MiniAppReq(botId: sid, url: w); return }
         if let u = b.url, let url = URL(string: u), url.scheme == "https" || url.scheme == "http" { UIApplication.shared.open(url); return }
         guard let d = b.data else { return }
         Task {

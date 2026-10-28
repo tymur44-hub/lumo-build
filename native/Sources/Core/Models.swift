@@ -35,7 +35,7 @@ struct Profile: Identifiable, Equatable {
         switch key {
         case "seen": return showSeen ? "all" : "none"
         case "calls": return callsFrom
-        case "birthday": return "contacts"
+        case "birthday": return "all"
         default: return "all"
         }
     }
@@ -195,6 +195,14 @@ struct BotButton: Hashable {
     var text: String
     var data: String?
     var url: String?
+    var webApp: String?
+}
+
+/// Запрос на открытие мини-приложения бота
+struct MiniAppReq: Identifiable {
+    var botId: String
+    var url: String?
+    var id: String { botId + (url ?? "") }
 }
 
 struct Message: Identifiable, Equatable {
@@ -217,7 +225,7 @@ struct Message: Identifiable, Equatable {
     /// Кнопки под сообщением бота
     var buttons: [[BotButton]] {
         guard let rows = meta["buttons"] as? [[[String: Any]]] else { return [] }
-        return rows.map { $0.map { BotButton(text: $0["text"] as? String ?? "", data: $0["data"] as? String, url: $0["url"] as? String) } }
+        return rows.map { $0.map { BotButton(text: $0["text"] as? String ?? "", data: $0["data"] as? String, url: $0["url"] as? String, webApp: $0["web_app"] as? String) } }
     }
 
     init(json j: JSON) {

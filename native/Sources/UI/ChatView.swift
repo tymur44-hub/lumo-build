@@ -97,12 +97,31 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let pid = chat?.pinnedMessageId { pinnedBar(pid) }
-            messagesList
+            if isProt {
+                ScreenShield { messagesList.environmentObject(model).environmentObject(look).environmentObject(calls) }
+            } else {
+                messagesList
+            }
         }
         .background(ChatWallpaper(index: look.wall).ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             if selecting { selectionBar } else {
-                ComposerView(chatId: chatId, text: $text, reply: $reply, editing: $editing, blockedText: blockedText, onSendMenu: { sendMenu = true })
+                VStack(spacing: 0) {
+                    if isBotChat, let pid = chat?.peerId, let mb = model.botMenus[pid], mb.count == 2 {
+                        HStack {
+                            Button { model.miniApp = MiniAppReq(botId: pid, url: nil) } label: {
+                                Label(mb[0], systemImage: "square.grid.2x2.fill")
+                                    .font(.system(size: 14, weight: .bold)).foregroundColor(Theme.a1)
+                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                    .background(Theme.a1.opacity(0.16), in: Capsule())
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 2)
+                        .background(Theme.panel)
+                    }
+                    ComposerView(chatId: chatId, text: $text, reply: $reply, editing: $editing, blockedText: blockedText, onSendMenu: { sendMenu = true })
+                }
             }
         }
         .overlay {
@@ -154,6 +173,7 @@ struct ChatView: View {
         }
         .navigationBarBackButtonHidden(selecting)
         .lumoNavBar()
+        .task(id: chat?.peerId) { if isBotChat, let pid = chat?.peerId { await model.loadBotMenu(pid) } }
         .onAppear {
             model.openChatId = chatId
             Notifier.clear(chat: chatId)

@@ -817,6 +817,8 @@ fun NewChatScreen() {
                         SettingsRow(Icons.Filled.Groups, Color(0xFF3A7BFF), "Создать группу") { creating = "group" }
                         Divider()
                         SettingsRow(Icons.Filled.Campaign, Color(0xFFFF8A3D), "Создать канал") { creating = "channel" }
+                        Divider()
+                        SettingsRow(Icons.Filled.SmartToy, Color(0xFF7C5CFF), "Создать бота", "Конструктор ботов и мини-приложений") { scope.launch { AppModel.openBotFather() } }
                     }
                     Spacer(Modifier.height(10.dp))
                 }

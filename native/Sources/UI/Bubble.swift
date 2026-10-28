@@ -304,6 +304,12 @@ struct MessageRow: View {
                                 .background(Capsule().fill(Color.black.opacity(0.45)))
                                 .padding(6)
                         }
+                    } else if m.kind == "voice" {
+                        // у голосового время на отдельной строке справа, чтобы не налезало на кнопку расшифровки
+                        VStack(alignment: .trailing, spacing: 0) {
+                            media
+                            timeLine(onMedia: false).padding(.top, -6)
+                        }
                     } else {
                         HStack(alignment: .bottom, spacing: 8) {
                             media

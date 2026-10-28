@@ -20,6 +20,7 @@ struct LumoApp: App {
                 .preferredColorScheme(look.scheme)
                 .tint(Theme.a1)
                 .id(look.version)
+                .fullScreenCover(item: $model.miniApp) { MiniAppView(req: $0).environmentObject(model).environmentObject(look) }
                 .onOpenURL { url in handle(url) }
                 .overlay { LockOverlayView() }
         }

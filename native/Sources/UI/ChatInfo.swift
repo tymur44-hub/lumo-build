@@ -623,6 +623,8 @@ struct NewChatView: View {
                             Divider().overlay(Theme.line)
                             Button { mode = "channel" } label: { SettingsRow(icon: "megaphone.fill", color: Color(hex: 0xff8a3d), title: "Новый канал", subtitle: "Публикации для подписчиков") }
                             Divider().overlay(Theme.line)
+                            Button { dismiss(); Task { await model.openBotFather() } } label: { SettingsRow(icon: "cpu", color: Color(hex: 0x7c5cff), title: "Создать бота", subtitle: "Конструктор ботов и мини-приложений") }
+                            Divider().overlay(Theme.line)
                             Button { Task { await model.openSaved(); dismiss() } } label: { SettingsRow(icon: "bookmark.fill", color: Color(hex: 0x3a7bff), title: "Избранное", subtitle: "Заметки для себя") }
                         }
                         SectionTitle(text: "Контакты")

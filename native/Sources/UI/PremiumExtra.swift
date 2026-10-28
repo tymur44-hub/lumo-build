@@ -81,6 +81,7 @@ final class ExtraStore: ObservableObject {
             return
         }
         if hasLock, let t = lastStop, Date().timeIntervalSince(t) > 60 { locked = true }
+        lastStop = nil   // отметка использована: иначе каждое возвращение в приложение блокировало бы его снова
         if hasLock && locked && faceId { DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { self.unlockWithBio() } }
     }
 }

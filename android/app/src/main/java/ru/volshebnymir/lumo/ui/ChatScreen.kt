@@ -133,7 +133,9 @@ fun ChatScreen(chatId: String) {
     val prot = ru.volshebnymir.lumo.core.Prot.map[chatId] == true
     LaunchedEffect(chatId) { ru.volshebnymir.lumo.core.Prot.load(chatId) }
     DisposableEffect(prot) {
-        val w = (ctx as? android.app.Activity)?.window
+        var ac: android.content.Context? = ctx
+        while (ac is android.content.ContextWrapper && ac !is android.app.Activity) ac = ac.baseContext
+        val w = (ac as? android.app.Activity)?.window
         if (prot) w?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         onDispose { w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
     }
@@ -246,6 +248,20 @@ fun ChatScreen(chatId: String) {
                 androidx.compose.animation.AnimatedVisibility(showDown, Modifier.align(Alignment.BottomEnd).padding(14.dp), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
                     Box(Modifier.size(46.dp).clip(CircleShape).background(p.panel).bouncy { scope.launch { list.animateScrollToItem(0) } }, contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.KeyboardArrowDown, null, tint = p.text, modifier = Modifier.size(30.dp))
+                    }
+                }
+            }
+            val menuBot = if (chat?.isPrivate == true && peerBadges(chat).first) chat.peerId else null
+            if (menuBot != null) {
+                LaunchedEffect(menuBot) { AppModel.loadBotMenu(menuBot) }
+                AppModel.botMenus[menuBot]?.let { mb ->
+                    Row(Modifier.fillMaxWidth().background(p.panel).padding(start = 12.dp, end = 12.dp, top = 6.dp)) {
+                        Row(Modifier.clip(RoundedCornerShape(14.dp)).background(p.a1.copy(alpha = 0.16f)).bouncy { AppModel.miniApp = ru.volshebnymir.lumo.core.MiniAppReq(menuBot) }
+                            .padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Apps, null, tint = p.a1, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(mb.first, color = p.a1, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
                     }
                 }
             }

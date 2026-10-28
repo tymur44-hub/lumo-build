@@ -101,8 +101,28 @@ object AppModel {
 
     var openUrl: ((String) -> Unit)? = null
 
+    /** Открытое мини-приложение бота */
+    var miniApp by mutableStateOf<MiniAppReq?>(null)
+    /** Кнопка мини-приложения у бота: id бота → (текст, адрес) */
+    val botMenus = mutableStateMapOf<String, Pair<String, String>?>()
+
+    suspend fun loadBotMenu(botId: String) {
+        if (botMenus.containsKey(botId)) return
+        val j = runCatching { Api.rpc("lm_bot_info", jsonOf("p_id" to botId)) as? JSONObject }.getOrNull()
+        val u = j?.str("web_app_url")
+        botMenus[botId] = if (u != null) (j?.str("menu_text") ?: "Открыть") to u else null
+    }
+
+    /** «Создать бота»: открывает конструктор в BotFather */
+    suspend fun openBotFather() {
+        val r = search("botfather").firstOrNull { it.username == "botfather" }
+        if (r == null) { say("Конструктор ботов пока недоступен"); return }
+        miniApp = MiniAppReq(r.id, null)
+    }
+
     /** Нажатие кнопки под сообщением бота */
     fun botPress(m: Message, b: BotBtn) {
+        if (!b.webApp.isNullOrEmpty() && m.senderId != null) { miniApp = MiniAppReq(m.senderId, b.webApp); return }
         if (!b.url.isNullOrEmpty()) { openUrl?.invoke(b.url); return }
         val d = b.data ?: return
         scope.launch {

@@ -91,6 +91,7 @@ object Ui {
         if (addStory) AddStoryScreen { addStory = false }
         if (qrMine) MyQRScreen { qrMine = false }
         if (qrScan) QRScanScreen { qrScan = false }
+        AppModel.miniApp?.let { MiniAppScreen(it) { AppModel.miniApp = null } }
     }
 }
 
