@@ -31,6 +31,7 @@ struct ChatView: View {
     @State private var selecting = false
     @State private var selected: Set<Int> = []
     @State private var reporting: ReportTarget?
+    @State private var transcript: String?
     @State private var showSearch = false
     @State private var confirmClear = false
     @State private var confirmLeave = false
@@ -190,6 +191,10 @@ struct ChatView: View {
         }
         .sheet(item: $forwarding) { b in ForwardView(messages: b.messages).environmentObject(model) }
         .sheet(item: $reporting) { t in ReportView(target: t).environmentObject(model) }
+        .alert("Расшифровка", isPresented: Binding(get: { transcript != nil }, set: { if !$0 { transcript = nil } })) {
+            Button("Копировать") { UIPasteboard.general.string = transcript; model.say("Скопировано") }
+            Button("Закрыть", role: .cancel) {}
+        } message: { Text(transcript ?? "") }
         .sheet(isPresented: $showSearch) {
             ChatSearchView(chatId: chatId) { id in highlight = id }.environmentObject(model)
         }
@@ -283,6 +288,19 @@ struct ChatView: View {
         if chat?.canPost ?? true { a.append(MsgAction(title: "Ответить", icon: "arrowshape.turn.up.left") { reply = m; editing = nil }) }
         if let b = m.body, !b.isEmpty {
             a.append(MsgAction(title: "Копировать", icon: "doc.on.doc") { UIPasteboard.general.string = b; model.say("Скопировано") })
+        }
+        if ["voice", "video_note"].contains(m.kind), let u = m.mediaURL {
+            a.append(MsgAction(title: "Расшифровать", icon: "text.quote") {
+                model.premium {
+                    model.say("Расшифровываю…")
+                    Task {
+                        switch await Transcriber.run(urlString: u, ext: m.kind == "voice" ? "m4a" : "mp4") {
+                        case .success(let t): transcript = t
+                        case .failure(let e): model.say(e.localizedDescription)
+                        }
+                    }
+                }
+            })
         }
         if mine && ["text", "image", "video", "file"].contains(m.kind) {
             a.append(MsgAction(title: "Изменить", icon: "square.and.pencil") { editing = m; reply = nil; text = m.body ?? "" })
@@ -574,7 +592,7 @@ struct ChatView: View {
         if c.isPrivate {
             if c.peerId == model.myId { return "заметки и сохранённое" }
             if let b = model.peerBlockText(c.peerId), model.profiles[c.peerId ?? ""]?.banned == true { return b.lowercased() }
-            return model.lastSeenText(c.peerId, fallback: c.peerLastSeen)
+            return c.peerBot ? "бот" : model.lastSeenText(c.peerId, fallback: c.peerLastSeen)
         }
         let n = c.membersCount
         return c.isChannel ? "\(n) " + plural(n, "подписчик", "подписчика", "подписчиков") : "\(n) " + plural(n, "участник", "участника", "участников")

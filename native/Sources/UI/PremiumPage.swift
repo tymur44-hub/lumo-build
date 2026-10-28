@@ -12,19 +12,14 @@ func emojiGlyph(_ s: String) -> String {
     return s
 }
 
-/// Значок статуса: анимированный (пульс и покачивание) или обычный
+/// Значок статуса: нарисованный анимированный значок или обычный эмодзи
 struct StatusEmojiView: View {
     let s: String
     var size: CGFloat = 16
-    @State private var on = false
 
     var body: some View {
         if s.hasPrefix("a:") {
-            Text(emojiGlyph(s)).font(.system(size: size))
-                .scaleEffect(on ? 1.14 : 0.88)
-                .rotationEffect(.degrees(on ? 9 : -9))
-                .animation(.easeInOut(duration: 0.9 + Double(abs(s.hashValue) % 4) * 0.12).repeatForever(autoreverses: true), value: on)
-                .onAppear { on = true }
+            DrawnStatusView(key: String(s.dropFirst(2)), size: size * 1.15)
         } else {
             Text(s).font(.system(size: size))
         }
@@ -93,8 +88,22 @@ struct PremiumPageView: View {
         ("⏳", "Исчезающие сообщения", "Автоудаление в чате через час, день, неделю или месяц"),
         ("📊", "Статистика каналов", "Подписчики и посты по дням"),
         ("🤖", "Создание своих ботов", "Через @botfather командой /newbot"),
+        ("🎙", "Расшифровка голосовых и кружков", "Текст под голосовым сообщением — кнопка в меню сообщения"),
+        ("🎨", "Иконки приложения", "Шесть оформлений иконки с премиум-значком"),
+        ("🔐", "Блокировка и Face ID", "Код или Face ID при входе в Lumo"),
+        ("✉️", "Писать мне только Premium", "Ограничьте входящие сообщения в «Конфиденциальности»"),
+        ("🖼", "Свои цвета и фоны чатов", "Цвет сообщений, обои и акценты оформления"),
         ("⭐", "Значок Premium", "Звезда рядом с именем в чатах и профиле"),
     ]
+    private let about: [(String, String)] = [
+        ("Что это", "Lumo Premium — необязательная подписка с дополнительными возможностями для общения. Основные функции мессенджера остаются бесплатными."),
+        ("Где работает", "Подписка привязана к вашему аккаунту и действует на всех устройствах: сайт, iOS, Android и Windows."),
+        ("Как оформить", "Оплата проходит через встроенного бота @lumo_premium прямо в Lumo. После оплаты значок и функции включаются сами."),
+        ("Безопасность", "Шифрование медиа остаётся бесплатным для всех. Premium не даёт доступа к чужим перепискам."),
+        ("Скоро", "Функции с пометкой «в разработке» появятся в следующих обновлениях."),
+    ]
+    @State private var showEmoji = false
+    @State private var showIcons = false
     private var gold: LinearGradient {
         LinearGradient(colors: [Color(hex: 0x7c5cff), Color(hex: 0xff5bb8), Color(hex: 0xffb020)], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
@@ -103,11 +112,7 @@ struct PremiumPageView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 10) {
-                    ZStack {
-                        Circle().fill(gold).frame(width: 96, height: 96)
-                        Image(systemName: "star.fill").font(.system(size: 50)).foregroundColor(.white)
-                    }
-                    .padding(.top, 10)
+                    PremiumStarView(size: 120).padding(.top, 10)
                     Text("Lumo Premium").font(.system(size: 26, weight: .heavy)).foregroundColor(Theme.text)
                     Text("Больше возможностей для общения").font(.system(size: 15)).foregroundColor(Theme.muted)
                     if model.isPremium {
@@ -160,8 +165,25 @@ struct PremiumPageView: View {
                     }
                     .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
                     .padding(.top, 6)
-                    Text("Шифрование медиа остаётся бесплатным для всех.").font(.system(size: 12.5)).foregroundColor(Theme.muted)
-                        .multilineTextAlignment(.center).padding(12)
+                    VStack(spacing: 0) {
+                        if model.isPremium {
+                            Button { showEmoji = true } label: { HStack { Text("Смайлик-статус").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text); Spacer() }.padding(16) }
+                            Divider().overlay(Theme.line).padding(.leading, 16)
+                        }
+                        Button { showIcons = true } label: { HStack { Text(model.isPremium ? "Иконка приложения" : "Посмотреть иконки приложения").font(.system(size: 16, weight: .bold)).foregroundColor(model.isPremium ? Theme.text : Theme.a1); Spacer() }.padding(16) }
+                    }
+                    .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
+                    .padding(.top, 6)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("О Lumo Premium").font(.system(size: 18, weight: .heavy)).foregroundColor(Theme.text)
+                        ForEach(Array(about.enumerated()), id: \.offset) { _, a in
+                            Text(a.0).font(.system(size: 13, weight: .bold)).foregroundColor(Theme.a1).padding(.top, 12)
+                            Text(a.1).font(.system(size: 14)).foregroundColor(Theme.muted)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                    .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
+                    .padding(.top, 6).padding(.bottom, 20)
                 }
                 .padding(.horizontal, 16)
             }
@@ -175,6 +197,8 @@ struct PremiumPageView: View {
         }
         .background(Theme.bg.ignoresSafeArea())
         .navigationTitle("Lumo Premium").navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showEmoji) { EmojiStatusSheet() }
+        .sheet(isPresented: $showIcons) { AppIconSheet() }
         .task {
             if let r = try? await API.shared.rpc("lm_my_premium", [:]) {
                 let o = (r as? [String: Any]) ?? ((r as? [[String: Any]])?.first)
@@ -310,5 +334,69 @@ struct SendMenuOverlay: View {
             .padding(14).padding(.bottom, 58)
         }
         .transition(.opacity)
+    }
+}
+
+
+// MARK: - Иконка приложения
+
+struct AppIconSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var cur: String? = UIApplication.shared.alternateIconName
+    private let icons: [(String?, String, String)] = [
+        (nil, "Классика", "IconPrev-classic"), ("AppIcon-gold", "Золото", "IconPrev-gold"), ("AppIcon-aurora", "Аврора", "IconPrev-aurora"),
+        ("AppIcon-midnight", "Полночь", "IconPrev-midnight"), ("AppIcon-sakura", "Сакура", "IconPrev-sakura"), ("AppIcon-neon", "Неон", "IconPrev-neon"),
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Иконка на экране «Домой» поменяется сразу.").font(.footnote).foregroundColor(Theme.muted)
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 16) {
+                        ForEach(icons, id: \.1) { ic in
+                            Button { pick(ic.0) } label: {
+                                VStack(spacing: 6) {
+                                    IconPreview(name: ic.2)
+                                        .frame(width: 80, height: 80)
+                                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                                        .overlay(RoundedRectangle(cornerRadius: 18).stroke(cur == ic.0 ? Theme.a1 : Color.clear, lineWidth: 3).padding(-2))
+                                    Text(ic.1).font(.system(size: 13, weight: .semibold)).foregroundColor(cur == ic.0 ? Theme.a1 : Theme.text)
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+            .background(Theme.bg.ignoresSafeArea())
+            .navigationTitle("Иконка приложения").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Закрыть") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func pick(_ name: String?) {
+        if name != nil && !model.isPremium { model.say(premiumSoon); return }
+        UIApplication.shared.setAlternateIconName(name) { err in
+            DispatchQueue.main.async {
+                if let err = err { model.say(err.localizedDescription) } else { cur = name }
+            }
+        }
+    }
+}
+
+/// Превью иконки из каталога ресурсов (набор иконок читаем из бандла как файл, иначе рисуем градиент)
+private struct IconPreview: View {
+    let name: String
+    var body: some View {
+        if let img = UIImage(named: name) {
+            Image(uiImage: img).resizable().scaledToFill()
+        } else {
+            LinearGradient(colors: [Color(hex: 0x7c5cff), Color(hex: 0x22c1ff)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                .overlay(Image(systemName: "bubble.left.fill").font(.system(size: 34)).foregroundColor(.white))
+        }
     }
 }

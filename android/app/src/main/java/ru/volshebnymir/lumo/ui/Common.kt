@@ -104,11 +104,11 @@ fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
 }
 
 @Composable
-fun SettingsRow(icon: ImageVector, color: Color, title: String, subtitle: String? = null, titleColor: Color? = null, onClick: () -> Unit) {
+fun SettingsRow(icon: ImageVector, color: Color, title: String, subtitle: String? = null, titleColor: Color? = null, lead: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
     val p = P
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(color), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Color.White, modifier = Modifier.size(19.dp))
+            if (lead != null) lead() else Icon(icon, null, tint = Color.White, modifier = Modifier.size(19.dp))
         }
         Column(Modifier.weight(1f)) {
             Text(title, color = titleColor ?: p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)

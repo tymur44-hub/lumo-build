@@ -380,7 +380,7 @@ private fun ChatHeader(chatId: String, chat: ChatItem?) {
                 val status = when {
                     t != null -> t
                     chat == null || saved -> ""
-                    chat.isPrivate -> AppModel.lastSeenText(chat.peerId, chat.peerLastSeen)
+                    chat.isPrivate -> if (chat.peerBot) "бот" else AppModel.lastSeenText(chat.peerId, chat.peerLastSeen)
                     chat.isChannel -> plural(chat.membersCount, "подписчик", "подписчика", "подписчиков")
                     else -> plural(chat.membersCount, "участник", "участника", "участников")
                 }

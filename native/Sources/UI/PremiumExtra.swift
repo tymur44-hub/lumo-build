@@ -1,5 +1,6 @@
 import SwiftUI
 import CryptoKit
+import LocalAuthentication
 
 /// Локальные настройки Premium: цвет сообщений в чатах и блокировка приложения
 final class ExtraStore: ObservableObject {
@@ -12,6 +13,7 @@ final class ExtraStore: ObservableObject {
     @Published var bub: [String: Int]
     @Published var hasLock: Bool
     @Published var locked: Bool
+    @Published var faceId: Bool
     var lastStop: Date?
 
     private init() {
@@ -19,6 +21,21 @@ final class ExtraStore: ObservableObject {
         let h = UserDefaults.standard.string(forKey: "lm_lock")
         hasLock = !(h ?? "").isEmpty
         locked = !(h ?? "").isEmpty
+        faceId = !(h ?? "").isEmpty && UserDefaults.standard.bool(forKey: "lm_faceid")
+    }
+
+    /// Есть ли на устройстве Face ID или Touch ID
+    var bioAvailable: Bool { LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil) }
+    var bioName: String { let c = LAContext(); _ = c.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil); return c.biometryType == .touchID ? "Touch ID" : "Face ID" }
+
+    func setFaceId(_ on: Bool) { faceId = on; d.set(on, forKey: "lm_faceid") }
+
+    func unlockWithBio() {
+        let c = LAContext()
+        c.localizedCancelTitle = "Код доступа"
+        c.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "Разблокировать Lumo") { ok, _ in
+            DispatchQueue.main.async { if ok { self.locked = false } }
+        }
     }
 
     func setBub(_ chat: String, _ i: Int) {
@@ -37,7 +54,7 @@ final class ExtraStore: ObservableObject {
 
     func setPin(_ pin: String?) {
         if let p = pin { d.set(hash(p), forKey: "lm_lock"); hasLock = true }
-        else { d.removeObject(forKey: "lm_lock"); hasLock = false; locked = false }
+        else { d.removeObject(forKey: "lm_lock"); d.removeObject(forKey: "lm_faceid"); hasLock = false; locked = false; faceId = false }
     }
 
     func check(_ pin: String) -> Bool { d.string(forKey: "lm_lock") == hash(pin) }
@@ -126,10 +143,18 @@ struct LockOverlayView: View {
         if ex.hasLock && ex.locked {
             ZStack {
                 Theme.bg.ignoresSafeArea()
-                PinPadView(title: "Введите код доступа", error: err) { pin in
-                    if ex.check(pin) { err = nil; ex.locked = false } else { err = "Неверный код" }
+                VStack(spacing: 18) {
+                    PinPadView(title: "Введите код доступа", error: err) { pin in
+                        if ex.check(pin) { err = nil; ex.locked = false } else { err = "Неверный код" }
+                    }
+                    if ex.faceId {
+                        Button { ex.unlockWithBio() } label: {
+                            Label("Войти по \(ex.bioName)", systemImage: "faceid").font(.system(size: 16, weight: .bold))
+                        }
+                    }
                 }
             }
+            .onAppear { if ex.faceId { ex.unlockWithBio() } }
             .transition(.opacity)
         }
     }
@@ -150,6 +175,14 @@ struct LockSettingsSheet: View {
                 case "menu":
                     Text("Блокировка включена").font(.system(size: 20, weight: .heavy)).foregroundColor(Theme.text)
                     Text("Код спрашивается при входе и после сворачивания больше чем на минуту.").font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+                    if ex.bioAvailable {
+                        Toggle(isOn: Binding(get: { ex.faceId }, set: { ex.setFaceId($0) })) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(ex.bioName).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
+                                Text("Разблокировка без ввода кода").font(.footnote).foregroundColor(Theme.muted)
+                            }
+                        }
+                    }
                     Button("Сменить код") { step = "old-change" }.font(.system(size: 17, weight: .bold))
                     Button("Выключить", role: .destructive) { step = "old-off" }.font(.system(size: 17, weight: .bold))
                 case "old-change", "old-off":

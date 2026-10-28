@@ -123,7 +123,7 @@ object AppModel {
 
     fun chat(id: String) = chats.firstOrNull { it.id == id }
     /** В сети — если человек разрешил мне видеть время захода */
-    fun isOnline(uid: String?) = uid != null && online[uid] == true && (uid == myId || profiles[uid]?.showSeen != false)
+    fun isOnline(uid: String?) = uid != null && profiles[uid]?.isBot != true && online[uid] == true && (uid == myId || profiles[uid]?.showSeen != false)
     fun displayName(uid: String?): String {
         if (uid == null) return "Lumo"
         if (uid == myId) return me?.name ?: "Вы"
@@ -132,6 +132,7 @@ object AppModel {
     }
 
     fun lastSeenText(uid: String?, fallback: Date? = null): String {
+        if (uid != null && profiles[uid]?.isBot == true) return "бот"
         if (isOnline(uid)) return "в сети"
         val p = uid?.let { profiles[it] }
         // самое свежее время из профиля и из списка чатов

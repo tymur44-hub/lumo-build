@@ -131,7 +131,7 @@ struct ChatInfoView: View {
                     if let t = model.typingText(c.id) {
                         Text(t).font(.system(size: 16)).foregroundColor(Theme.a2)
                     } else {
-                        Text(model.lastSeenText(c.peerId, fallback: c.peerLastSeen))
+                        Text(c.peerBot ? "бот" : model.lastSeenText(c.peerId, fallback: c.peerLastSeen))
                             .font(.system(size: 16)).foregroundColor(online ? Theme.a2 : Theme.muted)
                     }
                     if peer?.banned == true {

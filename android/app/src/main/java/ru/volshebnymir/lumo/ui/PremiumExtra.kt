@@ -61,6 +61,7 @@ object Extra {
     var hasLock by mutableStateOf(false)
     var locked by mutableStateOf(false)
     var lastStop = 0L
+    var bio by mutableStateOf(false)
 
     val BUBS: List<Pair<Long, Long>?> = listOf(
         null, 0xFFFF3D6EL to 0xFFFF8A5BL, 0xFF00C6FFL to 0xFF0072FFL, 0xFF43E97BL to 0xFF12B886L, 0xFFF7971EL to 0xFFFFB020L,
@@ -78,6 +79,7 @@ object Extra {
         wall = p.getInt("wall", 0)
         hasLock = !p.getString("lock", null).isNullOrEmpty()
         locked = hasLock
+        bio = hasLock && p.getBoolean("bio", false)
         p.all.forEach { (k, v) -> if (k.startsWith("bub_") && v is Int) bub[k.removePrefix("bub_")] = v }
     }
 
@@ -103,8 +105,27 @@ object Extra {
         MessageDigest.getInstance("SHA-256").digest(("lumo-lock:$pin").toByteArray()).joinToString("") { "%02x".format(it) }
 
     fun setPin(pin: String?) {
-        if (pin == null) { prefs().edit().remove("lock").apply(); hasLock = false; locked = false }
+        if (pin == null) { prefs().edit().remove("lock").remove("bio").apply(); hasLock = false; locked = false; bio = false }
         else { prefs().edit().putString("lock", hash(pin)).apply(); hasLock = true }
+    }
+
+    fun canBio(c: Context): Boolean = runCatching {
+        androidx.biometric.BiometricManager.from(c).canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK) == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS
+    }.getOrDefault(false)
+
+    fun setBio(on: Boolean) { bio = on; prefs().edit().putBoolean("bio", on).apply() }
+
+    /** Запрос отпечатка или лица; onOk вызывается при успехе */
+    fun askBio(c: Context, onOk: () -> Unit) {
+        val act = c as? androidx.fragment.app.FragmentActivity ?: return
+        val cb = object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) { onOk() }
+        }
+        val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Lumo").setSubtitle("Разблокируйте приложение")
+            .setNegativeButtonText("Код доступа")
+            .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK).build()
+        runCatching { androidx.biometric.BiometricPrompt(act, androidx.core.content.ContextCompat.getMainExecutor(c), cb).authenticate(info) }
     }
 
     fun check(pin: String): Boolean = prefs().getString("lock", null) == hash(pin)
@@ -247,9 +268,14 @@ fun LockOverlay() {
     }
     if (!(Extra.hasLock && Extra.locked)) return
     var err by remember { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.LaunchedEffect(Extra.locked) { if (Extra.bio) Extra.askBio(ctx) { Extra.locked = false } }
     Box(Modifier.fillMaxSize().background(p.bg).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {}, contentAlignment = Alignment.Center) {
-        PinPad("Введите код доступа", err) { pin ->
-            if (Extra.check(pin)) { err = null; Extra.locked = false } else err = "Неверный код"
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            PinPad("Введите код доступа", err) { pin ->
+                if (Extra.check(pin)) { err = null; Extra.locked = false } else err = "Неверный код"
+            }
+            if (Extra.bio) Text("Войти по отпечатку или лицу", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                modifier = Modifier.padding(top = 18.dp).clickable { Extra.askBio(ctx) { Extra.locked = false } }.padding(10.dp))
         }
     }
 }
@@ -267,6 +293,13 @@ fun LockSettingsDialog(onClose: () -> Unit) {
                 "menu" -> {
                     Text("Блокировка включена", color = p.text, fontWeight = FontWeight.Black, fontSize = 20.sp)
                     Text("Код спрашивается при входе и после сворачивания больше чем на минуту.", color = p.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 10.dp))
+                    if (Extra.canBio(LocalContext.current)) Row(Modifier.fillMaxWidth().clickable { Extra.setBio(!Extra.bio) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Отпечаток или лицо", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("Разблокировка без ввода кода", color = p.muted, fontSize = 12.5.sp)
+                        }
+                        androidx.compose.material3.Switch(checked = Extra.bio, onCheckedChange = { Extra.setBio(it) })
+                    }
                     Text("Сменить код", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().clickable { step = "old-change" }.padding(10.dp), textAlign = TextAlign.Center)
                     Text("Выключить", color = p.danger, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().clickable { step = "old-off" }.padding(10.dp), textAlign = TextAlign.Center)
                     Text("Закрыть", color = p.muted, fontSize = 15.sp, modifier = Modifier.clickable { onClose() }.padding(10.dp))

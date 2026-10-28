@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.volshebnymir.lumo.core.AppModel
 import ru.volshebnymir.lumo.core.premium
+import ru.volshebnymir.lumo.core.PREMIUM_SOON
 import ru.volshebnymir.lumo.core.Fmt
 import ru.volshebnymir.lumo.core.Screen
 
@@ -107,7 +108,7 @@ fun SettingsScreen() {
         }
         if (emojiDlg) EmojiPickerDialog { emojiDlg = false }
         Card {
-            SettingsRow(Icons.Filled.Star, Color(0xFFFFB020), "Lumo Premium", "Дополнительные возможности и боты") { AppModel.push(Screen.Premium) }
+            SettingsRow(Icons.Filled.Star, Color(0xFF2A1B5E), "Lumo Premium", "Дополнительные возможности и боты", lead = { PremiumStar(34.dp) }) { AppModel.push(Screen.Premium) }
         }
         Card {
             SettingsRow(Icons.Filled.Person, p.a1, "Мой профиль", "Имя, юзернейм, о себе, пароль") { AppModel.push(Screen.MyProfile) }
@@ -311,6 +312,25 @@ fun PrivacyScreen() {
             }
         }
         Text("Вы можете выбрать, кому разрешаете приглашать Вас в группы и каналы.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 30.dp))
+        Spacer(Modifier.height(6.dp))
+        val scopeP = rememberCoroutineScope()
+        val msgPrem = me?.privacy?.optString("msg_prem") == "premium"
+        Card {
+            Row(Modifier.fillMaxWidth().clickable {
+                if (!AppModel.isPremium) AppModel.say(PREMIUM_SOON)
+                else scopeP.launch { AppModel.setPrivacyKey("msg_prem", if (msgPrem) "all" else "premium") }
+            }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFFFB020)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Star, null, tint = Color.White, modifier = Modifier.size(19.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Писать мне только Premium", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text("Люди без Lumo Premium не смогут написать первыми. Контакты и уже начатые переписки не затрагиваются.", color = p.muted, fontSize = 12.5.sp)
+                }
+                androidx.compose.material3.Switch(checked = msgPrem, onCheckedChange = null)
+            }
+        }
         Spacer(Modifier.height(30.dp))
     }
 }

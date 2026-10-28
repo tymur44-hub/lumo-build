@@ -1,0 +1,254 @@
+package ru.volshebnymir.lumo.ui
+
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.unit.Dp
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.sin
+
+/** Нарисованные анимированные значки статуса (не эмодзи): рисуются кистью, у каждого своя анимация */
+@Composable
+fun DrawnStatus(key: String, size: Dp, modifier: Modifier = Modifier) {
+    val tr = rememberInfiniteTransition(label = "drawn")
+    val t by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart), label = "t")
+    Canvas(modifier.size(size)) {
+        val s = this.size.minDimension / 100f
+        scale(s, Offset.Zero) { drawStatusIcon(key, t) }
+    }
+}
+
+private fun vg(y0: Float, y1: Float, vararg c: Long) = Brush.verticalGradient(c.map { Color(it) }, y0, y1)
+private fun dg(vararg c: Long) = Brush.linearGradient(c.map { Color(it) }, Offset(0f, 0f), Offset(100f, 100f))
+
+private fun starPath(cx: Float, cy: Float, r: Float, k: Float = 0.5f): Path {
+    val p = Path()
+    for (i in 0 until 10) {
+        val rr = if (i % 2 == 0) r else r * k
+        val a = -PI / 2 + i * PI / 5
+        val x = cx + (rr * cos(a)).toFloat(); val y = cy + (rr * sin(a)).toFloat()
+        if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
+    }
+    p.close(); return p
+}
+
+private fun DrawScope.sparkle(cx: Float, cy: Float, r: Float, alpha: Float) {
+    if (alpha <= 0.01f) return
+    val p = Path().apply {
+        moveTo(cx, cy - r); quadraticBezierTo(cx, cy, cx + r, cy); quadraticBezierTo(cx, cy, cx, cy + r)
+        quadraticBezierTo(cx, cy, cx - r, cy); quadraticBezierTo(cx, cy, cx, cy - r); close()
+    }
+    drawPath(p, Color.White.copy(alpha = alpha.coerceIn(0f, 1f)))
+}
+
+private fun DrawScope.drawStatusIcon(k: String, t: Float) {
+    val w = (2 * PI * t).toFloat()
+    val sn = sin(w); val cs = cos(w)
+    when (k) {
+        "fire" -> {
+            scale(1f - 0.03f * sn, 1f + 0.08f * sn, Offset(50f, 95f)) {
+                val outer = Path().apply {
+                    moveTo(50f, 4f); cubicTo(58f, 24f, 82f, 34f, 82f, 62f); cubicTo(82f, 83f, 67f, 95f, 50f, 95f)
+                    cubicTo(33f, 95f, 18f, 83f, 18f, 62f); cubicTo(18f, 48f, 26f, 40f, 33f, 32f)
+                    cubicTo(36f, 44f, 40f, 48f, 44f, 48f); cubicTo(40f, 30f, 44f, 14f, 50f, 4f); close()
+                }
+                drawPath(outer, vg(4f, 95f, 0xFFFFC93C, 0xFFFF7A18, 0xFFE8321E))
+                scale(1f, 1f + 0.1f * cs, Offset(50f, 95f)) {
+                    val inner = Path().apply {
+                        moveTo(50f, 44f); cubicTo(56f, 56f, 68f, 62f, 68f, 76f); cubicTo(68f, 87f, 60f, 94f, 50f, 94f)
+                        cubicTo(40f, 94f, 32f, 87f, 32f, 76f); cubicTo(32f, 64f, 46f, 58f, 50f, 44f); close()
+                    }
+                    drawPath(inner, vg(44f, 94f, 0xFFFFF3A0, 0xFFFFC93C))
+                }
+            }
+        }
+        "heart" -> {
+            val s = 1f + 0.1f * max(0f, sn) + 0.05f * max(0f, sin(w * 2 + 1f))
+            scale(s, s, Offset(50f, 52f)) {
+                val h = Path().apply {
+                    moveTo(50f, 90f); cubicTo(8f, 60f, 4f, 30f, 26f, 18f); cubicTo(40f, 11f, 48f, 20f, 50f, 28f)
+                    cubicTo(52f, 20f, 60f, 11f, 74f, 18f); cubicTo(96f, 30f, 92f, 60f, 50f, 90f); close()
+                }
+                drawPath(h, dg(0xFFFF6B8B, 0xFFE0245E))
+                drawOval(Color.White.copy(alpha = 0.55f), Offset(22f, 26f), Size(14f, 9f))
+            }
+        }
+        "star" -> {
+            rotate(14f * sn, Offset(50f, 54f)) {
+                val s = 1f + 0.06f * cs
+                scale(s, s, Offset(50f, 54f)) {
+                    drawPath(starPath(50f, 54f, 46f, 0.48f), vg(8f, 98f, 0xFFFFE066, 0xFFFFB020, 0xFFFF8A00))
+                    drawPath(starPath(50f, 54f, 46f, 0.48f), Color(0xFFFFFFFF).copy(alpha = 0.55f), style = Stroke(1.6f))
+                }
+            }
+            sparkle(84f, 18f, 10f, max(0f, cs))
+            sparkle(16f, 80f, 7f, max(0f, -cs))
+        }
+        "rocket" -> {
+            translate(0f, 3f * sn) {
+                rotate(35f, Offset(50f, 50f)) {
+                    val flame = Path().apply { moveTo(40f, 72f); cubicTo(40f, 86f, 48f, 90f + 6f * sn, 50f, 96f + 6f * sn); cubicTo(52f, 90f + 6f * sn, 60f, 86f, 60f, 72f); close() }
+                    drawPath(flame, vg(72f, 100f, 0xFFFFE066, 0xFFFF6A00))
+                    val finL = Path().apply { moveTo(34f, 52f); lineTo(16f, 78f); lineTo(36f, 72f); close() }
+                    val finR = Path().apply { moveTo(66f, 52f); lineTo(84f, 78f); lineTo(64f, 72f); close() }
+                    drawPath(finL, Color(0xFFE8321E)); drawPath(finR, Color(0xFFE8321E))
+                    val body = Path().apply { moveTo(50f, 4f); cubicTo(72f, 22f, 74f, 52f, 66f, 74f); lineTo(34f, 74f); cubicTo(26f, 52f, 28f, 22f, 50f, 4f); close() }
+                    drawPath(body, vg(4f, 74f, 0xFFFFFFFF, 0xFFD8E1F0))
+                    val nose = Path().apply { moveTo(50f, 4f); cubicTo(60f, 12f, 66f, 20f, 68f, 28f); lineTo(32f, 28f); cubicTo(34f, 20f, 40f, 12f, 50f, 4f); close() }
+                    drawPath(nose, Color(0xFFE8321E))
+                    drawCircle(Color(0xFF3A86FF), 9f, Offset(50f, 46f)); drawCircle(Color.White.copy(alpha = 0.6f), 3f, Offset(47f, 43f))
+                    drawRect(Color(0xFF8A94A6), Offset(34f, 70f), Size(32f, 6f))
+                }
+            }
+        }
+        "crown" -> {
+            translate(0f, -3f * abs(sn)) {
+                val c = Path().apply {
+                    moveTo(10f, 78f); lineTo(6f, 28f); lineTo(30f, 52f); lineTo(50f, 16f); lineTo(70f, 52f); lineTo(94f, 28f); lineTo(90f, 78f); close()
+                }
+                drawPath(c, vg(16f, 78f, 0xFFFFE066, 0xFFFFB020))
+                drawRoundRect(Brush.horizontalGradient(listOf(Color(0xFFFFB020), Color(0xFFFFE066), Color(0xFFFFB020)), 10f, 90f), Offset(10f, 78f), Size(80f, 12f), androidx.compose.ui.geometry.CornerRadius(5f, 5f))
+                drawCircle(Color(0xFFE8321E), 5.5f, Offset(50f, 66f)); drawCircle(Color(0xFF3A86FF), 4.5f, Offset(28f, 68f)); drawCircle(Color(0xFF2BD67B), 4.5f, Offset(72f, 68f))
+                drawCircle(Color(0xFFFFE066), 5f, Offset(6f, 26f)); drawCircle(Color(0xFFFFE066), 5f, Offset(94f, 26f)); drawCircle(Color(0xFFFFE066), 5.5f, Offset(50f, 14f))
+            }
+            sparkle(30f + 40f * ((t + 0.0f) % 1f), 36f, 8f, sin((PI * ((t) % 1f)).toFloat()))
+        }
+        "gem" -> {
+            val top = Path().apply { moveTo(28f, 16f); lineTo(72f, 16f); lineTo(94f, 40f); lineTo(6f, 40f); close() }
+            val bot = Path().apply { moveTo(6f, 40f); lineTo(94f, 40f); lineTo(50f, 94f); close() }
+            drawPath(bot, vg(40f, 94f, 0xFF29B6F6, 0xFF1565C0)); drawPath(top, vg(16f, 40f, 0xFF9BE7FF, 0xFF4FC3F7))
+            val line = Color.White.copy(alpha = 0.7f)
+            drawLine(line, Offset(40f, 16f), Offset(28f, 40f), 1.8f); drawLine(line, Offset(60f, 16f), Offset(72f, 40f), 1.8f)
+            drawLine(line, Offset(28f, 40f), Offset(50f, 94f), 1.8f); drawLine(line, Offset(72f, 40f), Offset(50f, 94f), 1.8f)
+            drawLine(line, Offset(40f, 16f), Offset(50f, 40f), 1.8f); drawLine(line, Offset(60f, 16f), Offset(50f, 40f), 1.8f)
+            val a = (t * 3f) % 1f
+            sparkle(24f + 52f * a, 24f + 8f * a, 11f, sin((PI * a).toFloat()))
+        }
+        "bolt" -> {
+            val glow = 0.5f + 0.5f * max(0f, sn)
+            drawCircle(Color(0xFFFFE066).copy(alpha = 0.25f * glow), 44f, Offset(50f, 50f))
+            scale(1f + 0.04f * glow, 1f + 0.04f * glow, Offset(50f, 50f)) {
+                val b = Path().apply { moveTo(60f, 2f); lineTo(18f, 56f); lineTo(44f, 56f); lineTo(34f, 98f); lineTo(82f, 38f); lineTo(54f, 38f); lineTo(70f, 2f); close() }
+                drawPath(b, vg(2f, 98f, 0xFFFFF176, 0xFFFFC107, 0xFFFF9800))
+            }
+        }
+        "ghost" -> {
+            translate(0f, 4f * sn) {
+                val g = Path().apply {
+                    moveTo(16f, 94f); lineTo(16f, 46f); cubicTo(16f, 20f, 32f, 6f, 50f, 6f); cubicTo(68f, 6f, 84f, 20f, 84f, 46f); lineTo(84f, 94f)
+                    lineTo(72f, 84f); lineTo(61f, 94f); lineTo(50f, 84f); lineTo(39f, 94f); lineTo(28f, 84f); close()
+                }
+                drawPath(g, vg(6f, 94f, 0xFFFFFFFF, 0xFFC9D6F2))
+                drawOval(Color(0xFF2A2F4A), Offset(33f, 36f), Size(11f, 15f)); drawOval(Color(0xFF2A2F4A), Offset(56f, 36f), Size(11f, 15f))
+                drawOval(Color(0xFF2A2F4A), Offset(44f, 60f), Size(12f, 9f + 3f * sn))
+            }
+        }
+        "sun" -> {
+            rotate(360f * t, Offset(50f, 50f)) {
+                for (i in 0 until 8) rotate(i * 45f, Offset(50f, 50f)) {
+                    drawLine(Color(0xFFFFB020), Offset(50f, 6f), Offset(50f, 20f), 7f, StrokeCap.Round)
+                }
+            }
+            val s = 1f + 0.05f * sn
+            scale(s, s, Offset(50f, 50f)) { drawCircle(Brush.radialGradient(listOf(Color(0xFFFFF176), Color(0xFFFFA000)), Offset(44f, 44f), 34f), 27f, Offset(50f, 50f)) }
+        }
+        "moon" -> {
+            rotate(7f * sn, Offset(50f, 50f)) {
+                val m = Path().apply { moveTo(64f, 6f); cubicTo(32f, 8f, 10f, 34f, 14f, 62f); cubicTo(18f, 88f, 50f, 100f, 82f, 84f); cubicTo(52f, 78f, 40f, 40f, 64f, 6f); close() }
+                drawPath(m, dg(0xFFFFF3B0, 0xFFFFC94D))
+            }
+            val tw = 0.5f + 0.5f * sn
+            sparkle(78f, 26f, 6f + 6f * tw, 0.4f + 0.6f * tw); sparkle(88f, 60f, 4f + 3f * (1 - tw), 0.3f + 0.6f * (1 - tw))
+        }
+        "clover" -> {
+            rotate(14f * sn, Offset(50f, 50f)) {
+                val stem = Path().apply { moveTo(50f, 50f); cubicTo(54f, 72f, 60f, 84f, 70f, 94f) }
+                drawPath(stem, Color(0xFF1E8E4E), style = Stroke(6f, cap = StrokeCap.Round))
+                for (i in 0 until 4) rotate(i * 90f + 45f, Offset(50f, 50f)) {
+                    val leaf = Path().apply {
+                        moveTo(50f, 50f); cubicTo(28f, 36f, 24f, 16f, 37f, 10f); cubicTo(44f, 7f, 49f, 13f, 50f, 20f)
+                        cubicTo(51f, 13f, 56f, 7f, 63f, 10f); cubicTo(76f, 16f, 72f, 36f, 50f, 50f); close()
+                    }
+                    drawPath(leaf, vg(8f, 50f, 0xFF7BE495, 0xFF1FA85A))
+                }
+            }
+        }
+        "note" -> {
+            rotate(9f * sn, Offset(50f, 80f)) {
+                val s = 1f + 0.05f * abs(cs)
+                scale(s, s, Offset(50f, 80f)) {
+                    val flag = Path().apply { moveTo(52f, 14f); cubicTo(60f, 34f, 84f, 34f, 80f, 58f); cubicTo(72f, 44f, 58f, 46f, 52f, 40f); close() }
+                    drawPath(flag, dg(0xFFB66CFF, 0xFFFF5BB8))
+                    drawRoundRect(dg(0xFFB66CFF, 0xFFFF5BB8), Offset(46f, 14f), Size(8f, 64f), androidx.compose.ui.geometry.CornerRadius(3f, 3f))
+                    rotate(-20f, Offset(32f, 78f)) { drawOval(dg(0xFF8A5BFF, 0xFFFF5BB8), Offset(14f, 66f), Size(36f, 26f)) }
+                }
+            }
+        }
+        else -> drawPath(starPath(50f, 54f, 46f, 0.48f), vg(8f, 98f, 0xFFFFE066, 0xFFFFB020))
+    }
+}
+
+/** Большая вращающаяся золотая звезда Premium: объёмный разворот, блик и искры */
+@Composable
+fun PremiumStar(size: Dp, modifier: Modifier = Modifier) {
+    val tr = rememberInfiniteTransition(label = "pstar")
+    val spin by tr.animateFloat(0f, 360f, infiniteRepeatable(tween(4200, easing = LinearEasing), RepeatMode.Restart), label = "spin")
+    val pulse by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Reverse), label = "pulse")
+    val orbit by tr.animateFloat(0f, 360f, infiniteRepeatable(tween(6000, easing = LinearEasing), RepeatMode.Restart), label = "orbit")
+    val dens = androidx.compose.ui.platform.LocalDensity.current.density
+    Box(modifier.size(size)) {
+    Canvas(Modifier.fillMaxSize()) {
+        val s = this.size.minDimension / 100f
+        scale(s, Offset.Zero) {
+            drawCircle(Color(0xFFFFB020).copy(alpha = 0.18f + 0.14f * pulse), 46f, Offset(50f, 50f))
+            drawCircle(Color(0xFFFFE066).copy(alpha = 0.18f), 34f + 4f * pulse, Offset(50f, 50f))
+            // орбитальные искры
+            for (i in 0 until 3) {
+                val a = Math.toRadians((orbit + i * 120).toDouble())
+                val x = 50f + 44f * cos(a).toFloat(); val y = 50f + 44f * sin(a).toFloat()
+                sparkle(x, y, 5f + 2f * i, 0.5f + 0.5f * pulse)
+            }
+        }
+    }
+    // сама звезда — отдельным слоем, чтобы вращать вокруг вертикальной оси
+    Canvas(Modifier.fillMaxSize().graphicsLayerSpin(spin, dens)) {
+        val s = this.size.minDimension / 100f
+        scale(s, Offset.Zero) {
+            val sc = 0.62f + 0.04f * pulse
+            scale(sc, sc, Offset(50f, 52f)) {
+                drawPath(starPath(50f, 52f, 48f, 0.48f), vg(4f, 100f, 0xFFFFF08A, 0xFFFFB020, 0xFFFF7A00))
+                drawPath(starPath(50f, 52f, 48f, 0.48f), Color.White.copy(alpha = 0.7f), style = Stroke(2f))
+                drawPath(starPath(50f, 52f, 22f, 0.48f), Color.White.copy(alpha = 0.22f))
+            }
+        }
+    }
+    }
+}
+
+private fun Modifier.graphicsLayerSpin(deg: Float, density: Float): Modifier =
+    this.then(Modifier.graphicsLayer { rotationY = deg; cameraDistance = 14f * density })

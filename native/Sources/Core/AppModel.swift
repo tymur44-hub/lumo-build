@@ -104,11 +104,12 @@ final class AppModel: ObservableObject {
     }
 
     /// В сети — если человек разрешил мне видеть время захода
-    func isOnline(_ uid: String?) -> Bool { uid.map { online.contains($0) && ($0 == myId || profiles[$0]?.showSeen != false) } ?? false }
+    func isOnline(_ uid: String?) -> Bool { uid.map { profiles[$0]?.isBot != true && online.contains($0) && ($0 == myId || profiles[$0]?.showSeen != false) } ?? false }
 
     func lastSeenText(_ uid: String?, fallback: Date? = nil) -> String {
         guard let uid = uid else { return "" }
         let p = profiles[uid]
+        if p?.isBot == true { return "бот" }
         if p?.showSeen == false && uid != myId { return "был(а) недавно" }
         if online.contains(uid) { return "в сети" }
         // берём самое свежее время из профиля и из списка чатов

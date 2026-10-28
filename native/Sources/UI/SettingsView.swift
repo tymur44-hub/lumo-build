@@ -34,7 +34,17 @@ struct SettingsView: View {
                     }
                     SettingsGroup {
                         NavigationLink(value: SettingsPage.premium) {
-                            SettingsRow(icon: "star.fill", color: Color(hex: 0xffb020), title: "Lumo Premium", subtitle: "Дополнительные возможности и боты")
+                            HStack(spacing: 14) {
+                                PremiumStarView(size: 34).frame(width: 34, height: 34)
+                                    .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: 0x2a1b5e)))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Lumo Premium").font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                                    Text("Дополнительные возможности и боты").font(.system(size: 12.5)).foregroundColor(Theme.muted).lineLimit(2)
+                                }
+                                Spacer(minLength: 6)
+                                Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundColor(Theme.muted)
+                            }
+                            .padding(.vertical, 9).padding(.horizontal, 4).contentShape(Rectangle())
                         }
                     }
                     SettingsGroup {
@@ -894,6 +904,27 @@ struct PrivacyView: View {
                     }
                 }
                 TGHint(text: "Вы можете выбрать, кому разрешаете приглашать Вас в группы и каналы.")
+                TGCard {
+                    Button {
+                        if !model.isPremium { model.say(premiumSoon) }
+                        else { Task { await model.setPrivacyKey("msg_prem", model.me?.privacy["msg_prem"] == "premium" ? "all" : "premium") } }
+                    } label: {
+                        HStack(spacing: 16) {
+                            Image(systemName: "star.fill").font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                                .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color(hex: 0xffb020)))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Писать мне только Premium").font(.system(size: 17)).foregroundColor(Theme.text)
+                                Text("Люди без Lumo Premium не смогут написать первыми. Контакты и уже начатые переписки не затрагиваются.")
+                                    .font(.system(size: 12.5)).foregroundColor(Theme.muted)
+                            }
+                            Spacer(minLength: 8)
+                            Toggle("", isOn: .constant(model.me?.privacy["msg_prem"] == "premium")).labelsHidden().allowsHitTesting(false)
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 10).contentShape(Rectangle())
+                    }
+                    .buttonStyle(RowButtonStyle())
+                }
+                .padding(.top, 12).padding(.bottom, 30)
             }
         }
         .background(Theme.bg.ignoresSafeArea())

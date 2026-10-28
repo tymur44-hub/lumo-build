@@ -84,16 +84,12 @@ val CLASSIC_EMOJI = listOf("🎧", "📚", "🌴", "☕", "🎮", "💼", "🛠"
 
 fun emojiGlyph(s: String): String = if (s.startsWith("a:")) ANIM_EMOJI.firstOrNull { it.first == s.removePrefix("a:") }?.second ?: "⭐" else s
 
-/** Значок статуса: анимированный (пульс и покачивание) или обычный */
+/** Значок статуса: анимированный нарисованный значок или обычный эмодзи */
 @Composable
 fun StatusEmoji(s: String, size: TextUnit = 16.sp, modifier: Modifier = Modifier) {
-    val glyph = emojiGlyph(s)
-    if (!s.startsWith("a:")) { Text(glyph, fontSize = size, modifier = modifier); return }
-    val tr = rememberInfiniteTransition(label = "emo")
-    val k = s.hashCode() and 3
-    val sc by tr.animateFloat(0.88f, 1.14f, infiniteRepeatable(tween(900 + k * 120, easing = LinearEasing), RepeatMode.Reverse), label = "sc")
-    val rot by tr.animateFloat(-9f, 9f, infiniteRepeatable(tween(1300 + k * 150, easing = LinearEasing), RepeatMode.Reverse), label = "rot")
-    Text(glyph, fontSize = size, modifier = modifier.graphicsLayer { scaleX = sc; scaleY = sc; rotationZ = rot })
+    if (!s.startsWith("a:")) { Text(emojiGlyph(s), fontSize = size, modifier = modifier); return }
+    val dp = with(LocalDensity.current) { size.toDp() } * 1.15f
+    DrawnStatus(s.removePrefix("a:"), dp, modifier)
 }
 
 /** Выбор смайлик-статуса: анимированные и обычные */
@@ -153,7 +149,20 @@ private val FEATURES = listOf(
     Triple("⏳", "Исчезающие сообщения", "Автоудаление в чате через час, день, неделю или месяц"),
     Triple("📊", "Статистика каналов", "Подписчики и посты по дням"),
     Triple("🤖", "Создание своих ботов", "Через @botfather командой /newbot"),
+    Triple("🎙", "Расшифровка голосовых и кружков", "Текст под голосовым сообщением (на Android — в разработке)"),
+    Triple("🎨", "Иконки приложения", "Шесть оформлений иконки с премиум-значком"),
+    Triple("🔐", "Блокировка и биометрия", "Код, отпечаток пальца или Face ID при входе"),
+    Triple("✉️", "Писать мне только Premium", "Ограничьте входящие сообщения в «Конфиденциальности»"),
+    Triple("🖼", "Свои цвета и фоны чатов", "Цвет сообщений, обои и акценты оформления"),
     Triple("⭐", "Значок Premium", "Звезда рядом с именем в чатах и профиле"),
+)
+
+private val ABOUT = listOf(
+    "Что это" to "Lumo Premium — необязательная подписка с дополнительными возможностями для общения. Основные функции мессенджера остаются бесплатными.",
+    "Где работает" to "Подписка привязана к вашему аккаунту и действует на всех устройствах: сайт, iOS, Android и Windows.",
+    "Как оформить" to "Оплата проходит через встроенного бота @lumo_premium прямо в Lumo. После оплаты значок и функции включаются сами.",
+    "Безопасность" to "Шифрование медиа остаётся бесплатным для всех. Premium не даёт доступа к чужим перепискам.",
+    "Скоро" to "Функции с пометкой «в разработке» появятся в следующих обновлениях.",
 )
 
 @Composable
@@ -173,9 +182,7 @@ fun PremiumScreen() {
         TopBar("Lumo Premium")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(10.dp))
-            Box(Modifier.size(96.dp).clip(CircleShape).background(gold), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Star, null, tint = Color.White, modifier = Modifier.size(58.dp))
-            }
+            PremiumStar(120.dp)
             Spacer(Modifier.height(12.dp))
             Text("Lumo Premium", color = p.text, fontWeight = FontWeight.Black, fontSize = 26.sp)
             Text("Больше возможностей для общения", color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center)
@@ -220,7 +227,32 @@ fun PremiumScreen() {
                     }
                 }
             }
-            Text("Шифрование медиа остаётся бесплатным для всех.", color = p.muted, fontSize = 12.5.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(16.dp))
+            if (AppModel.isPremium) {
+                Spacer(Modifier.height(12.dp))
+                var emo by remember { mutableStateOf(false) }
+                var ico by remember { mutableStateOf(false) }
+                if (emo) EmojiPickerDialog { emo = false }
+                if (ico) AppIconDialog { ico = false }
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel)) {
+                    Text("Смайлик-статус", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().clickable { emo = true }.padding(16.dp))
+                    Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(1.dp).background(p.line))
+                    Text("Иконка приложения", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().clickable { ico = true }.padding(16.dp))
+                }
+            } else {
+                var ico by remember { mutableStateOf(false) }
+                if (ico) AppIconDialog { ico = false }
+                Spacer(Modifier.height(12.dp))
+                Text("Посмотреть иконки приложения", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.clickable { ico = true }.padding(8.dp))
+            }
+            Spacer(Modifier.height(16.dp))
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel).padding(16.dp)) {
+                Text("О Lumo Premium", color = p.text, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                ABOUT.forEach { (h, d) ->
+                    Text(h, color = p.a1, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
+                    Text(d, color = p.muted, fontSize = 14.sp)
+                }
+            }
+            Spacer(Modifier.height(24.dp))
         }
         Box(Modifier.fillMaxWidth().background(p.panel).navigationBarsPadding().padding(12.dp)) {
             Text(if (AppModel.isPremium) "Продлить подписку" else "Оформить Premium", color = Color.White, fontWeight = FontWeight.Black, fontSize = 17.sp, textAlign = TextAlign.Center,
@@ -335,5 +367,63 @@ private fun MenuRow(icon: androidx.compose.ui.graphics.vector.ImageVector, t: St
         Icon(icon, null, tint = p.text, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(14.dp))
         Text(t, color = p.text, fontSize = 16.sp)
+    }
+}
+
+
+// ---------------- иконка приложения ----------------
+
+private val ICONS = listOf(
+    Triple("Classic", "Классика", ru.volshebnymir.lumo.R.drawable.ic_alt_classic),
+    Triple("Gold", "Золото", ru.volshebnymir.lumo.R.drawable.ic_alt_gold),
+    Triple("Aurora", "Аврора", ru.volshebnymir.lumo.R.drawable.ic_alt_aurora),
+    Triple("Midnight", "Полночь", ru.volshebnymir.lumo.R.drawable.ic_alt_midnight),
+    Triple("Sakura", "Сакура", ru.volshebnymir.lumo.R.drawable.ic_alt_sakura),
+    Triple("Neon", "Неон", ru.volshebnymir.lumo.R.drawable.ic_alt_neon),
+)
+
+private fun iconComponent(ctx: android.content.Context, k: String) = android.content.ComponentName(ctx.packageName, "ru.volshebnymir.lumo.Icon$k")
+
+private fun currentIcon(ctx: android.content.Context): String {
+    val pm = ctx.packageManager
+    for ((k, _, _) in ICONS) {
+        val st = pm.getComponentEnabledSetting(iconComponent(ctx, k))
+        if (st == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED) return k
+    }
+    return "Classic"
+}
+
+private fun applyIcon(ctx: android.content.Context, key: String) {
+    val pm = ctx.packageManager
+    pm.setComponentEnabledSetting(iconComponent(ctx, key), android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED, android.content.pm.PackageManager.DONT_KILL_APP)
+    for ((k, _, _) in ICONS) if (k != key)
+        pm.setComponentEnabledSetting(iconComponent(ctx, k), android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED, android.content.pm.PackageManager.DONT_KILL_APP)
+}
+
+@Composable
+fun AppIconDialog(onClose: () -> Unit) {
+    val p = P
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var cur by remember { mutableStateOf(currentIcon(ctx)) }
+    Dialog(onDismissRequest = onClose) {
+        Column(Modifier.clip(RoundedCornerShape(26.dp)).background(p.panel).padding(18.dp)) {
+            Text("Иконка приложения", color = p.text, fontWeight = FontWeight.Black, fontSize = 20.sp)
+            Text("Иконка на экране телефона поменяется. Лаунчер может обновить её через несколько секунд.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+            ICONS.chunked(3).forEach { row ->
+                Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    row.forEach { (k, title, res) ->
+                        Column(Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                            if (k != "Classic" && !AppModel.isPremium) AppModel.say(PREMIUM_SOON)
+                            else { applyIcon(ctx, k); cur = k }
+                        }.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(res), null,
+                                Modifier.size(70.dp).clip(RoundedCornerShape(16.dp)).then(if (cur == k) Modifier.border(3.dp, p.a1, RoundedCornerShape(16.dp)) else Modifier))
+                            Text(title, color = if (cur == k) p.a1 else p.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+                        }
+                    }
+                }
+            }
+            Text("Закрыть", color = p.a1, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.End).clickable { onClose() }.padding(8.dp))
+        }
     }
 }

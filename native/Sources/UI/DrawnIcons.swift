@@ -1,0 +1,239 @@
+import SwiftUI
+
+// MARK: - Нарисованные анимированные значки статуса (не эмодзи)
+
+private func C(_ h: UInt32) -> Color { Color(hex: h) }
+private func vg(_ y0: CGFloat, _ y1: CGFloat, _ c: [UInt32]) -> GraphicsContext.Shading {
+    .linearGradient(Gradient(colors: c.map { C($0) }), startPoint: CGPoint(x: 0, y: y0), endPoint: CGPoint(x: 0, y: y1))
+}
+private func dg(_ c: [UInt32]) -> GraphicsContext.Shading {
+    .linearGradient(Gradient(colors: c.map { C($0) }), startPoint: .zero, endPoint: CGPoint(x: 100, y: 100))
+}
+private func xf(_ c: GraphicsContext, rot: Double = 0, sx: CGFloat = 1, sy: CGFloat = 1, at: CGPoint = .zero, dx: CGFloat = 0, dy: CGFloat = 0) -> GraphicsContext {
+    var g = c
+    g.translateBy(x: dx + at.x, y: dy + at.y)
+    g.rotate(by: .degrees(rot))
+    g.scaleBy(x: sx, y: sy)
+    g.translateBy(x: -at.x, y: -at.y)
+    return g
+}
+private func P(_ f: (inout Path) -> Void) -> Path { var p = Path(); f(&p); return p }
+private func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x, y: y) }
+
+private func starPath(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat, _ k: CGFloat = 0.5) -> Path {
+    P { p in
+        for i in 0..<10 {
+            let rr = i % 2 == 0 ? r : r * k
+            let a = -Double.pi / 2 + Double(i) * Double.pi / 5
+            let q = pt(cx + rr * CGFloat(cos(a)), cy + rr * CGFloat(sin(a)))
+            if i == 0 { p.move(to: q) } else { p.addLine(to: q) }
+        }
+        p.closeSubpath()
+    }
+}
+
+private func sparkle(_ c: GraphicsContext, _ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat, _ alpha: Double) {
+    if alpha <= 0.01 { return }
+    let p = P { p in
+        p.move(to: pt(cx, cy - r)); p.addQuadCurve(to: pt(cx + r, cy), control: pt(cx, cy))
+        p.addQuadCurve(to: pt(cx, cy + r), control: pt(cx, cy)); p.addQuadCurve(to: pt(cx - r, cy), control: pt(cx, cy))
+        p.addQuadCurve(to: pt(cx, cy - r), control: pt(cx, cy)); p.closeSubpath()
+    }
+    c.fill(p, with: .color(.white.opacity(min(1, alpha))))
+}
+
+private func drawIcon(_ c: GraphicsContext, _ k: String, _ t: Double) {
+    let w = 2 * Double.pi * t
+    let sn = CGFloat(sin(w)), cs = CGFloat(cos(w))
+    switch k {
+    case "fire":
+        let g = xf(c, sx: 1 - 0.03 * sn, sy: 1 + 0.08 * sn, at: pt(50, 95))
+        let outer = P { p in
+            p.move(to: pt(50, 4)); p.addCurve(to: pt(82, 62), control1: pt(58, 24), control2: pt(82, 34))
+            p.addCurve(to: pt(50, 95), control1: pt(82, 83), control2: pt(67, 95)); p.addCurve(to: pt(18, 62), control1: pt(33, 95), control2: pt(18, 83))
+            p.addCurve(to: pt(33, 32), control1: pt(18, 48), control2: pt(26, 40)); p.addCurve(to: pt(44, 48), control1: pt(36, 44), control2: pt(40, 48))
+            p.addCurve(to: pt(50, 4), control1: pt(40, 30), control2: pt(44, 14)); p.closeSubpath()
+        }
+        g.fill(outer, with: vg(4, 95, [0xFFC93C, 0xFF7A18, 0xE8321E]))
+        let g2 = xf(g, sy: 1 + 0.1 * cs, at: pt(50, 95))
+        let inner = P { p in
+            p.move(to: pt(50, 44)); p.addCurve(to: pt(68, 76), control1: pt(56, 56), control2: pt(68, 62))
+            p.addCurve(to: pt(50, 94), control1: pt(68, 87), control2: pt(60, 94)); p.addCurve(to: pt(32, 76), control1: pt(40, 94), control2: pt(32, 87))
+            p.addCurve(to: pt(50, 44), control1: pt(32, 64), control2: pt(46, 58)); p.closeSubpath()
+        }
+        g2.fill(inner, with: vg(44, 94, [0xFFF3A0, 0xFFC93C]))
+    case "heart":
+        let s = 1 + 0.1 * max(0, sn) + 0.05 * max(0, CGFloat(sin(w * 2 + 1)))
+        let g = xf(c, sx: s, sy: s, at: pt(50, 52))
+        let h = P { p in
+            p.move(to: pt(50, 90)); p.addCurve(to: pt(26, 18), control1: pt(8, 60), control2: pt(4, 30))
+            p.addCurve(to: pt(50, 28), control1: pt(40, 11), control2: pt(48, 20)); p.addCurve(to: pt(74, 18), control1: pt(52, 20), control2: pt(60, 11))
+            p.addCurve(to: pt(50, 90), control1: pt(96, 30), control2: pt(92, 60)); p.closeSubpath()
+        }
+        g.fill(h, with: dg([0xFF6B8B, 0xE0245E]))
+        g.fill(Path(ellipseIn: CGRect(x: 22, y: 26, width: 14, height: 9)), with: .color(.white.opacity(0.55)))
+    case "star":
+        let s = 1 + 0.06 * cs
+        let g = xf(c, rot: Double(14 * sn), sx: s, sy: s, at: pt(54, 54))
+        g.fill(starPath(50, 54, 46, 0.48), with: vg(8, 98, [0xFFE066, 0xFFB020, 0xFF8A00]))
+        g.stroke(starPath(50, 54, 46, 0.48), with: .color(.white.opacity(0.55)), lineWidth: 1.6)
+        sparkle(c, 84, 18, 10, Double(max(0, cs))); sparkle(c, 16, 80, 7, Double(max(0, -cs)))
+    case "rocket":
+        let g = xf(c, rot: 35, at: pt(50, 50), dy: 3 * sn)
+        let flame = P { p in
+            p.move(to: pt(40, 72)); p.addCurve(to: pt(50, 96 + 6 * sn), control1: pt(40, 86), control2: pt(48, 90 + 6 * sn))
+            p.addCurve(to: pt(60, 72), control1: pt(52, 90 + 6 * sn), control2: pt(60, 86)); p.closeSubpath()
+        }
+        g.fill(flame, with: vg(72, 100, [0xFFE066, 0xFF6A00]))
+        g.fill(P { p in p.move(to: pt(34, 52)); p.addLine(to: pt(16, 78)); p.addLine(to: pt(36, 72)); p.closeSubpath() }, with: .color(C(0xE8321E)))
+        g.fill(P { p in p.move(to: pt(66, 52)); p.addLine(to: pt(84, 78)); p.addLine(to: pt(64, 72)); p.closeSubpath() }, with: .color(C(0xE8321E)))
+        let body = P { p in
+            p.move(to: pt(50, 4)); p.addCurve(to: pt(66, 74), control1: pt(72, 22), control2: pt(74, 52)); p.addLine(to: pt(34, 74))
+            p.addCurve(to: pt(50, 4), control1: pt(26, 52), control2: pt(28, 22)); p.closeSubpath()
+        }
+        g.fill(body, with: vg(4, 74, [0xFFFFFF, 0xD8E1F0]))
+        let nose = P { p in
+            p.move(to: pt(50, 4)); p.addCurve(to: pt(68, 28), control1: pt(60, 12), control2: pt(66, 20)); p.addLine(to: pt(32, 28))
+            p.addCurve(to: pt(50, 4), control1: pt(34, 20), control2: pt(40, 12)); p.closeSubpath()
+        }
+        g.fill(nose, with: .color(C(0xE8321E)))
+        g.fill(Path(ellipseIn: CGRect(x: 41, y: 37, width: 18, height: 18)), with: .color(C(0x3A86FF)))
+        g.fill(Path(ellipseIn: CGRect(x: 44, y: 40, width: 6, height: 6)), with: .color(.white.opacity(0.6)))
+        g.fill(Path(CGRect(x: 34, y: 70, width: 32, height: 6)), with: .color(C(0x8A94A6)))
+    case "crown":
+        let g = xf(c, dy: -3 * abs(sn))
+        let cr = P { p in
+            p.move(to: pt(10, 78)); p.addLine(to: pt(6, 28)); p.addLine(to: pt(30, 52)); p.addLine(to: pt(50, 16)); p.addLine(to: pt(70, 52))
+            p.addLine(to: pt(94, 28)); p.addLine(to: pt(90, 78)); p.closeSubpath()
+        }
+        g.fill(cr, with: vg(16, 78, [0xFFE066, 0xFFB020]))
+        g.fill(Path(roundedRect: CGRect(x: 10, y: 78, width: 80, height: 12), cornerRadius: 5), with: .linearGradient(Gradient(colors: [C(0xFFB020), C(0xFFE066), C(0xFFB020)]), startPoint: pt(10, 0), endPoint: pt(90, 0)))
+        for (x, y, r, col) in [(50, 66, 5.5, 0xE8321E), (28, 68, 4.5, 0x3A86FF), (72, 68, 4.5, 0x2BD67B), (6, 26, 5.0, 0xFFE066), (94, 26, 5.0, 0xFFE066), (50, 14, 5.5, 0xFFE066)] as [(CGFloat, CGFloat, CGFloat, UInt32)] {
+            g.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)), with: .color(C(col)))
+        }
+        let a = CGFloat(t)
+        sparkle(c, 30 + 40 * a, 36, 8, sin(Double.pi * Double(a)))
+    case "gem":
+        let top = P { p in p.move(to: pt(28, 16)); p.addLine(to: pt(72, 16)); p.addLine(to: pt(94, 40)); p.addLine(to: pt(6, 40)); p.closeSubpath() }
+        let bot = P { p in p.move(to: pt(6, 40)); p.addLine(to: pt(94, 40)); p.addLine(to: pt(50, 94)); p.closeSubpath() }
+        c.fill(bot, with: vg(40, 94, [0x29B6F6, 0x1565C0])); c.fill(top, with: vg(16, 40, [0x9BE7FF, 0x4FC3F7]))
+        let ln = GraphicsContext.Shading.color(.white.opacity(0.7))
+        for (a, b) in [(pt(40, 16), pt(28, 40)), (pt(60, 16), pt(72, 40)), (pt(28, 40), pt(50, 94)), (pt(72, 40), pt(50, 94)), (pt(40, 16), pt(50, 40)), (pt(60, 16), pt(50, 40))] {
+            c.stroke(P { p in p.move(to: a); p.addLine(to: b) }, with: ln, lineWidth: 1.8)
+        }
+        let a = CGFloat((t * 3).truncatingRemainder(dividingBy: 1))
+        sparkle(c, 24 + 52 * a, 24 + 8 * a, 11, sin(Double.pi * Double(a)))
+    case "bolt":
+        let glow = 0.5 + 0.5 * Double(max(0, sn))
+        c.fill(Path(ellipseIn: CGRect(x: 6, y: 6, width: 88, height: 88)), with: .color(C(0xFFE066).opacity(0.25 * glow)))
+        let s = 1 + 0.04 * CGFloat(glow)
+        let g = xf(c, sx: s, sy: s, at: pt(50, 50))
+        let b = P { p in
+            p.move(to: pt(60, 2)); p.addLine(to: pt(18, 56)); p.addLine(to: pt(44, 56)); p.addLine(to: pt(34, 98)); p.addLine(to: pt(82, 38))
+            p.addLine(to: pt(54, 38)); p.addLine(to: pt(70, 2)); p.closeSubpath()
+        }
+        g.fill(b, with: vg(2, 98, [0xFFF176, 0xFFC107, 0xFF9800]))
+    case "ghost":
+        let g = xf(c, dy: 4 * sn)
+        let gh = P { p in
+            p.move(to: pt(16, 94)); p.addLine(to: pt(16, 46)); p.addCurve(to: pt(50, 6), control1: pt(16, 20), control2: pt(32, 6))
+            p.addCurve(to: pt(84, 46), control1: pt(68, 6), control2: pt(84, 20)); p.addLine(to: pt(84, 94))
+            p.addLine(to: pt(72, 84)); p.addLine(to: pt(61, 94)); p.addLine(to: pt(50, 84)); p.addLine(to: pt(39, 94)); p.addLine(to: pt(28, 84)); p.closeSubpath()
+        }
+        g.fill(gh, with: vg(6, 94, [0xFFFFFF, 0xC9D6F2]))
+        g.fill(Path(ellipseIn: CGRect(x: 33, y: 36, width: 11, height: 15)), with: .color(C(0x2A2F4A)))
+        g.fill(Path(ellipseIn: CGRect(x: 56, y: 36, width: 11, height: 15)), with: .color(C(0x2A2F4A)))
+        g.fill(Path(ellipseIn: CGRect(x: 44, y: 60, width: 12, height: 9 + 3 * sn)), with: .color(C(0x2A2F4A)))
+    case "sun":
+        for i in 0..<8 {
+            let g = xf(c, rot: 360 * t + Double(i) * 45, at: pt(50, 50))
+            g.stroke(P { p in p.move(to: pt(50, 6)); p.addLine(to: pt(50, 20)) }, with: .color(C(0xFFB020)), style: StrokeStyle(lineWidth: 7, lineCap: .round))
+        }
+        let s = 1 + 0.05 * sn
+        let g = xf(c, sx: s, sy: s, at: pt(50, 50))
+        g.fill(Path(ellipseIn: CGRect(x: 23, y: 23, width: 54, height: 54)), with: .radialGradient(Gradient(colors: [C(0xFFF176), C(0xFFA000)]), center: pt(44, 44), startRadius: 0, endRadius: 34))
+    case "moon":
+        let g = xf(c, rot: Double(7 * sn), at: pt(50, 50))
+        let m = P { p in
+            p.move(to: pt(64, 6)); p.addCurve(to: pt(14, 62), control1: pt(32, 8), control2: pt(10, 34)); p.addCurve(to: pt(82, 84), control1: pt(18, 88), control2: pt(50, 100))
+            p.addCurve(to: pt(64, 6), control1: pt(52, 78), control2: pt(40, 40)); p.closeSubpath()
+        }
+        g.fill(m, with: dg([0xFFF3B0, 0xFFC94D]))
+        let tw = 0.5 + 0.5 * Double(sn)
+        sparkle(c, 78, 26, CGFloat(6 + 6 * tw), 0.4 + 0.6 * tw); sparkle(c, 88, 60, CGFloat(4 + 3 * (1 - tw)), 0.3 + 0.6 * (1 - tw))
+    case "clover":
+        let g = xf(c, rot: Double(14 * sn), at: pt(50, 50))
+        g.stroke(P { p in p.move(to: pt(50, 50)); p.addCurve(to: pt(70, 94), control1: pt(54, 72), control2: pt(60, 84)) }, with: .color(C(0x1E8E4E)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+        let leaf = P { p in
+            p.move(to: pt(50, 50)); p.addCurve(to: pt(37, 10), control1: pt(28, 36), control2: pt(24, 16)); p.addCurve(to: pt(50, 20), control1: pt(44, 7), control2: pt(49, 13))
+            p.addCurve(to: pt(63, 10), control1: pt(51, 13), control2: pt(56, 7)); p.addCurve(to: pt(50, 50), control1: pt(76, 16), control2: pt(72, 36)); p.closeSubpath()
+        }
+        for i in 0..<4 { xf(g, rot: Double(i) * 90 + 45, at: pt(50, 50)).fill(leaf, with: vg(8, 50, [0x7BE495, 0x1FA85A])) }
+    case "note":
+        let s = 1 + 0.05 * abs(cs)
+        let g = xf(c, rot: Double(9 * sn), sx: s, sy: s, at: pt(50, 80))
+        let sh = dg([0xB66CFF, 0xFF5BB8])
+        g.fill(P { p in
+            p.move(to: pt(52, 14)); p.addCurve(to: pt(80, 58), control1: pt(60, 34), control2: pt(84, 34)); p.addCurve(to: pt(52, 40), control1: pt(72, 44), control2: pt(58, 46)); p.closeSubpath()
+        }, with: sh)
+        g.fill(Path(roundedRect: CGRect(x: 46, y: 14, width: 8, height: 64), cornerRadius: 3), with: sh)
+        xf(g, rot: -20, at: pt(32, 78)).fill(Path(ellipseIn: CGRect(x: 14, y: 66, width: 36, height: 26)), with: sh)
+    default:
+        c.fill(starPath(50, 54, 46, 0.48), with: vg(8, 98, [0xFFE066, 0xFFB020]))
+    }
+}
+
+struct DrawnStatusView: View {
+    let key: String
+    var size: CGFloat = 20
+    var body: some View {
+        TimelineView(.animation) { tl in
+            let t = (tl.date.timeIntervalSinceReferenceDate / 2.4).truncatingRemainder(dividingBy: 1)
+            Canvas { ctx, sz in
+                var g = ctx
+                let s = min(sz.width, sz.height) / 100
+                g.scaleBy(x: s, y: s)
+                drawIcon(g, key, t)
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// Большая вращающаяся золотая звезда Premium
+struct PremiumStarView: View {
+    var size: CGFloat = 110
+    var body: some View {
+        TimelineView(.animation) { tl in
+            let now = tl.date.timeIntervalSinceReferenceDate
+            let spin = (now / 4.2).truncatingRemainder(dividingBy: 1) * 360
+            let pulse = 0.5 + 0.5 * sin(now * 3.9)
+            let orbit = (now / 6).truncatingRemainder(dividingBy: 1) * 360
+            ZStack {
+                Canvas { ctx, sz in
+                    var g = ctx
+                    let s = min(sz.width, sz.height) / 100
+                    g.scaleBy(x: s, y: s)
+                    g.fill(Path(ellipseIn: CGRect(x: 4, y: 4, width: 92, height: 92)), with: .color(C(0xFFB020).opacity(0.18 + 0.14 * pulse)))
+                    g.fill(Path(ellipseIn: CGRect(x: 16 - 2 * pulse, y: 16 - 2 * pulse, width: 68 + 4 * pulse, height: 68 + 4 * pulse)), with: .color(C(0xFFE066).opacity(0.18)))
+                    for i in 0..<3 {
+                        let a = (orbit + Double(i) * 120) * Double.pi / 180
+                        sparkle(g, 50 + 44 * CGFloat(cos(a)), 50 + 44 * CGFloat(sin(a)), CGFloat(5 + 2 * i), 0.5 + 0.5 * pulse)
+                    }
+                }
+                Canvas { ctx, sz in
+                    var g = ctx
+                    let s = min(sz.width, sz.height) / 100
+                    g.scaleBy(x: s, y: s)
+                    let sc = CGFloat(0.62 + 0.04 * pulse)
+                    let h = xf(g, sx: sc, sy: sc, at: pt(50, 52))
+                    h.fill(starPath(50, 52, 48, 0.48), with: vg(4, 100, [0xFFF08A, 0xFFB020, 0xFF7A00]))
+                    h.stroke(starPath(50, 52, 48, 0.48), with: .color(.white.opacity(0.7)), lineWidth: 2)
+                    h.fill(starPath(50, 52, 22, 0.48), with: .color(.white.opacity(0.22)))
+                }
+                .rotation3DEffect(.degrees(spin), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
