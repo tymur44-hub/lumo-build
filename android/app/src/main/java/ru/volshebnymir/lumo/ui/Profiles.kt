@@ -733,6 +733,11 @@ fun AppearanceScreen() {
                 listOf("dark" to "Тёмная", "light" to "Светлая", "system" to "Как в системе").forEach { (k, t) -> Pill(t, Look.theme == k) { Look.theme = k; Look.save() } }
             }
         }
+        var icoDlg by remember { mutableStateOf(false) }
+        if (icoDlg) AppIconDialog { icoDlg = false }
+        Card {
+            SettingsRow(Icons.Filled.Apps, Color(0xFF5B6CFF), "Иконка приложения", "Шесть оформлений, часть — с премиум-значком") { icoDlg = true }
+        }
         Card {
             Text("Цвет", color = p.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
             Look.accents.withIndex().toList().chunked(6).forEach { row ->

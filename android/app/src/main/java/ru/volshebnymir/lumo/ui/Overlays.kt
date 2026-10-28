@@ -14,6 +14,8 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -266,22 +268,142 @@ fun StoryViewer(startUser: String, onClose: () -> Unit) {
 
 @Composable
 fun AddStoryScreen(onClose: () -> Unit) {
+    var uri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var isVideo by remember { mutableStateOf(false) }
+    val u = uri
+    if (u == null) StoryCamera(onClose) { x, v -> uri = x; isVideo = v }
+    else StoryEdit(u, isVideo, onClose) { uri = null }
+}
+
+/** Камера для историй: сетка, вспышка, переключение ФОТО/ВИДЕО, галерея слева, переворот справа */
+@android.annotation.SuppressLint("MissingPermission")
+@Composable
+private fun StoryCamera(onClose: () -> Unit, onPicked: (android.net.Uri, Boolean) -> Unit) {
+    val ctx = LocalContext.current
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    var granted by remember { mutableStateOf(androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) }
+    val perm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r -> granted = r[android.Manifest.permission.CAMERA] == true }
+    LaunchedEffect(Unit) { if (!granted) perm.launch(arrayOf(android.Manifest.permission.CAMERA, android.Manifest.permission.RECORD_AUDIO)) }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
+        if (u != null) onPicked(u, ctx.contentResolver.getType(u)?.startsWith("video") == true)
+    }
+    var front by remember { mutableStateOf(false) }
+    var video by remember { mutableStateOf(false) }
+    var grid by remember { mutableStateOf(false) }
+    var flash by remember { mutableStateOf(false) }
+    var camera by remember { mutableStateOf<androidx.camera.core.Camera?>(null) }
+    var imageCap by remember { mutableStateOf<androidx.camera.core.ImageCapture?>(null) }
+    var videoCap by remember { mutableStateOf<androidx.camera.video.VideoCapture<androidx.camera.video.Recorder>?>(null) }
+    var rec by remember { mutableStateOf<androidx.camera.video.Recording?>(null) }
+    var sec by remember { mutableStateOf(0) }
+    val previewView = remember { androidx.camera.view.PreviewView(ctx).apply { scaleType = androidx.camera.view.PreviewView.ScaleType.FILL_CENTER; implementationMode = androidx.camera.view.PreviewView.ImplementationMode.COMPATIBLE } }
+    BackHandler { rec?.stop(); onClose() }
+    LaunchedEffect(front, granted) {
+        if (!granted) return@LaunchedEffect
+        val provider = runCatching { androidx.camera.lifecycle.ProcessCameraProvider.getInstance(ctx).get() }.getOrNull() ?: run { AppModel.say("Камера недоступна"); return@LaunchedEffect }
+        val preview = androidx.camera.core.Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
+        val ic = androidx.camera.core.ImageCapture.Builder().setCaptureMode(androidx.camera.core.ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
+        val recorder = androidx.camera.video.Recorder.Builder().setQualitySelector(androidx.camera.video.QualitySelector.from(androidx.camera.video.Quality.HD, androidx.camera.video.FallbackStrategy.lowerQualityOrHigherThan(androidx.camera.video.Quality.SD))).build()
+        val vc = androidx.camera.video.VideoCapture.withOutput(recorder)
+        runCatching {
+            provider.unbindAll()
+            camera = provider.bindToLifecycle(owner, if (front) androidx.camera.core.CameraSelector.DEFAULT_FRONT_CAMERA else androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA, preview, ic, vc)
+            imageCap = ic; videoCap = vc
+        }.onFailure { AppModel.say("Не удалось включить камеру") }
+    }
+    LaunchedEffect(flash, camera, front) {
+        runCatching { camera?.cameraControl?.enableTorch(flash && video && !front) }
+        imageCap?.flashMode = if (flash) androidx.camera.core.ImageCapture.FLASH_MODE_ON else androidx.camera.core.ImageCapture.FLASH_MODE_OFF
+    }
+    LaunchedEffect(rec) { val r = rec ?: return@LaunchedEffect; sec = 0; while (rec === r) { delay(1000); sec++; if (sec >= 60) r.stop() } }
+    DisposableEffect(Unit) { onDispose { runCatching { rec?.stop() } } }
+
+    fun shoot() {
+        if (!video) {
+            val ic = imageCap ?: return
+            val f = java.io.File(ctx.cacheDir, "story-${System.currentTimeMillis()}.jpg")
+            ic.takePicture(androidx.camera.core.ImageCapture.OutputFileOptions.Builder(f).build(), androidx.core.content.ContextCompat.getMainExecutor(ctx),
+                object : androidx.camera.core.ImageCapture.OnImageSavedCallback {
+                    override fun onImageSaved(r: androidx.camera.core.ImageCapture.OutputFileResults) { onPicked(android.net.Uri.fromFile(f), false) }
+                    override fun onError(e: androidx.camera.core.ImageCaptureException) { AppModel.say("Не удалось сделать снимок") }
+                })
+        } else {
+            val cur = rec
+            if (cur != null) { cur.stop(); return }
+            val vc = videoCap ?: return
+            val f = java.io.File(ctx.cacheDir, "story-${System.currentTimeMillis()}.mp4")
+            rec = vc.output.prepareRecording(ctx, androidx.camera.video.FileOutputOptions.Builder(f).build()).withAudioEnabled()
+                .start(androidx.core.content.ContextCompat.getMainExecutor(ctx)) { e ->
+                    if (e is androidx.camera.video.VideoRecordEvent.Finalize) { rec = null; if (f.length() > 0) onPicked(android.net.Uri.fromFile(f), true) }
+                }
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(Color.Black).clickable(remember { MutableInteractionSource() }, null) {}) {
+        Box(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = 150.dp).clip(RoundedCornerShape(28.dp)).background(Color(0xFF1B1B1F))) {
+            if (granted) androidx.compose.ui.viewinterop.AndroidView({ previewView }, Modifier.fillMaxSize())
+            else Column(Modifier.align(Alignment.Center).padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Нужен доступ к камере", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text("Или выберите фото из галереи", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
+            }
+            if (grid) Canvas(Modifier.fillMaxSize()) {
+                val c = Color.White.copy(alpha = 0.45f)
+                for (i in 1..2) {
+                    drawLine(c, Offset(size.width * i / 3f, 0f), Offset(size.width * i / 3f, size.height), 1.5f)
+                    drawLine(c, Offset(0f, size.height * i / 3f), Offset(size.width, size.height * i / 3f), 1.5f)
+                }
+            }
+            Row(Modifier.align(Alignment.TopEnd).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RoundIcon(Icons.Filled.GridOn, tint = Color.White, bg = if (grid) Color.White.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.3f)) { grid = !grid }
+                RoundIcon(if (flash) Icons.Filled.FlashOn else Icons.Filled.FlashOff, tint = Color.White, bg = if (flash) Color.White.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.3f)) { flash = !flash }
+                RoundIcon(Icons.Filled.Close, tint = Color.White, bg = Color.Black.copy(alpha = 0.3f)) { rec?.stop(); onClose() }
+            }
+            if (rec != null) Text("%d:%02d".format(sec / 60, sec % 60), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                modifier = Modifier.align(Alignment.TopStart).padding(16.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFFF3B30)).padding(horizontal = 10.dp, vertical = 3.dp))
+        }
+        Column(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.size(78.dp).clip(CircleShape).border(4.dp, Color.White.copy(alpha = 0.55f), CircleShape).padding(6.dp).clip(CircleShape)
+                .background(if (video) Color(0xFFFF3B30) else Color.White).clickable { shoot() }, contentAlignment = Alignment.Center) {
+                if (rec != null) Box(Modifier.size(24.dp).clip(RoundedCornerShape(5.dp)).background(Color.White))
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Box(Modifier.size(54.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.18f))
+                    .clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.PhotoLibrary, null, tint = Color.White, modifier = Modifier.size(26.dp))
+                }
+                Row(Modifier.clip(RoundedCornerShape(28.dp)).background(Color.White.copy(alpha = 0.16f)).padding(4.dp)) {
+                    listOf(true to "ВИДЕО", false to "ФОТО").forEach { (v, t) ->
+                        Text(t, color = if (video == v) Color(0xFFFFD60A) else Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                            modifier = Modifier.clip(RoundedCornerShape(24.dp)).background(if (video == v) Color.White.copy(alpha = 0.18f) else Color.Transparent)
+                                .clickable { if (rec == null) video = v }.padding(horizontal = 22.dp, vertical = 12.dp))
+                    }
+                }
+                Box(Modifier.size(54.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f)).clickable { if (rec == null) front = !front }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Cameraswitch, null, tint = Color.White, modifier = Modifier.size(26.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoryEdit(first: android.net.Uri, firstVideo: Boolean, onClose: () -> Unit, onRetake: () -> Unit) {
     val p = P
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var uri by remember { mutableStateOf<android.net.Uri?>(null) }
-    var isVideo by remember { mutableStateOf(false) }
+    var uri by remember { mutableStateOf<android.net.Uri?>(first) }
+    var isVideo by remember { mutableStateOf(firstVideo) }
     var caption by remember { mutableStateOf("") }
     var hours by remember { mutableStateOf(24) }
     var busy by remember { mutableStateOf(false) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) { uri = u; isVideo = ctx.contentResolver.getType(u)?.startsWith("video") == true }
     }
-    LaunchedEffect(Unit) { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
-    BackHandler { onClose() }
+    BackHandler { onRetake() }
     Column(Modifier.fillMaxSize().background(p.bg).clickable(remember { MutableInteractionSource() }, null) {}.statusBarsPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            RoundIcon(Icons.Filled.Close) { onClose() }
+            RoundIcon(Icons.Filled.Close) { onRetake() }
             Text("Новая история", color = p.text, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         }
         Box(Modifier.weight(1f).fillMaxWidth().padding(14.dp).clip(RoundedCornerShape(22.dp)).background(p.panel2)

@@ -31,6 +31,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Celebration
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Mail
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -141,20 +157,26 @@ private val PLANS = listOf(
     Plan("month", "1 месяц", "199 ₽", "без скидки"),
 )
 
+private class Feat(val icon: androidx.compose.ui.graphics.vector.ImageVector, val color: Color, val title: String, val desc: String, val soon: Boolean = false)
+
 private val FEATURES = listOf(
-    Triple("✨", "Анимированные смайлик-статусы", "Двигающийся значок рядом с именем"),
-    Triple("🎉", "Анимированные эффекты сообщений", "Удерживайте кнопку отправки и выберите эффект"),
-    Triple("🔕", "Отправка без звука", "Сообщение придёт тихо"),
-    Triple("⏰", "Отложенные сообщения", "Уйдут сами в нужное время"),
-    Triple("⏳", "Исчезающие сообщения", "Автоудаление в чате через час, день, неделю или месяц"),
-    Triple("📊", "Статистика каналов", "Подписчики и посты по дням"),
-    Triple("🤖", "Создание своих ботов", "Через @botfather командой /newbot"),
-    Triple("🎙", "Расшифровка голосовых и кружков", "Текст под голосовым сообщением (на Android — в разработке)"),
-    Triple("🎨", "Иконки приложения", "Шесть оформлений иконки с премиум-значком"),
-    Triple("🔐", "Блокировка и биометрия", "Код, отпечаток пальца или Face ID при входе"),
-    Triple("✉️", "Писать мне только Premium", "Ограничьте входящие сообщения в «Конфиденциальности»"),
-    Triple("🖼", "Свои цвета и фоны чатов", "Цвет сообщений, обои и акценты оформления"),
-    Triple("⭐", "Значок Premium", "Звезда рядом с именем в чатах и профиле"),
+    Feat(Icons.Filled.AutoAwesome, Color(0xFFFF9F0A), "Анимированные смайлик-статусы", "Двигающийся значок рядом с именем"),
+    Feat(Icons.Filled.Celebration, Color(0xFFFF5B7A), "Анимированные эффекты сообщений", "Удерживайте кнопку отправки и выберите эффект"),
+    Feat(Icons.Filled.NotificationsOff, Color(0xFF8E8E93), "Отправка без звука", "Сообщение придёт тихо"),
+    Feat(Icons.Filled.Schedule, Color(0xFF2BD67B), "Отложенные сообщения", "Уйдут сами в нужное время"),
+    Feat(Icons.Filled.Timer, Color(0xFF1FB6A6), "Исчезающие сообщения", "Автоудаление в чате через час, день, неделю или месяц"),
+    Feat(Icons.Filled.BarChart, Color(0xFF22A6FF), "Статистика каналов", "Подписчики и посты по дням"),
+    Feat(Icons.Filled.SmartToy, Color(0xFFFF8A3D), "Создание своих ботов", "Через @botfather командой /newbot"),
+    Feat(Icons.Filled.Mic, Color(0xFFA35BFF), "Расшифровка голосовых и кружков", "Текст под голосовым. На iPhone работает, на Android — в разработке"),
+    Feat(Icons.Filled.Apps, Color(0xFF5B6CFF), "Иконки приложения", "Шесть оформлений иконки с премиум-значком"),
+    Feat(Icons.Filled.Fingerprint, Color(0xFF5B6CFF), "Блокировка и биометрия", "Код, отпечаток пальца или Face ID при входе"),
+    Feat(Icons.Filled.Mail, Color(0xFFFFB020), "Писать мне только Premium", "Ограничьте входящие сообщения в «Конфиденциальности»"),
+    Feat(Icons.Filled.Palette, Color(0xFFE05BFF), "Свои цвета и фоны чатов", "Цвет сообщений, обои и акценты оформления"),
+    Feat(Icons.Filled.Shield, Color(0xFF2B8CFF), "Запрет пересылки и скриншотов", "Защищённый чат: на Android скриншоты блокируются, на iPhone экран скрывается при записи"),
+    Feat(Icons.Filled.Groups, Color(0xFF34C759), "Групповые голосовые и видеозвонки", "Звонок с несколькими участниками", soon = true),
+    Feat(Icons.Filled.BlurOn, Color(0xFF64D2FF), "Размытие и замена фона в звонке", "Скройте комнату за спиной", soon = true),
+    Feat(Icons.Filled.FiberManualRecord, Color(0xFFFF453A), "Запись звонка с согласия собеседника", "Собеседник должен подтвердить запись", soon = true),
+    Feat(Icons.Filled.Star, Color(0xFFFFB020), "Значок Premium", "Звезда рядом с именем в чатах и профиле"),
 )
 
 private val ABOUT = listOf(
@@ -165,6 +187,23 @@ private val ABOUT = listOf(
     "Скоро" to "Функции с пометкой «в разработке» появятся в следующих обновлениях.",
 )
 
+/** Кнопка с градиентом и бегущим бликом */
+@Composable
+fun ShimmerButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val tr = rememberInfiniteTransition(label = "shim")
+    val x by tr.animateFloat(-0.4f, 1.4f, infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Restart), label = "x")
+    val base = Brush.horizontalGradient(listOf(Color(0xFF5B8CFF), Color(0xFFA066FF), Color(0xFFD86BFF)))
+    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(base).clickable { onClick() }
+        .drawWithContent {
+            drawContent()
+            val w = size.width
+            val cx = w * x
+            drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.38f), Color.Transparent), cx - w * 0.18f, cx + w * 0.18f))
+        }.padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
+        Text(text, color = Color.White, fontWeight = FontWeight.Black, fontSize = 17.sp, textAlign = TextAlign.Center)
+    }
+}
+
 @Composable
 fun PremiumScreen() {
     val p = P
@@ -172,93 +211,92 @@ fun PremiumScreen() {
     var plan by remember { mutableStateOf("year") }
     var until by remember { mutableStateOf<String?>(null) }
     var owner by remember { mutableStateOf(false) }
+    var emo by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val r = runCatching { Api.rpc("lm_my_premium") }.getOrNull()
         val o = (r as? JSONObject) ?: (r as? JSONArray)?.optJSONObject(0)
         if (o != null) { owner = o.optBoolean("owner"); until = o.optString("until").takeIf { it.isNotEmpty() && it != "null" } }
     }
-    val gold = Brush.linearGradient(listOf(Color(0xFF7C5CFF), Color(0xFFFF5BB8), Color(0xFFFFB020)))
+    if (emo) EmojiPickerDialog { emo = false }
     Column(Modifier.fillMaxSize().background(p.bg)) {
-        TopBar("Lumo Premium")
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(10.dp))
-            PremiumStar(120.dp)
-            Spacer(Modifier.height(12.dp))
-            Text("Lumo Premium", color = p.text, fontWeight = FontWeight.Black, fontSize = 26.sp)
-            Text("Больше возможностей для общения", color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(16.dp))
-            if (AppModel.isPremium) {
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel).padding(14.dp)) {
-                    Text("У вас активен Premium", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text(if (owner) "Бессрочно — вы владелец Lumo" else until?.let { "Действует до " + it.take(10) } ?: "Подписка активна", color = p.muted, fontSize = 14.sp)
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Ваш смайлик-статус:", color = p.muted, fontSize = 14.sp)
-                        Spacer(Modifier.width(8.dp))
-                        AppModel.me?.emojiStatus?.let { StatusEmoji(it, 22.sp) } ?: Text("не выбран", color = p.muted, fontSize = 14.sp)
-                    }
-                }
-                Spacer(Modifier.height(14.dp))
-            }
-            PLANS.forEach { pl ->
-                val on = plan == pl.id
-                Row(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(16.dp)).background(p.panel)
-                    .border(2.dp, if (on) p.a1 else Color.Transparent, RoundedCornerShape(16.dp)).clickable { plan = pl.id }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(22.dp).clip(CircleShape).border(2.dp, if (on) p.a1 else p.muted, CircleShape).padding(4.dp)) { if (on) Box(Modifier.fillMaxSize().clip(CircleShape).background(p.a1)) }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(pl.title, color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text(pl.note, color = p.muted, fontSize = 13.sp)
-                    }
-                    Text(pl.price, color = p.text, fontWeight = FontWeight.Black, fontSize = 17.sp)
+        Box {
+            TopBar("")
+        }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.fillMaxWidth().height(230.dp).background(Brush.verticalGradient(listOf(Color(0xFF9B6BFF).copy(alpha = 0.22f), Color.Transparent))), contentAlignment = Alignment.TopCenter) {
+                SparkleField(Modifier.fillMaxSize())
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    PremiumStar(130.dp)
+                    Text("Lumo Premium", color = p.text, fontWeight = FontWeight.Black, fontSize = 26.sp)
+                    Text("Больше свободы и десятки эксклюзивных функций", color = p.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 40.dp, vertical = 4.dp))
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel).padding(vertical = 6.dp)) {
-                FEATURES.forEachIndexed { i, (ic, t, d) ->
-                    if (i > 0) Box(Modifier.padding(start = 58.dp).fillMaxWidth().height(1.dp).background(p.line))
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(ic, fontSize = 26.sp, modifier = Modifier.width(34.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Column {
-                            Text(t, color = p.text, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                            Text(d, color = p.muted, fontSize = 13.sp)
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                if (AppModel.isPremium) {
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel).padding(14.dp)) {
+                        Text("У вас активен Premium", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(if (owner) "Бессрочно — вы владелец Lumo" else until?.let { "Действует до " + it.take(10) } ?: "Подписка активна", color = p.muted, fontSize = 14.sp)
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { emo = true }) {
+                            Text("Ваш смайлик-статус:", color = p.muted, fontSize = 14.sp)
+                            Spacer(Modifier.width(8.dp))
+                            AppModel.me?.emojiStatus?.let { StatusEmoji(it, 22.sp) } ?: Text("выбрать", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel)) {
+                    PLANS.forEachIndexed { i, pl ->
+                        val on = plan == pl.id
+                        if (i > 0) Box(Modifier.padding(start = 50.dp).fillMaxWidth().height(1.dp).background(p.line))
+                        Row(Modifier.fillMaxWidth().clickable { plan = pl.id }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(24.dp).clip(CircleShape).background(if (on) p.a1 else Color.Transparent).border(2.dp, if (on) p.a1 else p.muted, CircleShape), contentAlignment = Alignment.Center) {
+                                if (on) Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(pl.title, color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Text(pl.note, color = p.muted, fontSize = 12.5.sp)
+                            }
+                            Text(pl.price, color = p.text, fontWeight = FontWeight.Black, fontSize = 16.sp)
                         }
                     }
                 }
-            }
-            if (AppModel.isPremium) {
-                Spacer(Modifier.height(12.dp))
-                var emo by remember { mutableStateOf(false) }
-                var ico by remember { mutableStateOf(false) }
-                if (emo) EmojiPickerDialog { emo = false }
-                if (ico) AppIconDialog { ico = false }
+                Text("ПРЕИМУЩЕСТВА ПОДПИСКИ", color = p.muted, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 14.dp, top = 18.dp, bottom = 8.dp))
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel)) {
-                    Text("Смайлик-статус", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().clickable { emo = true }.padding(16.dp))
-                    Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(1.dp).background(p.line))
-                    Text("Иконка приложения", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().clickable { ico = true }.padding(16.dp))
+                    FEATURES.forEachIndexed { i, f ->
+                        if (i > 0) Box(Modifier.padding(start = 62.dp).fillMaxWidth().height(1.dp).background(p.line))
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(f.color), contentAlignment = Alignment.Center) {
+                                Icon(f.icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(f.title, color = p.text, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f, fill = false))
+                                    if (f.soon) Text("в разработке", color = p.a1, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(6.dp)).background(p.a1.copy(alpha = 0.14f)).padding(horizontal = 6.dp, vertical = 1.dp))
+                                }
+                                Text(f.desc, color = p.muted, fontSize = 12.5.sp)
+                            }
+                        }
+                    }
                 }
-            } else {
-                var ico by remember { mutableStateOf(false) }
-                if (ico) AppIconDialog { ico = false }
-                Spacer(Modifier.height(12.dp))
-                Text("Посмотреть иконки приложения", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.clickable { ico = true }.padding(8.dp))
-            }
-            Spacer(Modifier.height(16.dp))
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel).padding(16.dp)) {
-                Text("О Lumo Premium", color = p.text, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                ABOUT.forEach { (h, d) ->
-                    Text(h, color = p.a1, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
-                    Text(d, color = p.muted, fontSize = 14.sp)
+                Spacer(Modifier.height(16.dp))
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel).padding(16.dp)) {
+                    Text("О Lumo Premium", color = p.text, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                    ABOUT.forEach { (h, d) ->
+                        Text(h, color = p.a1, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
+                        Text(d, color = p.muted, fontSize = 14.sp)
+                    }
                 }
+                Spacer(Modifier.height(24.dp))
             }
-            Spacer(Modifier.height(24.dp))
         }
         Box(Modifier.fillMaxWidth().background(p.panel).navigationBarsPadding().padding(12.dp)) {
-            Text(if (AppModel.isPremium) "Продлить подписку" else "Оформить Premium", color = Color.White, fontWeight = FontWeight.Black, fontSize = 17.sp, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(gold).clickable {
-                    if (owner) scope.launch { AppModel.openByUsername("lumo_premium") } else AppModel.say("Оплата пока временно недоступна")
-                }.padding(vertical = 15.dp))
+            ShimmerButton(if (AppModel.isPremium) "Продлить подписку" else "Оформить Premium") {
+                if (owner) scope.launch { AppModel.openByUsername("lumo_premium") } else AppModel.say("Оплата пока временно недоступна")
+            }
         }
     }
 }

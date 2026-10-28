@@ -57,13 +57,13 @@ private fun starPath(cx: Float, cy: Float, r: Float, k: Float = 0.5f): Path {
     p.close(); return p
 }
 
-private fun DrawScope.sparkle(cx: Float, cy: Float, r: Float, alpha: Float) {
+private fun DrawScope.sparkle(cx: Float, cy: Float, r: Float, alpha: Float, color: Color = Color.White) {
     if (alpha <= 0.01f) return
     val p = Path().apply {
         moveTo(cx, cy - r); quadraticBezierTo(cx, cy, cx + r, cy); quadraticBezierTo(cx, cy, cx, cy + r)
         quadraticBezierTo(cx, cy, cx - r, cy); quadraticBezierTo(cx, cy, cx, cy - r); close()
     }
-    drawPath(p, Color.White.copy(alpha = alpha.coerceIn(0f, 1f)))
+    drawPath(p, color.copy(alpha = alpha.coerceIn(0f, 1f)))
 }
 
 private fun DrawScope.drawStatusIcon(k: String, t: Float) {
@@ -213,40 +213,50 @@ private fun DrawScope.drawStatusIcon(k: String, t: Float) {
     }
 }
 
-/** Большая вращающаяся золотая звезда Premium: объёмный разворот, блик и искры */
+/** Вращающаяся фиолетовая звезда Premium с мягкими углами: объёмный разворот по вертикальной оси */
 @Composable
 fun PremiumStar(size: Dp, modifier: Modifier = Modifier) {
     val tr = rememberInfiniteTransition(label = "pstar")
-    val spin by tr.animateFloat(0f, 360f, infiniteRepeatable(tween(4200, easing = LinearEasing), RepeatMode.Restart), label = "spin")
-    val pulse by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Reverse), label = "pulse")
-    val orbit by tr.animateFloat(0f, 360f, infiniteRepeatable(tween(6000, easing = LinearEasing), RepeatMode.Restart), label = "orbit")
+    val spin by tr.animateFloat(0f, 360f, infiniteRepeatable(tween(3600, easing = androidx.compose.animation.core.FastOutSlowInEasing), RepeatMode.Restart), label = "spin")
+    val pulse by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Reverse), label = "pulse")
     val dens = androidx.compose.ui.platform.LocalDensity.current.density
     Box(modifier.size(size)) {
-    Canvas(Modifier.fillMaxSize()) {
-        val s = this.size.minDimension / 100f
-        scale(s, Offset.Zero) {
-            drawCircle(Color(0xFFFFB020).copy(alpha = 0.18f + 0.14f * pulse), 46f, Offset(50f, 50f))
-            drawCircle(Color(0xFFFFE066).copy(alpha = 0.18f), 34f + 4f * pulse, Offset(50f, 50f))
-            // орбитальные искры
-            for (i in 0 until 3) {
-                val a = Math.toRadians((orbit + i * 120).toDouble())
-                val x = 50f + 44f * cos(a).toFloat(); val y = 50f + 44f * sin(a).toFloat()
-                sparkle(x, y, 5f + 2f * i, 0.5f + 0.5f * pulse)
+        Canvas(Modifier.fillMaxSize().graphicsLayerSpin(spin, dens)) {
+            val s = this.size.minDimension / 100f
+            scale(s, Offset.Zero) {
+                val sc = 0.9f + 0.03f * pulse
+                scale(sc, sc, Offset(50f, 53f)) {
+                    val path = starPath(50f, 53f, 38f, 0.55f)
+                    val br = Brush.linearGradient(listOf(Color(0xFF5B8CFF), Color(0xFFA066FF), Color(0xFFFF6BCB)), Offset(15f, 10f), Offset(85f, 95f))
+                    drawPath(path, br)
+                    drawPath(path, br, style = Stroke(11f, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                    drawPath(starPath(50f, 51f, 24f, 0.55f), Color.White.copy(alpha = 0.16f))
+                    drawOval(Color.White.copy(alpha = 0.35f + 0.2f * pulse), Offset(32f, 26f), Size(16f, 8f))
+                }
             }
         }
     }
-    // сама звезда — отдельным слоем, чтобы вращать вокруг вертикальной оси
-    Canvas(Modifier.fillMaxSize().graphicsLayerSpin(spin, dens)) {
-        val s = this.size.minDimension / 100f
-        scale(s, Offset.Zero) {
-            val sc = 0.62f + 0.04f * pulse
-            scale(sc, sc, Offset(50f, 52f)) {
-                drawPath(starPath(50f, 52f, 48f, 0.48f), vg(4f, 100f, 0xFFFFF08A, 0xFFFFB020, 0xFFFF7A00))
-                drawPath(starPath(50f, 52f, 48f, 0.48f), Color.White.copy(alpha = 0.7f), style = Stroke(2f))
-                drawPath(starPath(50f, 52f, 22f, 0.48f), Color.White.copy(alpha = 0.22f))
-            }
-        }
+}
+
+/** Поле мерцающих искр (как в шапке Premium): фиолетовые крестики и звёздочки */
+@Composable
+fun SparkleField(modifier: Modifier = Modifier, count: Int = 46) {
+    val tr = rememberInfiniteTransition(label = "sf")
+    val t by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(3200, easing = LinearEasing), RepeatMode.Restart), label = "t")
+    val pts = androidx.compose.runtime.remember(count) {
+        val r = kotlin.random.Random(7)
+        List(count) { floatArrayOf(r.nextFloat(), r.nextFloat(), 3f + r.nextFloat() * 6f, r.nextFloat()) }
     }
+    Canvas(modifier) {
+        for (q in pts) {
+            val ph = (t + q[3]) % 1f
+            val a = (0.25f + 0.75f * sin((PI * ph).toFloat())).coerceIn(0f, 1f)
+            val x = q[0] * size.width; val y = q[1] * size.height
+            val col = if (q[3] > 0.5f) Color(0xFF9B6BFF) else Color(0xFF6C8CFF)
+            val r = q[2] * (0.7f + 0.5f * a)
+            drawLine(col.copy(alpha = a * 0.8f), Offset(x - r, y), Offset(x + r, y), 2f, StrokeCap.Round)
+            drawLine(col.copy(alpha = a * 0.8f), Offset(x, y - r), Offset(x, y + r), 2f, StrokeCap.Round)
+        }
     }
 }
 

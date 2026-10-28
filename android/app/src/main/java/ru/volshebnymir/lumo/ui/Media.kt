@@ -31,6 +31,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Pause
@@ -229,7 +231,7 @@ fun VoiceBubble(m: Message, mine: Boolean) {
     val p = P
     val cur = Voice.current == m.id
     LaunchedEffect(cur, Voice.playing) { while (cur && Voice.playing) { Voice.tick(); delay(80) } }
-    Row(Modifier.width(240.dp).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.width(290.dp).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(42.dp).clip(CircleShape).background(if (mine) Color.White.copy(alpha = 0.22f) else p.a1).clickable { Voice.toggle(m) }, contentAlignment = Alignment.Center) {
             Icon(if (cur && Voice.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(26.dp))
         }
@@ -248,6 +250,28 @@ fun VoiceBubble(m: Message, mine: Boolean) {
                 }
             }
         }
+        Spacer(Modifier.width(8.dp))
+        TranscribeButton(mine)
+    }
+}
+
+/** Кнопка расшифровки справа от голосового: со значком замка, пока нет Premium */
+@Composable
+fun TranscribeButton(mine: Boolean) {
+    val p = P
+    val prem = ru.volshebnymir.lumo.core.AppModel.isPremium
+    val fg = if (mine) Color.White else p.a1
+    Box(Modifier.size(width = 42.dp, height = 36.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+        .background(if (mine) Color.White.copy(alpha = 0.2f) else p.a1.copy(alpha = 0.14f))
+        .clickable {
+            if (!prem) ru.volshebnymir.lumo.core.AppModel.say(ru.volshebnymir.lumo.core.PREMIUM_SOON)
+            else ru.volshebnymir.lumo.core.AppModel.say("Расшифровка на Android пока в разработке")
+        }, contentAlignment = Alignment.Center) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = fg, modifier = Modifier.size(13.dp))
+            Text("A", color = fg, fontWeight = FontWeight.Black, fontSize = 17.sp)
+        }
+        if (!prem) Icon(Icons.Filled.Lock, null, tint = fg, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 3.dp).size(11.dp))
     }
 }
 

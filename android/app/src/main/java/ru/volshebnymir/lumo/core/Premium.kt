@@ -46,3 +46,15 @@ suspend fun AppModel.setEmojiStatus(e: String) {
     try { Api.rpc("lm_set_emoji_status", jsonOf("p_emoji" to e)); loadMe(); say(if (e.isEmpty()) "Статус убран" else "Статус установлен") }
     catch (x: Exception) { say(x.message ?: "Не удалось изменить") }
 }
+
+/** Защищённые чаты: запрет пересылки, копирования и скриншотов */
+object Prot {
+    val map = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+    fun on(chatId: String?) = chatId != null && map[chatId] == true
+    suspend fun load(chatId: String) {
+        val v = runCatching { Api.select("lm_chats", mapOf("select" to "protected", "id" to "eq.$chatId")).firstOrNull()?.optBoolean("protected") }.getOrNull()
+        if (v != null) map[chatId] = v
+    }
+    suspend fun set(chatId: String, on: Boolean): Boolean =
+        try { Api.rpc("lm_set_protected", jsonOf("p_chat" to chatId, "p_on" to on)); map[chatId] = on; true } catch (e: Exception) { AppModel.say(e.message ?: "Не удалось изменить"); false }
+}

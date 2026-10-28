@@ -130,6 +130,13 @@ fun ChatScreen(chatId: String) {
     var forwarding by remember { mutableStateOf<List<Message>?>(null) }
     var deleting by remember { mutableStateOf<List<Message>?>(null) }
     val selected = remember { mutableStateListOf<Int>() }
+    val prot = ru.volshebnymir.lumo.core.Prot.map[chatId] == true
+    LaunchedEffect(chatId) { ru.volshebnymir.lumo.core.Prot.load(chatId) }
+    DisposableEffect(prot) {
+        val w = (ctx as? android.app.Activity)?.window
+        if (prot) w?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
+    }
     val list = rememberLazyListState()
     var loaded by remember { mutableStateOf(msgs.isNotEmpty()) }
     var flash by remember { mutableStateOf<Int?>(null) }
@@ -197,10 +204,13 @@ fun ChatScreen(chatId: String) {
         Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
             if (selecting) SelectHeader(selected.size, onClose = { selected.clear() },
                 onCopy = {
-                    val t = msgs.filter { it.id in selected }.joinToString("\n") { it.body ?: "" }.trim()
-                    copy(ctx, t); selected.clear()
+                    if (prot) AppModel.say("В защищённом чате копирование запрещено") else {
+                        val t = msgs.filter { it.id in selected }.joinToString("\n") { it.body ?: "" }.trim()
+                        copy(ctx, t)
+                    }
+                    selected.clear()
                 },
-                onForward = { forwarding = msgs.filter { it.id in selected }; },
+                onForward = { if (prot) { AppModel.say("В защищённом чате пересылка запрещена"); selected.clear() } else forwarding = msgs.filter { it.id in selected } },
                 onDelete = { deleting = msgs.filter { it.id in selected }.takeIf { it.isNotEmpty() } },
             ) else ChatHeader(chatId, chat)
             NetStatusBar()
@@ -420,6 +430,12 @@ private fun ChatMenu(c: ChatItem) {
             item(if (c.muted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff, if (c.muted) "Включить уведомления" else "Без звука") { scope.launch { AppModel.setMuted(c.id, !c.muted) } }
             item(Icons.Filled.PushPin, if (c.pinned) "Открепить чат" else "Закрепить чат") { scope.launch { AppModel.setPinned(c.id, !c.pinned) } }
             item(Icons.Filled.Palette, "Цвет сообщений ★") { AppModel.premium { bubDlg = true } }
+            if (!c.isChannel && (c.isPrivate || c.isAdmin)) {
+                val on = ru.volshebnymir.lumo.core.Prot.on(c.id)
+                item(Icons.Filled.Shield, if (on) "Разрешить пересылку и скриншоты" else "Запретить пересылку и скриншоты ★") {
+                    if (on) scope.launch { ru.volshebnymir.lumo.core.Prot.set(c.id, false) } else AppModel.premium { scope.launch { ru.volshebnymir.lumo.core.Prot.set(c.id, true) } }
+                }
+            }
             item(Icons.Filled.CleaningServices, "Очистить историю") { confirmClear = true }
             val peer = c.peerId
             if (c.isPrivate && peer != null && peer != AppModel.myId) {
@@ -763,12 +779,13 @@ private fun MessageMenu(
                     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(1.dp).background(p.line))
                     val ok = m.id > 0 && !m.deleted
                     if (ok && chat?.canPost != false) item(Icons.AutoMirrored.Filled.Reply, "Ответить", f = onReply)
-                    if (!m.body.isNullOrEmpty() && ok) item(Icons.Filled.ContentCopy, "Копировать", f = onCopy)
+                    val prot = ru.volshebnymir.lumo.core.Prot.on(chat?.id)
+                    if (!m.body.isNullOrEmpty() && ok && !prot) item(Icons.Filled.ContentCopy, "Копировать", f = onCopy)
                     if (mine && m.kind in listOf("text", "image", "video", "file") && ok) item(Icons.Filled.EditNote, "Изменить", f = onEdit)
                     if (ok && (chat?.isPrivate == true || chat?.isAdmin == true))
                         item(Icons.Filled.PushPin, if (chat.pinnedMessageId == m.id) "Открепить" else "Закрепить", f = onPin)
-                    if (ok) item(Icons.AutoMirrored.Filled.Forward, "Переслать", f = onForward)
-                    if (!m.mediaUrl.isNullOrEmpty() && ok) item(Icons.Filled.Download, "Скачать", f = onOpen)
+                    if (ok && !prot) item(Icons.AutoMirrored.Filled.Forward, "Переслать", f = onForward)
+                    if (!m.mediaUrl.isNullOrEmpty() && ok && !prot) item(Icons.Filled.Download, "Скачать", f = onOpen)
                     if (!mine && ok) item(Icons.Filled.Flag, "Пожаловаться", f = onReport)
                     if (ok) item(Icons.Filled.DeleteOutline, "Удалить", danger = true, f = onDelete)
                     if (m.id > 0) {

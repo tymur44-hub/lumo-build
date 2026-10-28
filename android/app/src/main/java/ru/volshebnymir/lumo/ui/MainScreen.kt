@@ -21,6 +21,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -177,14 +179,17 @@ fun Tabs() {
 @Composable
 fun TabBar(modifier: Modifier) {
     val p = P
-    Row(
-        modifier.navigationBarsPadding().padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth()
-            .clip(RoundedCornerShape(36.dp)).background(p.panel.copy(alpha = 0.96f)).padding(6.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        TabItem(Tab.Contacts, Icons.Filled.AccountCircle, "Контакты", 0)
-        TabItem(Tab.Chats, Icons.Filled.ChatBubble, "Чаты", AppModel.unreadTotal)
-        TabItem(Tab.Settings, Icons.Filled.Settings, "Настройки", 0)
+    // внешний слой съедает все касания по области панели, чтобы нажатие между кнопками не попадало в чат под ней
+    Box(modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { } }) {
+        Row(
+            Modifier.navigationBarsPadding().padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth()
+                .clip(RoundedCornerShape(36.dp)).background(p.panel.copy(alpha = 0.96f)).padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            TabItem(Tab.Contacts, Icons.Filled.AccountCircle, "Контакты", 0)
+            TabItem(Tab.Chats, Icons.Filled.ChatBubble, "Чаты", AppModel.unreadTotal)
+            TabItem(Tab.Settings, Icons.Filled.Settings, "Настройки", 0)
+        }
     }
 }
 
