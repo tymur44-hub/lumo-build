@@ -1,0 +1,27 @@
+name: build-windows
+on: workflow_dispatch
+jobs:
+  win:
+    runs-on: windows-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-audit --no-fund
+        working-directory: desktop
+      - name: Проверка запуска
+        shell: bash
+        working-directory: desktop
+        env: { LUMO_SMOKE: "1" }
+        run: |
+          npx electron . 2>&1 | tee smoke.log
+          grep -q "SMOKE-OK" smoke.log
+      - run: npm run dist
+        working-directory: desktop
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-${{ github.run_number }}
+          files: |
+            desktop/dist/Lumo-Setup-1.0.1.exe
+            desktop/dist/Lumo-Portable-1.0.1.exe

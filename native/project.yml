@@ -1,0 +1,67 @@
+name: LumoNative
+options:
+  bundleIdPrefix: ru.volshebnymir
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: ru
+packages:
+  WebRTC:
+    url: https://github.com/stasel/WebRTC
+    exactVersion: 125.0.0
+targets:
+  Lumo:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Resources
+    dependencies:
+      - package: WebRTC
+        product: WebRTC
+      - framework: Frameworks/LibXray.xcframework
+        embed: false
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: ru
+        CFBundleDisplayName: Lumo
+        CFBundleName: Lumo
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UILaunchScreen:
+          UIColorName: LaunchBg
+          UIImageName: LaunchLogo
+          UIImageRespectsSafeAreaInsets: true
+        UIBackgroundModes: [audio]
+        NSCameraUsageDescription: "Камера нужна для видеозвонков, фото и видео"
+        NSMicrophoneUsageDescription: "Микрофон нужен для звонков и голосовых сообщений"
+        NSPhotoLibraryUsageDescription: "Доступ к фото нужен, чтобы отправлять фото и видео и ставить аватарку"
+        NSPhotoLibraryAddUsageDescription: "Чтобы сохранять фото и видео из чатов"
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
+    settings:
+      base:
+        PRODUCT_NAME: Lumo
+        PRODUCT_BUNDLE_IDENTIFIER: ru.volshebnymir.lumo.native
+        MARKETING_VERSION: "3.9"
+        CURRENT_PROJECT_VERSION: "23"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_BITCODE: NO
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
+        OTHER_LDFLAGS: "-lresolv"

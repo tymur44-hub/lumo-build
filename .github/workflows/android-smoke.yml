@@ -1,0 +1,53 @@
+name: Android — проверка запуска
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.23" }
+      - name: Собрать ядро соединения (libXray.aar)
+        env: { LIBXRAY_REF: "v26.7.28" }
+        run: |
+          set -e
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          git clone --depth 1 --branch "$LIBXRAY_REF" https://github.com/XTLS/libXray /tmp/libxray
+          cd /tmp/libxray && go mod download && gomobile init
+          gomobile bind -target android -androidapi 21 -trimpath -ldflags="-checklinkname=0 -s -w" -o libXray.aar github.com/xtls/libxray
+          mkdir -p "$GITHUB_WORKSPACE/android/app/libs"
+          cp libXray.aar "$GITHUB_WORKSPACE/android/app/libs/libXray.aar"
+      - name: Собрать APK
+        run: gradle -p android assembleRelease --no-daemon -q
+      - name: Включить KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Запустить в эмуляторе
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: bash .github/smoke.sh
+      - name: Выложить скриншоты
+        if: always()
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          ls shots || exit 0; find shots -empty -delete
+          gh release create "ashots-${{ github.run_number }}" shots/* --title "Android скриншоты ${{ github.run_number }}" --notes "smoke" --latest=false

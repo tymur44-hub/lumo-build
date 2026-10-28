@@ -1,0 +1,104 @@
+name: Собрать отдельное приложение (Swift)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: macos-15-intel
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Выбрать новейший Xcode
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$X" ]; then sudo xcode-select -s "$X/Contents/Developer"; fi
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Установить XcodeGen
+        run: brew install xcodegen
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+
+      - name: Собрать ядро соединения (LibXray.xcframework)
+        working-directory: .
+        env:
+          LIBXRAY_REF: "v26.7.28"
+          GOTOOLCHAIN: "auto"
+        run: |
+          set -o pipefail
+          fail() { tail -n 25 /tmp/fx.log | while IFS= read -r l; do echo "::error::${l}"; done; exit 1; }
+          trap 'fail' ERR
+          exec > >(tee /tmp/fx.log) 2>&1
+          go version
+          git clone --depth 1 --branch "$LIBXRAY_REF" https://github.com/XTLS/libXray /tmp/libxray
+          cd /tmp/libxray
+          go mod download
+          slice() { # goarch sdk apple_arch
+            local GA="$1"; local SDK="$2"; local AA="$3"
+            local OUT="/tmp/fx/$SDK-$AA"
+            mkdir -p "$OUT"
+            local SYS; SYS=$(xcrun --sdk "$SDK" --show-sdk-path)
+            GOOS=ios GOARCH=$GA CGO_ENABLED=1 GOFLAGS=-tags=ios \
+              CC="xcrun --sdk $SDK clang" CXX="xcrun --sdk $SDK clang++" \
+              CGO_CFLAGS="-isysroot $SYS -m$SDK-version-min=15.0 -arch $AA" \
+              CGO_LDFLAGS="-isysroot $SYS -m$SDK-version-min=15.0 -arch $AA -Wl,-Bsymbolic-functions" \
+              go build -trimpath -ldflags "-s -w -buildid=" -o "$OUT/libXray.a" -buildmode=c-archive ./cgo_bridge
+          }
+          slice arm64 iphoneos arm64
+          slice arm64 iphonesimulator arm64
+          slice amd64 iphonesimulator x86_64
+          mkdir -p /tmp/fx/sim
+          lipo -create -arch arm64 /tmp/fx/iphonesimulator-arm64/libXray.a \
+                       -arch x86_64 /tmp/fx/iphonesimulator-x86_64/libXray.a \
+                       -output /tmp/fx/sim/libXray.a
+          mkdir -p /tmp/inc-dev /tmp/inc-sim
+          cp /tmp/fx/iphoneos-arm64/libXray.h /tmp/inc-dev/
+          cp /tmp/fx/iphonesimulator-arm64/libXray.h /tmp/inc-sim/
+          cp build/template/module.modulemap /tmp/inc-dev/
+          cp build/template/module.modulemap /tmp/inc-sim/
+          rm -rf "$GITHUB_WORKSPACE/native/Frameworks/LibXray.xcframework"
+          mkdir -p "$GITHUB_WORKSPACE/native/Frameworks"
+          xcodebuild -create-xcframework \
+            -library /tmp/fx/iphoneos-arm64/libXray.a -headers /tmp/inc-dev \
+            -library /tmp/fx/sim/libXray.a -headers /tmp/inc-sim \
+            -output "$GITHUB_WORKSPACE/native/Frameworks/LibXray.xcframework"
+          ls -R "$GITHUB_WORKSPACE/native/Frameworks/LibXray.xcframework" | head
+
+      - name: Создать Xcode-проект
+        run: xcodegen generate
+
+      - name: Собрать приложение
+        run: |
+          set -o pipefail
+          xcodebuild -project LumoNative.xcodeproj -scheme Lumo -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build -clonedSourcePackagesDirPath spm \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build > build.log 2>&1 || { grep -E "error:" build.log | sort -u | head -30 | while IFS= read -r l; do echo "::error::${l}"; done; tail -n 60 build.log; exit 1; }
+          test -d build/Build/Products/Release-iphoneos/Lumo.app
+
+      - name: Упаковать IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Lumo.app Payload/
+          zip -qry LumoNative.ipa Payload
+          ls -lh LumoNative.ipa
+
+      - name: Выложить в Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="native-${{ github.run_number }}"
+          gh release create "$TAG" LumoNative.ipa --title "Lumo (отдельное приложение) — сборка ${{ github.run_number }}" \
+            --notes "Отдельное приложение Lumo на Swift. Неподписанный IPA: установка через Sideloadly со своим Apple ID." --latest=false

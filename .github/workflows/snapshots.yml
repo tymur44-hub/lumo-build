@@ -1,0 +1,123 @@
+name: Скриншоты (симулятор)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: macos-15-intel
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+      - name: Выбрать новейший Xcode
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$X" ]; then sudo xcode-select -s "$X/Contents/Developer"; fi
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Кэш ядра соединения
+        id: xcache
+        uses: actions/cache@v4
+        with:
+          path: native/Frameworks/LibXray.xcframework
+          key: libxray-v26.7.28-xcf-${{ runner.os }}
+      - uses: actions/setup-go@v5
+        if: steps.xcache.outputs.cache-hit != 'true'
+        with:
+          go-version: "1.27"
+
+      - name: Собрать ядро соединения (LibXray.xcframework)
+        if: steps.xcache.outputs.cache-hit != 'true'
+        working-directory: .
+        env:
+          LIBXRAY_REF: "v26.7.28"
+          GOTOOLCHAIN: "auto"
+        run: |
+          set -o pipefail
+          fail() { tail -n 25 /tmp/fx.log | while IFS= read -r l; do echo "::error::${l}"; done; exit 1; }
+          trap 'fail' ERR
+          exec > >(tee /tmp/fx.log) 2>&1
+          go version
+          git clone --depth 1 --branch "$LIBXRAY_REF" https://github.com/XTLS/libXray /tmp/libxray
+          cd /tmp/libxray
+          go mod download
+          slice() { # goarch sdk apple_arch
+            local GA="$1"; local SDK="$2"; local AA="$3"
+            local OUT="/tmp/fx/$SDK-$AA"
+            mkdir -p "$OUT"
+            local SYS; SYS=$(xcrun --sdk "$SDK" --show-sdk-path)
+            GOOS=ios GOARCH=$GA CGO_ENABLED=1 GOFLAGS=-tags=ios \
+              CC="xcrun --sdk $SDK clang" CXX="xcrun --sdk $SDK clang++" \
+              CGO_CFLAGS="-isysroot $SYS -m$SDK-version-min=15.0 -arch $AA" \
+              CGO_LDFLAGS="-isysroot $SYS -m$SDK-version-min=15.0 -arch $AA -Wl,-Bsymbolic-functions" \
+              go build -trimpath -ldflags "-s -w -buildid=" -o "$OUT/libXray.a" -buildmode=c-archive ./cgo_bridge
+          }
+          slice arm64 iphoneos arm64
+          slice arm64 iphonesimulator arm64
+          slice amd64 iphonesimulator x86_64
+          mkdir -p /tmp/fx/sim
+          lipo -create -arch arm64 /tmp/fx/iphonesimulator-arm64/libXray.a \
+                       -arch x86_64 /tmp/fx/iphonesimulator-x86_64/libXray.a \
+                       -output /tmp/fx/sim/libXray.a
+          mkdir -p /tmp/inc-dev /tmp/inc-sim
+          cp /tmp/fx/iphoneos-arm64/libXray.h /tmp/inc-dev/
+          cp /tmp/fx/iphonesimulator-arm64/libXray.h /tmp/inc-sim/
+          cp build/template/module.modulemap /tmp/inc-dev/
+          cp build/template/module.modulemap /tmp/inc-sim/
+          rm -rf "$GITHUB_WORKSPACE/native/Frameworks/LibXray.xcframework"
+          mkdir -p "$GITHUB_WORKSPACE/native/Frameworks"
+          xcodebuild -create-xcframework \
+            -library /tmp/fx/iphoneos-arm64/libXray.a -headers /tmp/inc-dev \
+            -library /tmp/fx/sim/libXray.a -headers /tmp/inc-sim \
+            -output "$GITHUB_WORKSPACE/native/Frameworks/LibXray.xcframework"
+          ls -R "$GITHUB_WORKSPACE/native/Frameworks/LibXray.xcframework" | head
+
+      - name: XcodeGen
+        run: brew install xcodegen && xcodegen generate
+      - name: Собрать для симулятора
+        run: |
+          set -o pipefail
+          xcodebuild -project LumoNative.xcodeproj -scheme Lumo -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build -clonedSourcePackagesDirPath spm \
+            CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 || { grep -E "error:" build.log | sort -u | head -30 | while IFS= read -r l; do echo "::error::${l}"; done; tail -n 40 build.log; exit 1; }
+      - name: Снять экраны
+        run: |
+          mkdir -p shots
+          for DEV in "iPhone 16"; do
+            UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; n=sys.argv[1]; c=[x for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith(n)]; print(c[-1]['udid'])" "$DEV")
+            echo "$DEV => $UDID"
+            xcrun simctl boot "$UDID"
+            xcrun simctl bootstatus "$UDID" -b
+            xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/Lumo.app
+            TAG=$(echo "$DEV" | tr -d ' -' | tr 'A-Z' 'a-z')
+            for mode in contact; do
+              SIMCTL_CHILD_LUMO_SNAPSHOT=$mode xcrun simctl launch "$UDID" ru.volshebnymir.lumo.native
+              sleep 3
+              xcrun simctl io "$UDID" screenshot "shots/$TAG-$mode-a.png"
+              sleep 4
+              xcrun simctl io "$UDID" screenshot "shots/$TAG-$mode-b.png"
+              sleep 4
+              xcrun simctl io "$UDID" screenshot "shots/$TAG-$mode.png"
+              xcrun simctl spawn "$UDID" log show --last 2m --style compact --predicate 'process == "Lumo"' 2>&1 | grep -E "LUMODBG|Fatal|fatal|terminat|Crash|crash" | cut -c1-1800 > "shots/$TAG-$mode.log" || true
+              ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i lumo | head -3 || true
+              for f in $(ls -t ~/Library/Logs/DiagnosticReports/*Lumo* 2>/dev/null | head -1); do python3 "$GITHUB_WORKSPACE/scripts/crash.py" "$f" > "shots/$TAG-$mode.crash.txt"; done
+              xcrun simctl terminate "$UDID" ru.volshebnymir.lumo.native || true
+              sleep 2
+            done
+            xcrun simctl shutdown "$UDID" || true
+          done
+          ls -la shots
+      - name: Выложить скриншоты
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          find shots -type f -empty -delete
+          gh release create "shots-${{ github.run_number }}" shots/* --title "Скриншоты ${{ github.run_number }}" --notes "Скриншоты из симулятора" --latest=false

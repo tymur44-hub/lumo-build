@@ -1,0 +1,54 @@
+name: Lumo
+options:
+  bundleIdPrefix: ru.volshebnymir
+  deploymentTarget:
+    iOS: "15.0"
+  developmentLanguage: ru
+targets:
+  Lumo:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: ru
+        CFBundleDisplayName: Lumo
+        CFBundleName: Lumo
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        UIRequiresFullScreen: true
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UIViewControllerBasedStatusBarAppearance: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UILaunchScreen:
+          UIColorName: LaunchBg
+          UIImageName: LaunchLogo
+          UIImageRespectsSafeAreaInsets: true
+        UIBackgroundModes: [audio, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [ru.volshebnymir.lumo.refresh]
+        NSCameraUsageDescription: "Камера нужна для видеозвонков, видеосообщений, фото и сканирования QR-кодов"
+        NSMicrophoneUsageDescription: "Микрофон нужен для звонков, голосовых и видеосообщений"
+        NSPhotoLibraryUsageDescription: "Доступ к фото нужен, чтобы отправлять фото и видео и ставить аватарку"
+        NSPhotoLibraryAddUsageDescription: "Чтобы сохранять фото и видео из чатов"
+    settings:
+      base:
+        PRODUCT_NAME: Lumo
+        PRODUCT_BUNDLE_IDENTIFIER: ru.volshebnymir.lumo
+        MARKETING_VERSION: "1.3"
+        CURRENT_PROJECT_VERSION: "4"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_BITCODE: NO
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
