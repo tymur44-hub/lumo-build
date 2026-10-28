@@ -44,6 +44,7 @@ struct ChatView: View {
     @State private var atBottom = true
     @State private var sendMenu = false
     @State private var showBubSheet = false
+    @State private var showWall = false
     @State private var showSchedule2 = false
     @State private var showScheduled2 = false
     @State private var scheduleText2 = ""
@@ -103,7 +104,7 @@ struct ChatView: View {
                 messagesList
             }
         }
-        .background(ChatWallpaper(index: look.wall).ignoresSafeArea())
+        .background(ChatWallpaper(index: look.wall, custom: model.chatWalls[chatId]).ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             if selecting { selectionBar } else {
                 VStack(spacing: 0) {
@@ -134,8 +135,8 @@ struct ChatView: View {
                     onFx: { e in sendMenu = false; model.premium { sendFromMenu(fx: e) } },
                     onAction: { k in
                         sendMenu = false
-                        if k == 0 { model.premium { sendFromMenu(silent: true) } }
-                        else if k == 1 { model.premium { scheduleText2 = text.trimmingCharacters(in: .whitespacesAndNewlines); showSchedule2 = true } }
+                        if k == 0 { sendFromMenu(silent: true) }
+                        else if k == 1 { scheduleText2 = text.trimmingCharacters(in: .whitespacesAndNewlines); showSchedule2 = true }
                         else { showScheduled2 = true }
                     },
                     onSend: { sendMenu = false; sendFromMenu() })
@@ -143,6 +144,9 @@ struct ChatView: View {
             }
         }
         .overlay { if let e = fxPlay { FxOverlayView(emoji: e) { fxPlay = nil } } }
+        .sheet(isPresented: $showWall) {
+            ChatWallSheet(chatId: chatId, peerName: chat?.peerName, isPrivate: chat?.isPrivate == true).environmentObject(model).environmentObject(look)
+        }
         .sheet(isPresented: $showSchedule2) {
             ScheduleSheet(chatId: chatId, text: scheduleText2, replyTo: reply?.id) { text = ""; reply = nil }.environmentObject(model)
         }
@@ -647,6 +651,9 @@ struct ChatView: View {
                     Label(c.pinned ? "Открепить чат" : "Закрепить чат", systemImage: c.pinned ? "pin.slash" : "pin")
                 }
                 Button { model.premium { showBubSheet = true } } label: { Label("Цвет сообщений ★", systemImage: "paintpalette") }
+                if !c.isChannel {
+                    Button { model.premium { showWall = true } } label: { Label("Изменить обои ★", systemImage: "photo.artframe") }
+                }
                 if !c.isChannel, c.isPrivate || c.isAdmin {
                     let on = prot.map[c.id] == true
                     Button {
@@ -797,6 +804,12 @@ struct ComposerView: View {
                         let r = reply?.id
                         reply = nil
                         Task { await model.send(chatId: chatId, kind: "sticker", body: s, replyTo: r) }
+                    }, onAnim: { e in
+                        model.premium {
+                            let r = reply?.id
+                            reply = nil
+                            Task { await model.send(chatId: chatId, kind: "sticker", body: e, meta: ["anim": true], replyTo: r) }
+                        }
                     })
                     .frame(height: 260)
                 }
@@ -1020,7 +1033,10 @@ struct ComposerView: View {
 struct StickerPanel: View {
     let onEmoji: (String) -> Void
     let onSticker: (String) -> Void
+    var onAnim: (String) -> Void = { _ in }
     @State private var tab = 0
+
+    static let animated = ["😂", "🤣", "😍", "🥰", "😎", "🤩", "😜", "🥳", "😱", "😭", "😡", "🤯", "🔥", "❤️", "💖", "💯", "🎉", "✨", "⭐️", "👋", "👍", "👏", "🙏", "💪"]
 
     static let emoji = Array("😀😃😄😁😆😅😂🤣😊😇🙂😉😍🥰😘😋😛😜🤪🤗🤔🤨😐😏😒🙄😬😌😔😴😷🤒🤧🥵🥶😎🤓🧐😕😟😮😲😳🥺😢😭😱😖😣😞😓😩😫🥱😤😡😠🤬😈💀💩🤡👻👽🤖😺😹😻🙈🙉🙊💋💌💘💝💖💗💓💞💕❣️💔❤️🧡💛💚💙💜🤎🖤🤍💯💥💫💦💨🕳💬👋🤚🖐✋🖖👌🤌🤏✌️🤞🤟🤘🤙👈👉👆👇☝️👍👎✊👊🤛🤜👏🙌👐🤲🤝🙏💪🎉🎊🎁🔥⭐️🌟✨⚡️☀️🌙🌈❄️🍀🌹🌸🍕🍔🍟🍩🍰🎂☕️🍺🍷⚽️🏀🎮🎧🎵🚀✈️🚗🏠💡📱💻📷⏰✅❌❓❗️").map(String.init)
     static let stickers = ["😂", "😍", "🥰", "😎", "🤔", "😭", "😡", "🥳", "😴", "🤯", "👍", "👏", "🙏", "💪", "🔥", "❤️", "💔", "🎉", "💯", "👋", "🐶", "🐱", "🦊", "🐼", "🐸", "🦄", "🌈", "⭐️", "🍕", "☕️"]
@@ -1030,6 +1046,7 @@ struct StickerPanel: View {
             HStack(spacing: 4) {
                 tabButton("Эмодзи", 0)
                 tabButton("Стикеры", 1)
+                tabButton("Анимации ★", 2)
             }
             .padding(6)
             ScrollView {
@@ -1040,6 +1057,13 @@ struct StickerPanel: View {
                         }
                     }
                     .padding(8)
+                } else if tab == 2 {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 10) {
+                        ForEach(Self.animated, id: \.self) { e in
+                            Button { onAnim(e) } label: { AnimatedEmoji(emoji: e, size: 46, tappable: false) }.buttonStyle(.plain)
+                        }
+                    }
+                    .padding(10)
                 } else {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 10) {
                         ForEach(Self.stickers, id: \.self) { e in

@@ -330,11 +330,22 @@ struct SearchResult: Identifiable {
     }
 }
 
+/// Обои конкретного чата (для меня; могут быть установлены собеседником)
+struct ChatWall: Equatable {
+    var preset: Int?
+    var url: String?
+    var blur: Bool
+    var dim: Int
+    var setBy: String?
+}
+
 struct Reaction: Equatable {
     var messageId: Int
     var userId: String
     var emoji: String
-    init(messageId: Int, userId: String, emoji: String) { self.messageId = messageId; self.userId = userId; self.emoji = emoji }
+    /// Вторая и третья реакции (Premium) хранятся отдельно
+    var extra = false
+    init(messageId: Int, userId: String, emoji: String, extra: Bool = false) { self.messageId = messageId; self.userId = userId; self.emoji = emoji; self.extra = extra }
     init(json j: JSON) {
         messageId = j.int("message_id") ?? 0
         userId = j.str("user_id") ?? ""

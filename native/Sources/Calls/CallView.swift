@@ -70,7 +70,7 @@ struct CallView: View {
                     .padding(.horizontal, 20).padding(.top, 10)
                 }
                 Spacer()
-                controls.padding(.bottom, 30)
+                controls.padding(.bottom, 30).padding(.horizontal, 10)
             }
             if calls.video, let lv = calls.localVideo, !calls.camOff, calls.state != .incoming {
                 VStack {
@@ -104,7 +104,7 @@ struct CallView: View {
             }
         } else {
             VStack(spacing: 22) {
-                HStack(spacing: 22) {
+                HStack(spacing: 4) {
                     roundButton(calls.muted ? "mic.slash.fill" : "mic.fill", color: calls.muted ? .white : Color.white.opacity(0.18),
                                 fg: calls.muted ? .black : .white, label: "Микрофон") { calls.toggleMute() }
                     let camOn = calls.localVideo != nil && !calls.camOff
@@ -131,17 +131,18 @@ struct CallView: View {
         VStack(spacing: 6) {
             Button(action: action) {
                 Image(systemName: icon)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundColor(fg)
-                    .frame(width: 68, height: 68)
+                    .frame(width: 62, height: 62)
                     .background(Circle().fill(color))
                     .id(icon)
                     .transition(.scale.combined(with: .opacity))
             }
             .buttonStyle(BouncyButtonStyle())
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: icon)
-            Text(label).font(.caption).foregroundColor(.white.opacity(0.8))
+            Text(label).font(.caption).foregroundColor(.white.opacity(0.8)).lineLimit(1).minimumScaleFactor(0.75)
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

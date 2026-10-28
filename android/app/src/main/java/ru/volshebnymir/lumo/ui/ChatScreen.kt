@@ -201,7 +201,7 @@ fun ChatScreen(chatId: String) {
     BackHandler(selecting) { selected.clear() }
 
     Box(Modifier.fillMaxSize().background(p.chatBg)) {
-        Extra.wallBrush()?.let { wb -> Box(Modifier.fillMaxSize().background(wb)) }
+        ChatWallBackground(chatId)
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(p.a1.copy(alpha = 0.07f), Color.Transparent, p.a2.copy(alpha = 0.06f)))))
         Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
             if (selecting) SelectHeader(selected.size, onClose = { selected.clear() },
@@ -295,7 +295,7 @@ fun ChatScreen(chatId: String) {
                     val t = text.trim()
                     when (which) {
                         2 -> showScheduled = true
-                        else -> if (t.isNotEmpty()) AppModel.premium {
+                        else -> if (t.isNotEmpty()) run {
                             if (which == 0) { text = ""; val r = reply?.id; reply = null; scope.launch { AppModel.send(chatId, "text", t, meta = org.json.JSONObject().put("silent", true), replyTo = r) } }
                             else pickDateTime(ctx) { at ->
                                 val r = reply?.id
@@ -437,6 +437,8 @@ private fun ChatMenu(c: ChatItem) {
     var report by remember { mutableStateOf(false) }
     var bubDlg by remember { mutableStateOf(false) }
     if (bubDlg) BubbleColorDialog(c.id) { bubDlg = false }
+    var wallDlg by remember { mutableStateOf(false) }
+    if (wallDlg) ChatWallDialog(c.id, c.peerName, c.isPrivate) { wallDlg = false }
     Box {
         RoundIcon(Icons.Filled.MoreVert) { open = true }
         androidx.compose.material3.DropdownMenu(open, { open = false }) {
@@ -446,6 +448,7 @@ private fun ChatMenu(c: ChatItem) {
             item(if (c.muted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff, if (c.muted) "Включить уведомления" else "Без звука") { scope.launch { AppModel.setMuted(c.id, !c.muted) } }
             item(Icons.Filled.PushPin, if (c.pinned) "Открепить чат" else "Закрепить чат") { scope.launch { AppModel.setPinned(c.id, !c.pinned) } }
             item(Icons.Filled.Palette, "Цвет сообщений ★") { AppModel.premium { bubDlg = true } }
+            if (!c.isChannel) item(Icons.Filled.Wallpaper, "Изменить обои ★") { AppModel.premium { wallDlg = true } }
             if (!c.isChannel && (c.isPrivate || c.isAdmin)) {
                 val on = ru.volshebnymir.lumo.core.Prot.on(c.id)
                 item(Icons.Filled.Shield, if (on) "Разрешить пересылку и скриншоты" else "Запретить пересылку и скриншоты ★") {
@@ -652,7 +655,7 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
             }
             "voice" -> VoiceBubble(m, mine)
             "video_note" -> VideoNoteBubble(m)
-            "sticker" -> if (!m.mediaUrl.isNullOrEmpty()) AsyncImage(m.mediaUrl, null, Modifier.size(150.dp)) else Text(m.body ?: "", fontSize = 64.sp)
+            "sticker" -> if (m.meta.has("anim")) AnimatedEmoji(m.body ?: "", 96.dp) else if (!m.mediaUrl.isNullOrEmpty()) AsyncImage(m.mediaUrl, null, Modifier.size(150.dp)) else Text(m.body ?: "", fontSize = 64.sp)
             "file" -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(44.dp).clip(CircleShape).background(if (mine) Color.White.copy(alpha = 0.22f) else p.a1), contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Description, null, tint = Color.White)
@@ -1057,6 +1060,8 @@ private fun Composer(
         }
         if (stickers && !recording) StickerPanel(onEmoji = { onText(text + it) }, onSticker = { s ->
             val r = takeReply(); scope.launch { AppModel.send(chatId, "sticker", s, replyTo = r) }
+        }, onAnim = { e ->
+            AppModel.premium { val r = takeReply(); scope.launch { AppModel.send(chatId, "sticker", e, meta = org.json.JSONObject().put("anim", true), replyTo = r) } }
         })
     }
 }
@@ -1074,7 +1079,7 @@ private fun graphemes(s: String): List<String> {
 }
 
 @Composable
-private fun StickerPanel(onEmoji: (String) -> Unit, onSticker: (String) -> Unit) {
+private fun StickerPanel(onEmoji: (String) -> Unit, onSticker: (String) -> Unit, onAnim: (String) -> Unit = {}) {
     val p = P
     var tab by remember { mutableIntStateOf(0) }
     val emoji = remember { graphemes(EMOJI) }
@@ -1082,14 +1087,15 @@ private fun StickerPanel(onEmoji: (String) -> Unit, onSticker: (String) -> Unit)
         Row(Modifier.padding(horizontal = 10.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Pill("Эмодзи", tab == 0) { tab = 0 }
             Pill("Стикеры", tab == 1) { tab = 1 }
+            Pill("Анимации ★", tab == 2) { tab = 2 }
         }
         androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
             androidx.compose.foundation.lazy.grid.GridCells.Adaptive(if (tab == 0) 44.dp else 76.dp), Modifier.fillMaxSize().padding(horizontal = 6.dp),
         ) {
-            val list = if (tab == 0) emoji else STICKERS
+            val list = if (tab == 0) emoji else if (tab == 1) STICKERS else ANIMATED_EMOJI
             items(list.size) { i ->
-                Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(10.dp)).clickable { if (tab == 0) onEmoji(list[i]) else onSticker(list[i]) }, contentAlignment = Alignment.Center) {
-                    Text(list[i], fontSize = if (tab == 0) 26.sp else 46.sp)
+                Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(10.dp)).clickable { if (tab == 0) onEmoji(list[i]) else if (tab == 1) onSticker(list[i]) else onAnim(list[i]) }, contentAlignment = Alignment.Center) {
+                    if (tab == 2) AnimatedEmoji(list[i], 40.dp, tappable = false) else Text(list[i], fontSize = if (tab == 0) 26.sp else 46.sp)
                 }
             }
         }

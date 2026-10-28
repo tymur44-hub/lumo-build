@@ -222,9 +222,13 @@ data class BotBtn(val text: String, val data: String?, val url: String?, val web
 /** Запрос на открытие мини-приложения бота */
 data class MiniAppReq(val botId: String, val url: String? = null)
 
-data class Reaction(val messageId: Int, val userId: String, val emoji: String) {
-    companion object { fun from(j: JSONObject) = Reaction(j.int("message_id") ?: 0, j.str("user_id") ?: "", j.str("emoji") ?: "") }
+/** extra — вторая и третья реакции (Premium), хранятся отдельно */
+data class Reaction(val messageId: Int, val userId: String, val emoji: String, val extra: Boolean = false) {
+    companion object { fun from(j: JSONObject, extra: Boolean = false) = Reaction(j.int("message_id") ?: 0, j.str("user_id") ?: "", j.str("emoji") ?: "", extra) }
 }
+
+/** Обои конкретного чата (для меня; могут быть установлены собеседником) */
+data class ChatWall(val preset: Int?, val url: String?, val blur: Boolean, val dim: Int, val setBy: String?)
 
 data class SearchResult(val id: String, val kind: String, val name: String, val username: String?, val avatarUrl: String?, val color: Int, val extra: String?) {
     companion object {

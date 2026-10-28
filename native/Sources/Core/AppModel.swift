@@ -149,6 +149,7 @@ final class AppModel: ObservableObject {
         netStatus = "Обновление…"
         await loadContacts()
         await loadChats()
+        await loadChatWalls()
         Realtime.shared.connect()
         netStatus = nil
         if !Realtime.shared.isOpen { netChanged(false) }
@@ -157,6 +158,8 @@ final class AppModel: ObservableObject {
             ["event": "UPDATE", "schema": "public", "table": "lm_messages"],
             ["event": "*", "schema": "public", "table": "lm_members"],
             ["event": "*", "schema": "public", "table": "lm_reactions"],
+            ["event": "*", "schema": "public", "table": "lm_reactions_extra"],
+            ["event": "*", "schema": "public", "table": "lm_chat_wall"],
         ])
         ch.onChange = { [weak self] d in self?.onDB(d) }
         Realtime.shared.onReconnect = { [weak self] in
@@ -897,6 +900,8 @@ final class AppModel: ObservableObject {
             var map = reactions
             for id in ids { map[id] = [] }
             for r in rr { let x = Reaction(json: r); map[x.messageId, default: []].append(x) }
+            let rx = (try? await API.shared.select("lm_reactions_extra", ["select": "message_id,user_id,emoji", "message_id": "in.(" + ids.map(String.init).joined(separator: ",") + ")"])) ?? []
+            for r in rx { var x = Reaction(json: r); x.extra = true; map[x.messageId, default: []].append(x) }
             reactions = map
         }
         var need = arr.compactMap { $0.replyTo }
@@ -1059,22 +1064,70 @@ final class AppModel: ObservableObject {
 
     func react(_ m: Message, _ emoji: String) async {
         guard let me = myId, m.id > 0 else { return }
-        var list = reactions[m.id] ?? []
-        let mine = list.first { $0.userId == me }
-        list.removeAll { $0.userId == me }
-        if mine?.emoji == emoji {
-            reactions[m.id] = list
-            try? await API.shared.raw("DELETE", "/rest/v1/lm_reactions", query: [URLQueryItem(name: "message_id", value: "eq.\(m.id)"),
-                                                                                URLQueryItem(name: "user_id", value: "eq." + me)])
-        } else {
-            list.append(Reaction(messageId: m.id, userId: me, emoji: emoji))
-            reactions[m.id] = list
-            do {
-                try await API.shared.raw("POST", "/rest/v1/lm_reactions", query: [URLQueryItem(name: "on_conflict", value: "message_id,user_id")],
-                                         body: ["message_id": m.id, "user_id": me, "chat_id": m.chatId, "emoji": emoji],
-                                         headers: ["Prefer": "resolution=merge-duplicates,return=minimal"])
-            } catch { say(error.localizedDescription) }
+        let list = reactions[m.id] ?? []
+        let mine = list.filter { $0.userId == me }
+        let others = list.filter { $0.userId != me }
+        func delRow(_ table: String, _ e: String?) async {
+            var q = [URLQueryItem(name: "message_id", value: "eq.\(m.id)"), URLQueryItem(name: "user_id", value: "eq." + me)]
+            if let e = e { q.append(URLQueryItem(name: "emoji", value: "eq." + e)) }
+            try? await API.shared.raw("DELETE", "/rest/v1/" + table, query: q)
         }
+        if let had = mine.first(where: { $0.emoji == emoji }) {
+            reactions[m.id] = others + mine.filter { $0.emoji != emoji }
+            await delRow(had.extra ? "lm_reactions_extra" : "lm_reactions", emoji)
+            return
+        }
+        let row: JSON = ["message_id": m.id, "user_id": me, "chat_id": m.chatId, "emoji": emoji]
+        do {
+            if !isPremium {
+                // бесплатно: одна реакция, новая заменяет прежнюю
+                reactions[m.id] = others + [Reaction(messageId: m.id, userId: me, emoji: emoji)]
+                try await API.shared.raw("POST", "/rest/v1/lm_reactions", query: [URLQueryItem(name: "on_conflict", value: "message_id,user_id")],
+                                         body: row, headers: ["Prefer": "resolution=merge-duplicates,return=minimal"])
+                return
+            }
+            if mine.count >= 3 { say("Можно поставить не больше 3 реакций"); return }
+            if !mine.contains(where: { !$0.extra }) {
+                reactions[m.id] = others + mine + [Reaction(messageId: m.id, userId: me, emoji: emoji)]
+                try await API.shared.raw("POST", "/rest/v1/lm_reactions", query: [URLQueryItem(name: "on_conflict", value: "message_id,user_id")],
+                                         body: row, headers: ["Prefer": "resolution=merge-duplicates,return=minimal"])
+            } else {
+                reactions[m.id] = others + mine + [Reaction(messageId: m.id, userId: me, emoji: emoji, extra: true)]
+                try await API.shared.raw("POST", "/rest/v1/lm_reactions_extra", body: row, headers: ["Prefer": "return=minimal"])
+            }
+        } catch {
+            reactions[m.id] = list
+            say(error.localizedDescription)
+        }
+    }
+
+    // MARK: обои чатов
+
+    @Published var chatWalls: [String: ChatWall] = [:]
+
+    func loadChatWalls() async {
+        guard let me = myId else { return }
+        let rows = (try? await API.shared.select("lm_chat_wall", ["select": "chat_id,preset,url,blur,dim,set_by", "user_id": "eq." + me])) ?? []
+        var map: [String: ChatWall] = [:]
+        for r in rows {
+            guard let cid = r.str("chat_id") else { continue }
+            map[cid] = ChatWall(preset: r.int("preset"), url: r.str("url"), blur: r.bool("blur"), dim: r.int("dim") ?? 0, setBy: r.str("set_by"))
+        }
+        chatWalls = map
+    }
+
+    func setWall(chat: String, preset: Int?, url: String?, blur: Bool, dim: Int, both: Bool) async -> Bool {
+        var p: JSON = ["p_chat": chat, "p_blur": blur, "p_dim": dim, "p_both": both]
+        p["p_preset"] = preset.map { $0 as Any } ?? NSNull()
+        p["p_url"] = url.map { $0 as Any } ?? NSNull()
+        do { _ = try await API.shared.rpc("lm_set_wall", p); await loadChatWalls(); return true }
+        catch { say(error.localizedDescription); return false }
+    }
+
+    func clearWall(chat: String) async {
+        guard let me = myId else { return }
+        chatWalls[chat] = nil
+        try? await API.shared.raw("DELETE", "/rest/v1/lm_chat_wall", query: [URLQueryItem(name: "chat_id", value: "eq." + chat), URLQueryItem(name: "user_id", value: "eq." + me)])
     }
 
     private func sorted(_ list: [Message]) -> [Message] {
@@ -1166,62 +1219,26 @@ final class AppModel: ObservableObject {
             }
         case "lm_members":
             scheduleReload()
-        case "lm_reactions":
+        case "lm_reactions", "lm_reactions_extra":
+            let isExtra = table == "lm_reactions_extra"
             if type == "DELETE" {
                 let old = d.dict("old_record")
-                if let mid = old.int("message_id"), let uid = old.str("user_id") { reactions[mid]?.removeAll { $0.userId == uid } }
+                if let mid = old.int("message_id"), let uid = old.str("user_id"), uid != myId {
+                    let e = old.str("emoji")
+                    reactions[mid]?.removeAll { $0.userId == uid && $0.extra == isExtra && (e == nil || $0.emoji == e) }
+                }
             } else {
-                let r = Reaction(json: rec)
+                var r = Reaction(json: rec)
+                r.extra = isExtra
                 guard r.messageId > 0, r.userId != myId else { return }
                 var list = reactions[r.messageId] ?? []
-                list.removeAll { $0.userId == r.userId }
+                if !isExtra { list.removeAll { $0.userId == r.userId && !$0.extra } }
+                list.removeAll { $0.userId == r.userId && $0.emoji == r.emoji }
                 list.append(r)
                 reactions[r.messageId] = list
             }
-        default:
-            break
-        }
-    }
-
-    private func incoming(_ m: Message) {
-        if var list = messages[m.chatId], !list.contains(where: { $0.id == m.id }) {
-            if m.senderId == myId, let i = list.firstIndex(where: { $0.pending && $0.kind == m.kind && $0.body == m.body }) {
-                list.remove(at: i)
-            }
-            list.append(m)
-            messages[m.chatId] = sorted(list)
-        }
-        if let s = m.senderId { typing[m.chatId]?[s] = nil }
-        if m.kind == "call" { Task { await loadCalls() } }
-        scheduleReload()
-        guard m.senderId != myId, m.kind != "system" else { return }
-        if let sid = m.senderId, profiles[sid] == nil { Task { _ = await profile(sid) } }
-        let visible = isActive && openChatId == m.chatId
-        if isActive && m.kind != "call" && chat(m.chatId)?.muted != true { playIncomingSound() }
-        if visible {
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                self?.markRead(m.chatId)
-            }
-            return
-        }
-        // звонок, который ещё идёт, показывает экран звонка — отдельное уведомление не нужно
-        if m.kind == "call" && (m.metaStatus == nil || m.metaStatus == "ended" || m.metaStatus == "rejected") { return }
-        guard !notified.contains(m.id) else { return }
-        notified.insert(m.id)
-        Task {
-            if chat(m.chatId) == nil { await loadChats() }
-            let c = chat(m.chatId)
-            if c?.muted == true { return }
-            if let sid = m.senderId { _ = await profile(sid) }
-            let senderName = displayName(m.senderId)
-            let title: String
-            var body = m.preview
-            if m.kind == "call" { body = m.isVideoCall ? "Пропущенный видеозвонок" : "Пропущенный звонок" }
-            if c?.isPrivate ?? true { title = senderName }
-            else if c?.isChannel == true { title = c?.displayName ?? "Канал" }
-            else { title = c?.displayName ?? "Группа"; body = senderName + ": " + body }
-            Notifier.show(id: "m\(m.id)", title: title, body: body, chatId: m.chatId)
+        case "lm_chat_wall":
+            Task { await loadChatWalls() }
         }
     }
 }

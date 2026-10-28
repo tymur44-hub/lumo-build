@@ -117,8 +117,9 @@ struct PremiumPageView: View {
     private let features: [Feat] = [
         Feat(icon: "sparkles", color: 0xff9f0a, title: "Анимированные смайлик-статусы", desc: "Двигающийся значок рядом с именем"),
         Feat(icon: "party.popper.fill", color: 0xff5b7a, title: "Анимированные эффекты сообщений", desc: "Удерживайте кнопку отправки и выберите эффект"),
-        Feat(icon: "bell.slash.fill", color: 0x8e8e93, title: "Отправка без звука", desc: "Сообщение придёт тихо"),
-        Feat(icon: "clock.fill", color: 0x2bd67b, title: "Отложенные сообщения", desc: "Уйдут сами в нужное время"),
+        Feat(icon: "face.smiling.inverse", color: 0xffb020, title: "Анимированные эмодзи", desc: "Вкладка «Анимации» в панели эмодзи: оживающие эмодзи в любом чате"),
+        Feat(icon: "heart.circle.fill", color: 0xff5b7a, title: "До 3 реакций на сообщение", desc: "Без Premium — одна реакция"),
+        Feat(icon: "photo.artframe", color: 0x2b8cff, title: "Обои для вас и собеседника", desc: "Свои обои в личном чате — только для вас или сразу для двоих"),
         Feat(icon: "timer", color: 0x1fb6a6, title: "Исчезающие сообщения", desc: "Автоудаление в чате через час, день, неделю или месяц"),
         Feat(icon: "chart.bar.fill", color: 0x22a6ff, title: "Статистика каналов", desc: "Подписчики и посты по дням"),
         Feat(icon: "cpu.fill", color: 0xff8a3d, title: "Создание своих ботов", desc: "Через @botfather командой /newbot"),

@@ -246,7 +246,8 @@ struct MessageRow: View {
             }
         } else if m.kind == "sticker" || (m.kind == "text" && isOnlyEmoji(m.body) && m.replyTo == nil && m.forwardedFrom == nil) {
             VStack(alignment: mine ? .trailing : .leading, spacing: 2) {
-                Text(m.body ?? "").font(.system(size: m.kind == "sticker" ? 84 : 52))
+                if m.kind == "sticker", m.meta["anim"] != nil { AnimatedEmoji(emoji: m.body ?? "", size: 96, tappable: true) }
+                else { Text(m.body ?? "").font(.system(size: m.kind == "sticker" ? 84 : 52)) }
                 timeLine(onMedia: true)
             }
         } else if m.kind == "video_note" {

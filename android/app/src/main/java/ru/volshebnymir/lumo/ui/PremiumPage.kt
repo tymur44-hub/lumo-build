@@ -162,8 +162,9 @@ private class Feat(val icon: androidx.compose.ui.graphics.vector.ImageVector, va
 private val FEATURES = listOf(
     Feat(Icons.Filled.AutoAwesome, Color(0xFFFF9F0A), "Анимированные смайлик-статусы", "Двигающийся значок рядом с именем"),
     Feat(Icons.Filled.Celebration, Color(0xFFFF5B7A), "Анимированные эффекты сообщений", "Удерживайте кнопку отправки и выберите эффект"),
-    Feat(Icons.Filled.NotificationsOff, Color(0xFF8E8E93), "Отправка без звука", "Сообщение придёт тихо"),
-    Feat(Icons.Filled.Schedule, Color(0xFF2BD67B), "Отложенные сообщения", "Уйдут сами в нужное время"),
+    Feat(Icons.Filled.EmojiEmotions, Color(0xFFFFB020), "Анимированные эмодзи", "Вкладка «Анимации» в панели эмодзи: оживающие эмодзи в любом чате"),
+    Feat(Icons.Filled.Favorite, Color(0xFFFF5B7A), "До 3 реакций на сообщение", "Без Premium — одна реакция"),
+    Feat(Icons.Filled.Wallpaper, Color(0xFF2B8CFF), "Обои для вас и собеседника", "Свои обои в личном чате — только для вас или сразу для двоих"),
     Feat(Icons.Filled.Timer, Color(0xFF1FB6A6), "Исчезающие сообщения", "Автоудаление в чате через час, день, неделю или месяц"),
     Feat(Icons.Filled.BarChart, Color(0xFF22A6FF), "Статистика каналов", "Подписчики и посты по дням"),
     Feat(Icons.Filled.SmartToy, Color(0xFFFF8A3D), "Создание своих ботов", "Через @botfather командой /newbot"),

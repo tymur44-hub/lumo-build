@@ -174,6 +174,7 @@ object AppModel {
             netStatus = "Обновление…"
             loadContacts()
             loadChats()
+            loadChatWalls()
             Realtime.connect()
             netStatus = null
             if (!Realtime.isOpen) netChanged(false)
@@ -181,7 +182,9 @@ object AppModel {
                 .put(jsonOf("event" to "INSERT", "schema" to "public", "table" to "lm_messages"))
                 .put(jsonOf("event" to "UPDATE", "schema" to "public", "table" to "lm_messages"))
                 .put(jsonOf("event" to "*", "schema" to "public", "table" to "lm_members"))
-                .put(jsonOf("event" to "*", "schema" to "public", "table" to "lm_reactions")))
+                .put(jsonOf("event" to "*", "schema" to "public", "table" to "lm_reactions"))
+                .put(jsonOf("event" to "*", "schema" to "public", "table" to "lm_reactions_extra"))
+                .put(jsonOf("event" to "*", "schema" to "public", "table" to "lm_chat_wall")))
             db.onChange = { onDB(it) }
             Realtime.onReconnect = {
                 scope.launch {
@@ -477,7 +480,8 @@ object AppModel {
         if (ids.isNotEmpty()) {
             val rr = runCatching { Api.select("lm_reactions", mapOf("select" to "message_id,user_id,emoji", "message_id" to "in.(" + ids.joinToString(",") + ")")) }.getOrNull() ?: emptyList()
             ids.forEach { reactions[it] = emptyList() }
-            rr.map { Reaction.from(it) }.groupBy { it.messageId }.forEach { (k, v) -> reactions[k] = v }
+            val rx = runCatching { Api.select("lm_reactions_extra", mapOf("select" to "message_id,user_id,emoji", "message_id" to "in.(" + ids.joinToString(",") + ")")) }.getOrNull() ?: emptyList()
+            (rr.map { Reaction.from(it) } + rx.map { Reaction.from(it, true) }).groupBy { it.messageId }.forEach { (k, v) -> reactions[k] = v }
         }
         val need = arr.mapNotNull { it.replyTo }.toMutableList()
         chat(chatId)?.pinnedMessageId?.let { need.add(it) }
@@ -598,20 +602,59 @@ object AppModel {
     suspend fun react(m: Message, emoji: String) {
         val me = myId ?: return
         if (m.id <= 0) return
-        val list = (reactions[m.id] ?: emptyList()).toMutableList()
-        val mine = list.firstOrNull { it.userId == me }
-        list.removeAll { it.userId == me }
-        if (mine?.emoji == emoji) {
-            reactions[m.id] = list
-            runCatching { Api.delete("lm_reactions", mapOf("message_id" to m.id.toString(), "user_id" to me)) }
-        } else {
-            list.add(Reaction(m.id, me, emoji)); reactions[m.id] = list
-            runCatching {
-                Api.raw("POST", "/rest/v1/lm_reactions", mapOf("on_conflict" to "message_id,user_id"),
-                    jsonOf("message_id" to m.id, "user_id" to me, "chat_id" to m.chatId, "emoji" to emoji),
-                    mapOf("Prefer" to "resolution=merge-duplicates,return=minimal"))
-            }
+        val list = reactions[m.id] ?: emptyList()
+        val mine = list.filter { it.userId == me }
+        val others = list.filter { it.userId != me }
+        val had = mine.firstOrNull { it.emoji == emoji }
+        if (had != null) {
+            reactions[m.id] = others + mine.filter { it.emoji != emoji }
+            runCatching { Api.delete(if (had.extra) "lm_reactions_extra" else "lm_reactions", mapOf("message_id" to m.id.toString(), "user_id" to me, "emoji" to emoji)) }
+            return
         }
+        val row = jsonOf("message_id" to m.id, "user_id" to me, "chat_id" to m.chatId, "emoji" to emoji)
+        val merge = mapOf("Prefer" to "resolution=merge-duplicates,return=minimal")
+        try {
+            if (!isPremium) {
+                // бесплатно: одна реакция, новая заменяет прежнюю
+                reactions[m.id] = others + Reaction(m.id, me, emoji)
+                Api.raw("POST", "/rest/v1/lm_reactions", mapOf("on_conflict" to "message_id,user_id"), row, merge)
+                return
+            }
+            if (mine.size >= 3) { say("Можно поставить не больше 3 реакций"); return }
+            if (mine.none { !it.extra }) {
+                reactions[m.id] = others + mine + Reaction(m.id, me, emoji)
+                Api.raw("POST", "/rest/v1/lm_reactions", mapOf("on_conflict" to "message_id,user_id"), row, merge)
+            } else {
+                reactions[m.id] = others + mine + Reaction(m.id, me, emoji, true)
+                Api.raw("POST", "/rest/v1/lm_reactions_extra", emptyMap(), row, mapOf("Prefer" to "return=minimal"))
+            }
+        } catch (e: Exception) {
+            reactions[m.id] = list
+            say(e.message ?: "Не удалось поставить реакцию")
+        }
+    }
+
+    // ---------- обои чатов ----------
+
+    val chatWalls = mutableStateMapOf<String, ChatWall>()
+
+    suspend fun loadChatWalls() {
+        val me = myId ?: return
+        val rows = runCatching { Api.select("lm_chat_wall", mapOf("select" to "chat_id,preset,url,blur,dim,set_by", "user_id" to "eq.$me")) }.getOrNull() ?: return
+        val map = rows.mapNotNull { r -> r.str("chat_id")?.let { it to ChatWall(r.int("preset"), r.str("url"), r.bool("blur"), r.int("dim") ?: 0, r.str("set_by")) } }.toMap()
+        chatWalls.clear(); chatWalls.putAll(map)
+    }
+
+    suspend fun setWall(chat: String, preset: Int?, url: String?, blur: Boolean, dim: Int, both: Boolean): Boolean {
+        val p = JSONObject().put("p_chat", chat).put("p_blur", blur).put("p_dim", dim).put("p_both", both)
+            .put("p_preset", preset ?: JSONObject.NULL).put("p_url", url ?: JSONObject.NULL)
+        return try { Api.rpc("lm_set_wall", p); loadChatWalls(); true } catch (e: Exception) { say(e.message ?: "Не удалось установить обои"); false }
+    }
+
+    suspend fun clearWall(chat: String) {
+        val me = myId ?: return
+        chatWalls.remove(chat)
+        runCatching { Api.delete("lm_chat_wall", mapOf("chat_id" to chat, "user_id" to me)) }
     }
 
     // ---------- «печатает…» во всех недавних чатах ----------
@@ -681,16 +724,20 @@ object AppModel {
                 }
             }
             "lm_members" -> scheduleReload()
-            "lm_reactions" -> {
+            "lm_reactions", "lm_reactions_extra" -> {
+                val isExtra = table == "lm_reactions_extra"
                 if (type == "DELETE") {
-                    val old = d.obj("old_record"); val mid = old.int("message_id"); val uid = old.str("user_id")
-                    if (mid != null && uid != null) reactions[mid] = (reactions[mid] ?: emptyList()).filter { it.userId != uid }
+                    val old = d.obj("old_record"); val mid = old.int("message_id"); val uid = old.str("user_id"); val e = old.str("emoji")
+                    if (mid != null && uid != null && uid != myId) reactions[mid] = (reactions[mid] ?: emptyList()).filterNot { it.userId == uid && it.extra == isExtra && (e == null || it.emoji == e) }
                 } else {
-                    val r = Reaction.from(rec)
+                    val r = Reaction.from(rec, isExtra)
                     if (r.messageId <= 0 || r.userId == myId) return
-                    reactions[r.messageId] = (reactions[r.messageId] ?: emptyList()).filter { it.userId != r.userId } + r
+                    var l = reactions[r.messageId] ?: emptyList()
+                    if (!isExtra) l = l.filterNot { it.userId == r.userId && !it.extra }
+                    reactions[r.messageId] = l.filterNot { it.userId == r.userId && it.emoji == r.emoji } + r
                 }
             }
+            "lm_chat_wall" -> scope.launch { loadChatWalls() }
         }
     }
 

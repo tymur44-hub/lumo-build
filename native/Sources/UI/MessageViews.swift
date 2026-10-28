@@ -29,6 +29,7 @@ struct VoiceView: View {
                     Text(isCurrent && player.position > 0 ? Fmt.duration(player.position) : Fmt.duration(m.duration))
                         .font(.caption).foregroundColor(mine ? .white.opacity(0.75) : Theme.muted)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 TranscribeButton(m: m, mine: mine, ext: "m4a", text: $text)
             }
             if let t = text {
@@ -88,14 +89,19 @@ struct WaveBars: View {
     let mine: Bool
 
     var body: some View {
-        let bars = wave.isEmpty ? Array(repeating: 6, count: 40) : wave
-        HStack(alignment: .center, spacing: 2) {
-            ForEach(Array(bars.enumerated()), id: \.offset) { i, v in
-                let done = Double(i) / Double(max(1, bars.count)) < progress
-                Capsule()
-                    .fill(mine ? (done ? Color.white : Color.white.opacity(0.45)) : (done ? Theme.a1 : Theme.muted.opacity(0.45)))
-                    .frame(width: 2.5, height: 4 + CGFloat(min(31, max(0, v))) / 31 * 20)
+        let src = wave.isEmpty ? Array(repeating: 6, count: 40) : wave
+        GeometryReader { g in
+            let n = max(8, Int(g.size.width / 4.5))
+            HStack(alignment: .center, spacing: 2) {
+                ForEach(0..<n, id: \.self) { i in
+                    let v = src[min(src.count - 1, i * src.count / n)]
+                    let done = Double(i) / Double(n) < progress
+                    Capsule()
+                        .fill(mine ? (done ? Color.white : Color.white.opacity(0.45)) : (done ? Theme.a1 : Theme.muted.opacity(0.45)))
+                        .frame(width: 2.5, height: 4 + CGFloat(min(31, max(0, v))) / 31 * 20)
+                }
             }
+            .frame(width: g.size.width, height: g.size.height, alignment: .leading)
         }
         .frame(height: 24)
     }

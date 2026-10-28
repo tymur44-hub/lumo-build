@@ -3,15 +3,27 @@ import SwiftUI
 /// Фон чата (те же варианты, что на сайте)
 struct ChatWallpaper: View {
     let index: Int
+    var custom: ChatWall? = nil
 
     private static let premWalls: [(UInt32, UInt32)] = [(0x1b2a49, 0x3b1f4a), (0x0f3d3e, 0x1b6b4a), (0x4a1f2e, 0x7a3b1f), (0x1f2a4a, 0x2e6ba8)]
 
     var body: some View {
+        let idx = custom?.preset ?? index
         ZStack {
             Theme.chatBg
-            switch (index >= 6 && !AppModel.shared.isPremium) ? 0 : index {
+            if let c = custom, let u = c.url.flatMap(URL.init(string:)) {
+                GeometryReader { g in
+                    AsyncImage(url: u) { ph in
+                        if let im = ph.image { im.resizable().scaledToFill().frame(width: g.size.width, height: g.size.height).clipped() }
+                    }
+                    .blur(radius: c.blur ? 14 : 0)
+                    .clipped()
+                }
+                Color.black.opacity(Double(c.dim) / 100)
+            }
+            switch custom?.url != nil ? -1 : ((idx >= 6 && custom == nil && !AppModel.shared.isPremium) ? 0 : idx) {
             case 6...9:
-                LinearGradient(colors: [Color(hex: ChatWallpaper.premWalls[index - 6].0), Color(hex: ChatWallpaper.premWalls[index - 6].1)], startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [Color(hex: ChatWallpaper.premWalls[idx - 6].0), Color(hex: ChatWallpaper.premWalls[idx - 6].1)], startPoint: .top, endPoint: .bottom)
             case 1:
                 LinearGradient(colors: [Color(hex: 0x7c5cff).opacity(0.13), Color(hex: 0x22c1ff).opacity(0.10)], startPoint: .topLeading, endPoint: .bottomTrailing)
             case 2:
