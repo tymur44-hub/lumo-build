@@ -45,6 +45,7 @@ import kotlinx.coroutines.withContext
 import ru.volshebnymir.lumo.core.AppModel
 import ru.volshebnymir.lumo.core.premium
 import ru.volshebnymir.lumo.core.PREMIUM_SOON
+import ru.volshebnymir.lumo.core.isPremium
 import ru.volshebnymir.lumo.core.Fmt
 import ru.volshebnymir.lumo.core.Screen
 
