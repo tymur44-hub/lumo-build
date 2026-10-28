@@ -1239,6 +1239,50 @@ final class AppModel: ObservableObject {
             }
         case "lm_chat_wall":
             Task { await loadChatWalls() }
+        default:
+            break
+        }
+    }
+
+    private func incoming(_ m: Message) {
+        if var list = messages[m.chatId], !list.contains(where: { $0.id == m.id }) {
+            if m.senderId == myId, let i = list.firstIndex(where: { $0.pending && $0.kind == m.kind && $0.body == m.body }) {
+                list.remove(at: i)
+            }
+            list.append(m)
+            messages[m.chatId] = sorted(list)
+        }
+        if let s = m.senderId { typing[m.chatId]?[s] = nil }
+        if m.kind == "call" { Task { await loadCalls() } }
+        scheduleReload()
+        guard m.senderId != myId, m.kind != "system" else { return }
+        if let sid = m.senderId, profiles[sid] == nil { Task { _ = await profile(sid) } }
+        let visible = isActive && openChatId == m.chatId
+        if isActive && m.kind != "call" && chat(m.chatId)?.muted != true { playIncomingSound() }
+        if visible {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                self?.markRead(m.chatId)
+            }
+            return
+        }
+        // звонок, который ещё идёт, показывает экран звонка — отдельное уведомление не нужно
+        if m.kind == "call" && (m.metaStatus == nil || m.metaStatus == "ended" || m.metaStatus == "rejected") { return }
+        guard !notified.contains(m.id) else { return }
+        notified.insert(m.id)
+        Task {
+            if chat(m.chatId) == nil { await loadChats() }
+            let c = chat(m.chatId)
+            if c?.muted == true { return }
+            if let sid = m.senderId { _ = await profile(sid) }
+            let senderName = displayName(m.senderId)
+            let title: String
+            var body = m.preview
+            if m.kind == "call" { body = m.isVideoCall ? "Пропущенный видеозвонок" : "Пропущенный звонок" }
+            if c?.isPrivate ?? true { title = senderName }
+            else if c?.isChannel == true { title = c?.displayName ?? "Канал" }
+            else { title = c?.displayName ?? "Группа"; body = senderName + ": " + body }
+            Notifier.show(id: "m\(m.id)", title: title, body: body, chatId: m.chatId)
         }
     }
 }

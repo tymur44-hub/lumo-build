@@ -33,6 +33,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Celebration
+import androidx.compose.material.icons.filled.EmojiEmotions
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.SmartToy
