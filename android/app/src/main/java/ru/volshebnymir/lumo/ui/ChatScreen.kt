@@ -554,6 +554,7 @@ private fun MessageRow(
     val p = P
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
+    if (m.kind == "gift") { GiftMessageCard(m, chat); return }
     if (m.kind == "system") {
         Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
             Text(m.body ?: "", color = p.text, fontSize = 13.sp, textAlign = TextAlign.Center,

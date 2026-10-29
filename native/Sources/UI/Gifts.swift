@@ -311,3 +311,44 @@ struct ProfileGiftsRow: View {
         .sheet(item: $view) { o in OwnedGiftSheet(o: o).environmentObject(model) }
     }
 }
+
+/// Подарок в переписке: плашка «кто отправил» и карточка с подарком
+struct GiftMessageCard: View {
+    @EnvironmentObject var model: AppModel
+    let m: Message
+    let chat: ChatItem?
+    @State private var open: OwnedGift?
+    private var mine: Bool { m.senderId == model.myId }
+    var body: some View {
+        let gid = m.meta.str("gift_id") ?? ""
+        let name = m.meta.str("name") ?? ""
+        let rarity = m.meta.str("rarity") ?? ""
+        let serial = m.meta.int("serial") ?? 0
+        let supply = m.meta.int("supply") ?? 0
+        let price = m.meta.int("price") ?? 0
+        let c = rarityColor(rarity)
+        let who = mine ? "Вы отправили подарок: \(model.displayName(chat?.peerId))" : "\(model.displayName(m.senderId)) отправил(а) Вам подарок"
+        VStack(spacing: 10) {
+            Text("\(who) стоимостью \(price) \(lumenWord(price))")
+                .font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.text).multilineTextAlignment(.center)
+                .padding(.horizontal, 14).padding(.vertical, 6).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal, 24)
+            VStack(spacing: 6) {
+                GiftThumb(id: gid).frame(width: 150, height: 150)
+                Text("Подарок").font(.system(size: 18, weight: .black)).foregroundColor(Theme.text).padding(.top, 4)
+                Text("\(name) №\(serial) из \(supply)").font(.system(size: 14, weight: .bold)).foregroundColor(c).multilineTextAlignment(.center)
+                Text(mine ? "Подарок появится в профиле получателя." : "Подарок добавлен в ваш профиль.")
+                    .font(.system(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+                Button { open = OwnedGift(id: 0, giftId: gid, name: name, rarity: rarity, serial: serial, supply: supply, from: mine ? nil : m.senderId) } label: {
+                    Text("Посмотреть").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
+                        .padding(.horizontal, 26).padding(.vertical, 10).background(Capsule().fill(c.opacity(0.3)))
+                }.padding(.top, 6)
+            }
+            .padding(16).frame(width: 250)
+            .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(LinearGradient(colors: [c.opacity(0.35), Theme.panel], startPoint: .top, endPoint: .bottom)))
+            .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(c.opacity(0.45), lineWidth: 1))
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 8)
+        .sheet(item: $open) { o in OwnedGiftSheet(o: o).environmentObject(model) }
+    }
+}

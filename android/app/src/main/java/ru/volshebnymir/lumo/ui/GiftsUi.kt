@@ -273,3 +273,38 @@ fun ProfileGifts(userId: String) {
     Text("ПОДАРКИ · ${l.size}", color = p.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 20.dp, top = 14.dp, bottom = 6.dp))
     OwnedGrid(l.take(6)) { view = it }
 }
+
+/** Подарок в переписке: плашка «кто отправил» и карточка с подарком */
+@Composable
+fun GiftMessageCard(m: Message, chat: ChatItem?) {
+    val p = P
+    var open by remember { mutableStateOf(false) }
+    val mine = m.senderId == AppModel.myId
+    val gid = m.meta.optString("gift_id")
+    val name = m.meta.optString("name")
+    val rarity = m.meta.optString("rarity")
+    val serial = m.meta.optInt("serial")
+    val supply = m.meta.optInt("supply")
+    val price = m.meta.optInt("price")
+    val c = rarityColor(rarity)
+    val who = if (mine) "Вы отправили подарок: ${AppModel.displayName(chat?.peerId)}" else "${AppModel.displayName(m.senderId)} отправил(а) Вам подарок"
+    if (open) OwnedGiftDialog(OwnedGift(0, gid, name, rarity, serial, supply, if (mine) null else m.senderId)) { open = false }
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("$who стоимостью $price ${lumenWord(price.toLong())}", color = p.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp).clip(RoundedCornerShape(16.dp)).background(p.panel.copy(alpha = 0.85f)).padding(horizontal = 14.dp, vertical = 6.dp))
+        Spacer(Modifier.height(10.dp))
+        Column(Modifier.width(250.dp).clip(RoundedCornerShape(28.dp))
+            .background(Brush.verticalGradient(listOf(c.copy(alpha = 0.35f), p.panel)))
+            .border(1.dp, c.copy(alpha = 0.45f), RoundedCornerShape(28.dp)).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            GiftThumb(gid, Modifier.size(150.dp))
+            Spacer(Modifier.height(10.dp))
+            Text("Подарок", color = p.text, fontWeight = FontWeight.Black, fontSize = 18.sp)
+            Text("$name №$serial из $supply", color = c, fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.Center)
+            Text(if (mine) "Подарок появится в профиле получателя." else "Подарок добавлен в ваш профиль.", color = p.muted, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+            Spacer(Modifier.height(12.dp))
+            Box(Modifier.clip(RoundedCornerShape(18.dp)).background(c.copy(alpha = 0.3f)).bouncy { open = true }.padding(horizontal = 26.dp, vertical = 10.dp)) {
+                Text("Посмотреть", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+        }
+    }
+}

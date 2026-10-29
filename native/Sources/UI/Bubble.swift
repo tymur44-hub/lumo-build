@@ -95,7 +95,9 @@ struct MessageRow: View {
     static let quick = ["❤️", "👍", "😂", "😮", "😢", "🔥", "👏", "🎉"]
 
     var body: some View {
-        if m.kind == "system" {
+        if m.kind == "gift" {
+            GiftMessageCard(m: m, chat: chat)
+        } else if m.kind == "system" {
             Text(m.body ?? "")
                 .font(.system(size: 13, weight: .semibold))
                 .multilineTextAlignment(.center)
