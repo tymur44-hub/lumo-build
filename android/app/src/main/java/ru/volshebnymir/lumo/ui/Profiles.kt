@@ -240,7 +240,7 @@ fun PersonScreen(userId: String) {
                 SettingsRow(Icons.Filled.Lock, p.a1, "Код безопасности", "Проверить сквозное шифрование") { safety = true }
                 Divider()
                 if (AppModel.isContact(userId)) SettingsRow(Icons.Filled.PersonRemove, p.danger, "Удалить из контактов", titleColor = p.danger) { scope.launch { AppModel.removeContact(userId) } }
-                else SettingsRow(Icons.Filled.PersonAdd, p.a1, "Добавить в контакты") { if (Phone.canWriteContacts()) scope.launch { AppModel.addContact(userId) } else writePerm.launch(android.Manifest.permission.WRITE_CONTACTS) }
+                else SettingsRow(Icons.Filled.PersonAdd, p.a1, "Добавить в контакты") { if (PhoneStore.canWriteContacts()) scope.launch { AppModel.addContact(userId) } else writePerm.launch(android.Manifest.permission.WRITE_CONTACTS) }
                 Divider()
                 SettingsRow(Icons.Filled.Block, p.danger, if (blocked) "Разблокировать" else "Заблокировать", titleColor = p.danger) {
                     if (blocked) scope.launch { AppModel.setBlocked(userId, false) } else confirmBlock = true

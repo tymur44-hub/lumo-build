@@ -435,7 +435,7 @@ object AppModel {
     suspend fun addContact(id: String) {
         runCatching { Api.insertQuiet("lm_contacts", jsonOf("contact_id" to id)) }.onFailure { say(it.message ?: "Ошибка") }
         loadContacts()
-        val saved = Phone.saveToPhonebook(id, displayName(id))
+        val saved = PhoneStore.saveToPhonebook(id, displayName(id))
         say(if (saved) "Добавлено в контакты и в телефон" else "Добавлено в контакты")
     }
 

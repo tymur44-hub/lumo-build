@@ -32,7 +32,6 @@ struct ChatView: View {
     @State private var selected: Set<Int> = []
     @State private var reporting: ReportTarget?
     @State private var tipping: Message?
-    @State private var sendLumensTo: LumenTarget?
     @State private var commentsFor: Message?
     @ObservedObject private var lumens = Lumens.shared
     @State private var transcript: String?
@@ -225,7 +224,6 @@ struct ChatView: View {
         .sheet(item: $forwarding) { b in ForwardView(messages: b.messages).environmentObject(model) }
         .sheet(item: $reporting) { t in ReportView(target: t).environmentObject(model) }
         .sheet(item: $tipping) { m in TipSheet(message: m).environmentObject(model) }
-        .sheet(item: $sendLumensTo) { t in SendLumensSheet(userId: t.id).environmentObject(model) }
         .sheet(item: $commentsFor) { m in CommentsView(chatId: chatId, postId: m.id).environmentObject(model) }
         .task(id: chatId) { await prot.load(chatId) }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
@@ -801,6 +799,7 @@ struct ComposerView: View {
     @StateObject private var rec = VoiceRecorder()
     @State private var picks: [PhotosPickerItem] = []
     @State private var showPhotos = false
+    @State private var sendLumensTo: LumenTarget?
     @State private var showFiles = false
     @State private var showCamera = false
     @State private var showStickers = false
@@ -857,6 +856,7 @@ struct ComposerView: View {
                             Image(systemName: "paperclip").font(.system(size: 21, weight: .semibold))
                                 .foregroundColor(Theme.muted).frame(width: 40, height: 44)
                         }
+                        .sheet(item: $sendLumensTo) { t in SendLumensSheet(userId: t.id).environmentObject(model) }
                         HStack(alignment: .bottom, spacing: 4) {
                             TextField("Сообщение", text: $text, axis: .vertical)
                                 .lineLimit(1...6)
