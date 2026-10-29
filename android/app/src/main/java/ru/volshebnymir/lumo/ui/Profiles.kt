@@ -925,7 +925,7 @@ fun EditChatScreen(chatId: String) {
             if (page != "main") Text(when (page) { "type" -> "Тип $kind"; "admins" -> "Администраторы"; else -> if (c.isChannel) "Подписчики" else "Участники" }, color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
             Spacer(Modifier.weight(1f))
             Box(Modifier.size(44.dp).clip(CircleShape).background(p.accent).bouncy { if (!busy) save() }, contentAlignment = Alignment.Center) {
-                if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Icon(Icons.Filled.Check, null, tint = Color.White)
+                if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Icon(Icons.Filled.Check, null, tint = Color.White)
             }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
