@@ -42,6 +42,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import ru.volshebnymir.lumo.core.AppModel
+import ru.volshebnymir.lumo.core.Api
+import ru.volshebnymir.lumo.core.objects
 import ru.volshebnymir.lumo.core.Lumens
 import ru.volshebnymir.lumo.core.premium
 import ru.volshebnymir.lumo.core.isPremium
@@ -139,6 +141,63 @@ fun SharedMediaSection(chatId: String?) {
         }
     }
     viewer?.let { Box(Modifier.fillMaxSize()) { MediaViewer(it) { viewer = null } } }
+}
+
+private fun fmtPhone(raw: String?): String? {
+    val d = raw?.filter { it.isDigit() } ?: return null
+    if (d.length == 11) return "+${d[0]} ${d.substring(1, 4)} ${d.substring(4, 7)} ${d.substring(7, 9)} ${d.substring(9)}"
+    return if (d.isEmpty()) null else "+$d"
+}
+
+private fun storyMsg(kind: String, url: String) = Message(0, "", null, kind, null, url, JSONObject(), null, null, null, false, java.util.Date())
+
+/** Вкладки профиля: Публикации (мои истории) · Подарки · Медиа */
+@Composable
+private fun MyProfileTabs(savedChat: String?, open: (Message) -> Unit) {
+    val p = P
+    var tab by remember { mutableStateOf(0) }
+    var stories by remember { mutableStateOf<List<JSONObject>?>(null) }
+    var gift by remember { mutableStateOf<OwnedGift?>(null) }
+    LaunchedEffect(Unit) {
+        stories = runCatching { (Api.rpc("lm_my_stories") as? org.json.JSONArray).objects() }.getOrDefault(emptyList())
+        Gifts.load()
+    }
+    gift?.let { OwnedGiftDialog(it) { gift = null } }
+    Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf("Публикации", "Подарки", "Медиа").forEachIndexed { i, t -> Pill(t, tab == i) { tab = i } }
+    }
+    Spacer(Modifier.height(10.dp))
+    when (tab) {
+        0 -> {
+            val l = stories
+            Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.panel).padding(8.dp)) {
+                when {
+                    l == null -> Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) { androidx.compose.material3.CircularProgressIndicator(color = p.a1, modifier = Modifier.size(26.dp)) }
+                    l.isEmpty() -> Text("Вы ещё не публиковали истории", color = p.muted, modifier = Modifier.fillMaxWidth().padding(20.dp), textAlign = TextAlign.Center)
+                    else -> l.chunked(3).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            row.forEach { st ->
+                                val kind = st.optString("kind"); val url = st.optString("media_url")
+                                Box(Modifier.weight(1f).aspectRatio(0.75f).clip(RoundedCornerShape(8.dp)).background(Color.Black).clickable { if (url.isNotEmpty()) open(storyMsg(if (kind == "video") "video" else "image", url)) }, contentAlignment = Alignment.Center) {
+                                    if (kind == "text" || url.isEmpty()) Text(st.optString("caption"), color = Color.White, fontSize = 12.sp, textAlign = TextAlign.Center, maxLines = 5, modifier = Modifier.padding(6.dp))
+                                    else AsyncImage(url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                    if (kind == "video") Icon(Icons.Filled.PlayCircle, null, tint = Color.White)
+                                }
+                            }
+                            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                        Spacer(Modifier.height(3.dp))
+                    }
+                }
+            }
+        }
+        1 -> {
+            val l = Gifts.mine
+            if (l.isEmpty()) Text("Подарков пока нет", color = p.muted, modifier = Modifier.fillMaxWidth().padding(20.dp), textAlign = TextAlign.Center)
+            else OwnedGrid(l.toList()) { gift = it }
+        }
+        else -> SharedMediaSection(savedChat)
+    }
 }
 
 private fun avatarMsg(url: String) = Message(0, "", null, "image", null, url, JSONObject(), null, null, null, false, java.util.Date())
@@ -458,14 +517,16 @@ fun MyProfileScreen() {
                 }
             }
             Spacer(Modifier.height(14.dp))
+            LaunchedEffect(Unit) { if (!ru.volshebnymir.lumo.core.PhoneStore.loaded) ru.volshebnymir.lumo.core.PhoneStore.load() }
             Card {
+                fmtPhone(ru.volshebnymir.lumo.core.PhoneStore.phone)?.let { InfoLine(it, "Телефон") { copy(ctx, it) }; Divider() }
                 InfoLine("@" + (me?.username ?: ""), "Юзернейм") { copy(ctx, "@" + (me?.username ?: "")) }
                 if (!me?.bio.isNullOrEmpty()) { Divider(); InfoLine(me!!.bio, "О себе") }
                 ru.volshebnymir.lumo.core.Birthday.text(me?.birthday, withAge = true)?.let { Divider(); InfoLine(it, "День рождения") }
             }
             Spacer(Modifier.height(14.dp))
             me?.let { ChannelCard(it) }
-            SharedMediaSection(saved?.id)
+            MyProfileTabs(saved?.id) { viewer = it }
             Spacer(Modifier.height(30.dp))
         }
         viewer?.let { MediaViewer(it) { viewer = null } }

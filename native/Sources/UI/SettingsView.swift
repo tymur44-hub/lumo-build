@@ -1,4 +1,5 @@
 import SwiftUI
+import AVKit
 import PhotosUI
 import UIKit
 
@@ -225,6 +226,15 @@ struct MyProfileView: View {
     @State private var showQR = false
     @State private var avatarFull: IdentifiedURL?
     @State private var uploading = false
+    @ObservedObject private var phoneStore = PhoneStore.shared
+
+    static func fmtPhone(_ raw: String?) -> String? {
+        guard let raw = raw else { return nil }
+        let d = Array(raw.filter { $0.isNumber })
+        if d.isEmpty { return nil }
+        if d.count == 11 { return "+\(d[0]) \(String(d[1...3])) \(String(d[4...6])) \(String(d[7...8])) \(String(d[9...10]))" }
+        return "+" + String(d)
+    }
 
     var body: some View {
         let me = model.me
@@ -269,6 +279,15 @@ struct MyProfileView: View {
                         .buttonStyle(BouncyButtonStyle())
                     }
                     .padding(.vertical, 10)
+                    if let ph = Self.fmtPhone(phoneStore.phone) {
+                        Divider().overlay(Theme.line)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("телефон").font(.system(size: 14)).foregroundColor(Theme.text)
+                            Text(ph).font(.system(size: 17)).foregroundColor(Theme.text)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 10)
+                    }
                     if let bio = me?.bio, !bio.isEmpty {
                         Divider().overlay(Theme.line)
                         VStack(alignment: .leading, spacing: 3) {
@@ -292,9 +311,11 @@ struct MyProfileView: View {
                 .background(RoundedRectangle(cornerRadius: 22).fill(Theme.panel))
                 .padding(.horizontal, 14)
                 if let p = me { ProfileChannelCard(p: p) }
+                MyProfileTabs()
                 Color.clear.frame(height: 30)
             }
         }
+        .task { if !phoneStore.loaded { await phoneStore.load() } }
         .background(Theme.bg.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -1126,6 +1147,82 @@ struct ProfileChannelCard: View {
                 .padding(.horizontal, 14)
             }
             .buttonStyle(BouncyButtonStyle())
+        }
+    }
+}
+
+/// Вкладки профиля: Публикации (мои истории) · Подарки
+struct MyProfileTabs: View {
+    @EnvironmentObject var model: AppModel
+    @ObservedObject private var store = GiftStore.shared
+    @State private var tab = 0
+    @State private var stories: [JSON]? = nil
+    @State private var gift: OwnedGift?
+    @State private var image: IdentifiedURL?
+    @State private var video: IdentifiedURL?
+
+    private func tabBtn(_ t: String, _ i: Int) -> some View {
+        Button { withAnimation(.easeOut(duration: 0.15)) { tab = i } } label: {
+            Text(t).font(.system(size: 15, weight: .semibold))
+                .foregroundColor(tab == i ? .white : Theme.text)
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .background(tab == i ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.panel), in: Capsule())
+        }.buttonStyle(.plain)
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) { tabBtn("Публикации", 0); tabBtn("Подарки", 1); Spacer() }.padding(.horizontal, 14)
+            if tab == 0 {
+                if let l = stories {
+                    if l.isEmpty {
+                        Text("Вы ещё не публиковали истории").foregroundColor(Theme.muted).padding(24)
+                    } else {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 3), spacing: 3) {
+                            ForEach(Array(l.enumerated()), id: \.offset) { _, st in
+                                let kind = st.str("kind") ?? "", url = st.str("media_url") ?? ""
+                                Button {
+                                    guard let u = URL(string: url) else { return }
+                                    if kind == "video" { video = IdentifiedURL(url: u) } else if kind != "text" { image = IdentifiedURL(url: u) }
+                                } label: {
+                                    ZStack {
+                                        Color.black
+                                        if kind == "text" || url.isEmpty {
+                                            Text(st.str("caption") ?? "").font(.system(size: 12)).foregroundColor(.white).multilineTextAlignment(.center).lineLimit(5).padding(6)
+                                        } else {
+                                            AsyncImage(url: URL(string: url)) { ph in
+                                                if let i = ph.image { i.resizable().scaledToFill() } else { Color.clear }
+                                            }
+                                        }
+                                        if kind == "video" { Image(systemName: "play.circle.fill").font(.system(size: 28)).foregroundColor(.white.opacity(0.9)) }
+                                    }
+                                    .aspectRatio(0.75, contentMode: .fit).clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                }.buttonStyle(.plain)
+                            }
+                        }.padding(.horizontal, 14)
+                    }
+                } else { ProgressView().padding(30) }
+            } else {
+                if store.mine.isEmpty {
+                    Text("Подарков пока нет").foregroundColor(Theme.muted).padding(24)
+                } else {
+                    OwnedGrid(list: store.mine) { gift = $0 }
+                }
+            }
+        }
+        .task {
+            stories = ((try? await API.shared.rpc("lm_my_stories")) as? [JSON]) ?? []
+            await store.load()
+        }
+        .sheet(item: $gift) { OwnedGiftSheet(o: $0).environmentObject(model) }
+        .fullScreenCover(item: $image) { ImageScreen(url: $0.url) }
+        .fullScreenCover(item: $video) { v in
+            ZStack(alignment: .topTrailing) {
+                Color.black.ignoresSafeArea()
+                VideoPlayer(player: AVPlayer(url: v.url)).ignoresSafeArea()
+                Button { video = nil } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 30)).foregroundColor(.white).padding(16) }
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -37,7 +38,7 @@ import ru.volshebnymir.lumo.core.*
 data class Gift(val id: String, val name: String, val rarity: String, val price: Int, val supply: Int, val sold: Int) {
     val left get() = (supply - sold).coerceAtLeast(0)
 }
-data class OwnedGift(val id: Long, val giftId: String, val name: String, val rarity: String, val serial: Int, val supply: Int, val from: String?)
+data class OwnedGift(val id: Long, val giftId: String, val name: String, val rarity: String, val serial: Int, val supply: Int, val from: String?, val at: String? = null)
 
 fun rarityName(r: String) = when (r) { "rare" -> "Редкий"; "epic" -> "Эпический"; "legendary" -> "Легендарный"; "mythic" -> "Мифический"; else -> r }
 fun rarityColor(r: String) = when (r) { "rare" -> Color(0xFF22C7E0); "epic" -> Color(0xFFFF8A3D); "legendary" -> Color(0xFFB069FF); "mythic" -> Color(0xFFFFC247); else -> Color.Gray }
@@ -48,7 +49,7 @@ object Gifts {
     val of = mutableStateMapOf<String, List<OwnedGift>>()
 
     private fun parse(a: JSONArray?) = a.objects().map {
-        OwnedGift(it.optLong("id"), it.optString("gift_id"), it.optString("name"), it.optString("rarity"), it.optInt("serial"), it.optInt("supply"), it.str("from_user"))
+        OwnedGift(it.optLong("id"), it.optString("gift_id"), it.optString("name"), it.optString("rarity"), it.optInt("serial"), it.optInt("supply"), it.str("from_user"), it.str("at"))
     }
 
     suspend fun load() {
@@ -133,6 +134,7 @@ fun GiftDetailDialog(g: Gift, to: String?, onClose: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var done by remember { mutableStateOf<String?>(null) }
     val owner = AppModel.staffRole == "owner"
+    if (done != null) { GiftCelebration(g.id, to, g.name, done!!.toIntOrNull() ?: 0, g.supply, onClose); return }
     Dialog(onDismissRequest = { if (!busy) onClose() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { if (!busy) onClose() }, contentAlignment = Alignment.Center) {
             GlassCard(Modifier.padding(18.dp).widthIn(max = 380.dp).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) {}) {
@@ -174,20 +176,54 @@ fun GiftDetailDialog(g: Gift, to: String?, onClose: () -> Unit) {
     }
 }
 
-/** Просмотр уже полученного подарка */
+/** Просмотр полученного подарка: нижняя шторка с данными */
 @Composable
 fun OwnedGiftDialog(o: OwnedGift, onClose: () -> Unit) {
+    val p = P
+    val price = Gifts.catalog.firstOrNull { it.id == o.giftId }?.price
+    val date = remember(o.at) {
+        runCatching {
+            val d = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.parse(o.at!!.take(19))!!
+            java.text.SimpleDateFormat("dd.MM.yyyy 'в' HH:mm", java.util.Locale("ru")).format(d)
+        }.getOrDefault("—")
+    }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { onClose() }, contentAlignment = Alignment.Center) {
-            GlassCard(Modifier.padding(18.dp).widthIn(max = 380.dp)) {
-                Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    GiftAnimated(o.giftId, Modifier.fillMaxWidth().aspectRatio(1f))
-                    Spacer(Modifier.height(10.dp))
-                    RarityBadge(o.rarity)
-                    Spacer(Modifier.height(6.dp))
-                    Text("№${o.serial} из ${o.supply}", color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp)
-                    if (o.from != null) Text("От: ${AppModel.displayName(o.from)}", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
-                    Spacer(Modifier.height(6.dp))
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { onClose() }, contentAlignment = Alignment.BottomCenter) {
+            Column(Modifier.widthIn(max = 520.dp).fillMaxWidth().clip(RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)).background(p.panel)
+                .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) {}.navigationBarsPadding().padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.fillMaxWidth()) {
+                    Box(Modifier.size(42.dp).clip(CircleShape).background(p.panel2).bouncy { onClose() }, contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Close, null, tint = p.text)
+                    }
+                }
+                GiftAnimated(o.giftId, Modifier.size(230.dp))
+                Spacer(Modifier.height(8.dp))
+                Text(if (o.from != null) "Подарок Вам" else "Ваш подарок", color = p.text, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                Spacer(Modifier.height(6.dp))
+                Text("${o.name} №${o.serial} из ${o.supply} · ${rarityName(o.rarity)}", color = rarityColor(o.rarity), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                Text("Подарок хранится в вашем профиле.", color = p.muted, fontSize = 14.sp)
+                Spacer(Modifier.height(14.dp))
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).border(1.dp, p.line, RoundedCornerShape(18.dp))) {
+                    SheetRow("От") {
+                        if (o.from != null) {
+                            val pr = AppModel.profiles[o.from]
+                            Avatar(pr?.name ?: AppModel.displayName(o.from), pr?.avatarUrl, pr?.color ?: 0, 30.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(AppModel.displayName(o.from), color = p.a1, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1)
+                        } else Text("Вы", color = p.text, fontSize = 16.sp)
+                    }
+                    Divider()
+                    SheetRow("Дата") { Text(date, color = p.text, fontSize = 16.sp) }
+                    Divider()
+                    SheetRow("Стоимость") {
+                        if (price != null) { Text("$price", color = p.text, fontSize = 16.sp); Spacer(Modifier.width(5.dp)); LumenIcon(18.dp); Spacer(Modifier.width(5.dp)); Text(lumenWord(price.toLong()), color = p.text, fontSize = 16.sp) }
+                        else Text("—", color = p.text, fontSize = 16.sp)
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Box(Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(20.dp)).background(p.accent).bouncy { onClose() }, contentAlignment = Alignment.Center) {
+                    Text("OK", color = Color.White, fontWeight = FontWeight.Black, fontSize = 17.sp)
                 }
             }
         }
@@ -195,7 +231,16 @@ fun OwnedGiftDialog(o: OwnedGift, onClose: () -> Unit) {
 }
 
 @Composable
-private fun OwnedGrid(list: List<OwnedGift>, onTap: (OwnedGift) -> Unit) {
+private fun SheetRow(label: String, content: @Composable RowScope.() -> Unit) {
+    val p = P
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        Box(Modifier.weight(0.34f).fillMaxHeight().background(p.panel2).padding(14.dp), contentAlignment = Alignment.CenterStart) { Text(label, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
+        Row(Modifier.weight(0.66f).padding(14.dp), verticalAlignment = Alignment.CenterVertically, content = content)
+    }
+}
+
+@Composable
+fun OwnedGrid(list: List<OwnedGift>, onTap: (OwnedGift) -> Unit) {
     val p = P
     list.chunked(3).forEach { row ->
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

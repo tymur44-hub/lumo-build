@@ -3,7 +3,7 @@ import WebKit
 
 struct Gift: Identifiable { let id: String; let name: String; let rarity: String; let price: Int; let supply: Int; let sold: Int
     var left: Int { max(0, supply - sold) } }
-struct OwnedGift: Identifiable { let id: Int; let giftId: String; let name: String; let rarity: String; let serial: Int; let supply: Int; let from: String? }
+struct OwnedGift: Identifiable { let id: Int; let giftId: String; let name: String; let rarity: String; let serial: Int; let supply: Int; let from: String?; var at: String? = nil }
 struct GiftTarget: Identifiable { let id: String }
 
 func rarityName(_ r: String) -> String {
@@ -22,7 +22,7 @@ final class GiftStore: ObservableObject {
 
     private func parse(_ a: [JSON]) -> [OwnedGift] {
         a.map { OwnedGift(id: $0.int("id") ?? 0, giftId: $0.str("gift_id") ?? "", name: $0.str("name") ?? "", rarity: $0.str("rarity") ?? "",
-                          serial: $0.int("serial") ?? 0, supply: $0.int("supply") ?? 0, from: $0.str("from_user")) }
+                          serial: $0.int("serial") ?? 0, supply: $0.int("supply") ?? 0, from: $0.str("from_user"), at: $0.str("at")) }
     }
 
     func load() async {
@@ -156,6 +156,12 @@ struct GiftDetailSheet: View {
                 .padding(20)
             }
         }
+        .overlay {
+            if let n = done {
+                GiftCelebration(giftId: gift.id, to: to, name: gift.name, serial: n, supply: gift.supply) { dismiss(); onDone?() }
+                    .environmentObject(model).transition(.opacity)
+            }
+        }
         .preferredColorScheme(.dark)
         .task { await lumens.load() }
     }
@@ -167,9 +173,7 @@ struct GiftDetailSheet: View {
             defer { busy = false }
             do {
                 let n = try await store.buy(gift.id, to: to)
-                withAnimation(.spring()) { done = n }
-                try? await Task.sleep(nanoseconds: 1_900_000_000)
-                dismiss(); onDone?()
+                withAnimation(.easeIn(duration: 0.25)) { done = n }
             } catch { model.say(error.localizedDescription) }
         }
     }
@@ -179,24 +183,71 @@ struct OwnedGiftSheet: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let o: OwnedGift
-    var body: some View {
-        ZStack {
-            giftGlassBG()
-            VStack(spacing: 10) {
-                GiftAnimated(id: o.giftId).padding(.top, 24)
-                RarityBadge(r: o.rarity)
-                Text("№\(o.serial) из \(o.supply)").font(.system(size: 20, weight: .black)).foregroundColor(.white)
-                if let f = o.from { Text("От: \(model.displayName(f))").foregroundColor(.white.opacity(0.8)) }
-                Spacer()
-                Button("Закрыть") { dismiss() }.foregroundColor(.white.opacity(0.7)).padding(.bottom, 16)
-            }
-            .padding(.horizontal, 20)
+    private var price: Int? { GiftStore.shared.catalog.first { $0.id == o.giftId }?.price }
+    private var dateText: String {
+        guard let s = o.at else { return "—" }
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "UTC"); f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        guard let d = f.date(from: String(s.prefix(19))) else { return "—" }
+        let o = DateFormatter(); o.locale = Locale(identifier: "ru_RU"); o.dateFormat = "dd.MM.yyyy 'в' HH:mm"
+        return o.string(from: d)
+    }
+    private func row(_ label: String, @ViewBuilder _ content: () -> some View) -> some View {
+        HStack(spacing: 0) {
+            Text(label).font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                .frame(width: 120).background(Theme.panel2)
+            HStack(spacing: 6) { content() }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
         }
-        .preferredColorScheme(.dark)
+    }
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
+                        .frame(width: 42, height: 42).background(Theme.panel2, in: Circle())
+                }
+                Spacer()
+            }
+            GiftAnimated(id: o.giftId).frame(width: 220, height: 220)
+            Text(o.from != nil ? "Подарок Вам" : "Ваш подарок").font(.system(size: 24, weight: .black)).foregroundColor(Theme.text)
+            Text("\(o.name) №\(o.serial) из \(o.supply) · \(rarityName(o.rarity))").font(.system(size: 15, weight: .semibold))
+                .foregroundColor(rarityColor(o.rarity)).multilineTextAlignment(.center)
+            Text("Подарок хранится в вашем профиле.").font(.system(size: 14)).foregroundColor(Theme.muted)
+            VStack(spacing: 0) {
+                row("От") {
+                    if let f = o.from {
+                        let pr = model.profiles[f]
+                        AvatarView(name: pr?.name ?? model.displayName(f), url: pr?.avatarURL, color: pr?.color ?? 0, size: 30)
+                        Text(model.displayName(f)).font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.a1).lineLimit(1)
+                    } else { Text("Вы").font(.system(size: 16)).foregroundColor(Theme.text) }
+                }
+                Divider().overlay(Theme.line)
+                row("Дата") { Text(dateText).font(.system(size: 16)).foregroundColor(Theme.text) }
+                Divider().overlay(Theme.line)
+                row("Стоимость") {
+                    if let p = price { Text("\(p)").font(.system(size: 16)).foregroundColor(Theme.text); LumenGem(size: 18); Text(lumenWord(p)).font(.system(size: 16)).foregroundColor(Theme.text) }
+                    else { Text("—").foregroundColor(Theme.text) }
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line, lineWidth: 1))
+            .padding(.top, 6)
+            Button { dismiss() } label: {
+                Text("OK").font(.system(size: 17, weight: .black)).foregroundColor(.white)
+                    .frame(maxWidth: .infinity).frame(height: 54)
+                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            .padding(.top, 6)
+        }
+        .padding(18)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(Theme.panel.ignoresSafeArea())
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 }
 
-private struct OwnedGrid: View {
+struct OwnedGrid: View {
     let list: [OwnedGift]
     let onTap: (OwnedGift) -> Void
     var body: some View {
