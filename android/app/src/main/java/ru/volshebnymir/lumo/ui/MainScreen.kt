@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MarkChatRead
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import ru.volshebnymir.lumo.core.Message
+import ru.volshebnymir.lumo.core.PhoneStore
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -119,7 +120,15 @@ import ru.volshebnymir.lumo.core.Tab
 fun Root() {
     val p = P
     Box(Modifier.fillMaxSize().background(p.bg)) {
-        if (AppModel.loggedIn) MainScreen() else LoginScreen()
+        val prefs = remember { AppModel.ctx.getSharedPreferences("lumo_prefs", android.content.Context.MODE_PRIVATE) }
+        var permsDone by remember { mutableStateOf(prefs.getBoolean("lm_perms_done", false)) }
+        if (!permsDone) PermissionsScreen { prefs.edit().putBoolean("lm_perms_done", true).apply(); permsDone = true }
+        else if (AppModel.loggedIn) MainScreen() else LoginScreen()
+        if (permsDone && AppModel.loggedIn && AppModel.demoId == null) {
+            if (PhoneStore.loaded && PhoneStore.status == "required") PhoneAuthScreen(bind = true, required = true) {}
+            else if (PhoneUi.bind) PhoneAuthScreen(bind = true) { PhoneUi.bind = false }
+            else if (PhoneStore.loaded && !PhoneStore.reminderShown && (PhoneStore.status == "remind" || PhoneStore.status == "skipped")) PhoneReminderDialog()
+        }
         if (AppModel.loggedIn) { Ui.Overlays(); if (AppModel.demoId == null) FullScreenPrompt(); E2EDialogs() }
         CallsUi.Overlay()
         if (AppModel.loggedIn) LockOverlay()
@@ -165,6 +174,8 @@ fun MainScreen() {
             Screen.MsgPrivacy -> MsgPrivacyScreen()
             Screen.Devices -> DevicesScreen()
             Screen.Language -> LanguageScreen()
+            Screen.Phone -> PhoneSettingsScreen()
+            Screen.TwoFa -> TwoFaScreen()
         }
     }
 }
@@ -479,6 +490,7 @@ fun ContactsScreen() {
             if (q.isBlank()) {
                 val list = AppModel.contacts.mapNotNull { AppModel.profiles[it] }.sortedWith(compareByDescending<ru.volshebnymir.lumo.core.Profile> { AppModel.isOnline(it.id) }.thenBy { AppModel.displayName(it.id) })
                 if (list.isEmpty()) item { Text("Контактов пока нет. Найдите человека через поиск и добавьте его.", color = p.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(40.dp)) }
+                item { PhoneContactsSection() }
                 items(list, key = { it.id }) { pr ->
                     Row(Modifier.fillMaxWidth().clickable { AppModel.push(Screen.Person(pr.id)) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(AppModel.displayName(pr.id), pr.avatarUrl, pr.color, 50.dp, online = AppModel.isOnline(pr.id))

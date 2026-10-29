@@ -98,6 +98,7 @@ data class Profile(
         "seen" -> if (showSeen) "all" else "none"
         "calls" -> callsFrom
         "birthday" -> "all"
+        "phone" -> "contacts"
         else -> "all"
     }
 

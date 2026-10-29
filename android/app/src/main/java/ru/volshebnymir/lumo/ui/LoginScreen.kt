@@ -1,6 +1,7 @@
 package ru.volshebnymir.lumo.ui
 
 import android.content.Intent
+import androidx.compose.material.icons.filled.Phone
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -57,6 +58,7 @@ fun LoginScreen() {
     var loading by remember { mutableStateOf(false) }
     var tgKey by remember { mutableStateOf<String?>(null) }
 
+    var showPhone by remember { mutableStateOf(false) }
     fun openBot() {
         val bot = AppModel.botName ?: return; val k = tgKey ?: return
         runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/$bot?start=l_$k")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -130,9 +132,18 @@ fun LoginScreen() {
                     color = Color.White, fontWeight = FontWeight.Bold)
             }
             if (tgKey != null) Text("В Telegram нажмите кнопку в боте и вернитесь сюда — вход произойдёт сам.", color = p.muted, fontSize = 13.sp, textAlign = TextAlign.Center)
+            Row(
+                Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF2BD67B)).bouncy { err = null; showPhone = true },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+            ) {
+                Icon(Icons.Filled.Phone, null, tint = Color.White, modifier = Modifier.size(19.dp))
+                Spacer(Modifier.size(10.dp))
+                Text("Войти по номеру телефона", color = Color.White, fontWeight = FontWeight.Bold)
+            }
             Text(if (reg) "Уже есть аккаунт? Войти" else "Нет аккаунта? Зарегистрироваться", color = p.a1, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(top = 4.dp).bouncy { reg = !reg; err = null })
             Spacer(Modifier.height(40.dp))
         }
+        if (showPhone) PhoneAuthScreen(bind = false) { showPhone = false }
     }
 }

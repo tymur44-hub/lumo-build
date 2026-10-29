@@ -15,8 +15,8 @@ android {
         applicationId = "ru.volshebnymir.lumo"
         minSdk = 26
         targetSdk = 34
-        versionCode = 13
-        versionName = "2.2-beta"
+        versionCode = 14
+        versionName = "2.3-beta"
     }
     signingConfigs {
         create("lumo") {

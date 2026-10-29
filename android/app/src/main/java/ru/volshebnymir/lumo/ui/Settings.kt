@@ -47,6 +47,7 @@ import ru.volshebnymir.lumo.core.PREMIUM_SOON
 import ru.volshebnymir.lumo.core.isPremium
 import ru.volshebnymir.lumo.core.Fmt
 import ru.volshebnymir.lumo.core.Screen
+import ru.volshebnymir.lumo.core.PhoneStore
 
 private fun share(ctx: android.content.Context, text: String) {
     runCatching { ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Поделиться").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -270,6 +271,7 @@ val PRIVACY_ITEMS = listOf(
     PrivItem("calls", "Звонки", "Кто может мне звонить?", "Остальные не смогут вам позвонить."),
     PrivItem("voice", "Голосовые сообщения", "Кто может присылать мне голосовые и видеосообщения?", "Остальные смогут писать только текстом."),
     PrivItem("messages", "Сообщения", "Кто может писать мне первым?", "Тем, с кем вы уже переписываетесь, ограничение не помешает ответить.", noneAllowed = false),
+    PrivItem("phone", "Номер телефона", "Кто видит мой номер телефона?", "Если выбрать «Никто», друзья не найдут вас по номеру в записной книжке."),
     PrivItem("invites", "Приглашения", "Кто может приглашать меня в группы и каналы?", "Вы можете выбрать, кому разрешаете приглашать Вас в группы и каналы."),
 )
 
@@ -291,6 +293,12 @@ fun PrivacyScreen() {
                 if (ru.volshebnymir.lumo.core.E2E.status == ru.volshebnymir.lumo.core.E2E.Status.Ready) (if (ru.volshebnymir.lumo.core.E2E.backedUp) "Личные чаты · копия ключей сохранена" else "Личные чаты · задайте пароль копии") else "Личные чаты") {
                 if (ru.volshebnymir.lumo.core.E2E.status == ru.volshebnymir.lumo.core.E2E.Status.Ready) ru.volshebnymir.lumo.core.E2E.promptBackup = true
             }
+        }
+        Spacer(Modifier.height(6.dp))
+        Card {
+            SettingsRow(Icons.Filled.Phone, Color(0xFF2BD67B), "Номер телефона", PhoneStore.phone?.let { PhoneStore.pretty(it) } ?: "Не привязан") { AppModel.push(Screen.Phone) }
+            Divider()
+            SettingsRow(Icons.Filled.Lock, Color(0xFFFF8A3D), "Двухэтапная аутентификация", if (PhoneStore.tfa) "Включена" else "Выключена") { AppModel.push(Screen.TwoFa) }
         }
         Spacer(Modifier.height(6.dp))
         var lockDlg by remember { mutableStateOf(false) }

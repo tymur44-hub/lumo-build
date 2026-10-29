@@ -40,6 +40,8 @@ sealed class Screen {
     data object MsgPrivacy : Screen()
     data object Devices : Screen()
     data object Language : Screen()
+    data object Phone : Screen()
+    data object TwoFa : Screen()
 }
 
 enum class Tab { Contacts, Chats, Settings }
@@ -173,6 +175,7 @@ object AppModel {
             netStatus = "Соединение…"
             Realtime.onState = { ok -> netChanged(ok) }
             loadMe()
+            launch { PhoneStore.load(); if (PhoneStore.hasContactsAccess()) PhoneStore.syncContacts() }
             myId?.let { E2E.setup(it) }
             netStatus = "Обновление…"
             loadContacts()
@@ -237,6 +240,14 @@ object AppModel {
         start()
     }
 
+    /** Вход по токену, который выдал сервер после проверки кода */
+    suspend fun phoneLogin(th: String, created: Boolean) {
+        Api.verifyMagic(th)
+        loggedIn = true
+        start()
+        if (created) say("Аккаунт создан — имя и юзернейм можно поменять в настройках")
+    }
+
     /** Вход через Telegram: true — вошли, false — ещё ждём */
     suspend fun telegramCheck(key: String): Boolean {
         val j = Api.function("/tglogin", jsonOf("key" to key), auth = false) as? JSONObject ?: JSONObject()
@@ -299,6 +310,7 @@ object AppModel {
     suspend fun endSession(id: String) { runCatching { Api.rpc("lm_session_kill", jsonOf("p_id" to id)) } }
 
     fun resetAfterLogout() {
+        PhoneStore.reset()
         ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE).edit().putBoolean("lm_sess_active", false).apply()
         LumoService.stop(ctx)
         CallsBridge.detach()
