@@ -193,6 +193,7 @@ final class AppModel: ObservableObject {
         presence(true)
         Task { await touchSession() }
         Task { await PhoneStore.shared.load(); await PhoneStore.shared.syncIfAllowed() }
+        Task { await Lumens.shared.load(); await Lumens.shared.loadCfg() }
         presenceTimer?.invalidate()
         presenceTimer = Timer.scheduledTimer(withTimeInterval: 45, repeats: true) { [weak self] _ in
             Task { @MainActor in if let self = self, self.isActive { self.presence(true); await self.touchSession() } }
@@ -313,6 +314,7 @@ final class AppModel: ObservableObject {
     func resetAfterLogout() {
         UserDefaults.standard.set(false, forKey: "lm_sess_active")
         PhoneStore.shared.reset()
+        Lumens.shared.reset()
         if ProcessInfo.processInfo.environment["LUMO_SNAPSHOT"] != nil { NSLog("LUMODBG resetAfterLogout %@", Thread.callStackSymbols.prefix(14).joined(separator: " | ")) }
         netTask?.cancel()
         netStatus = nil
@@ -652,6 +654,7 @@ final class AppModel: ObservableObject {
             syncTypingChannels()
             Task { await self.loadProfiles(self.chats.compactMap { $0.peerId }) }
             chatsLoaded = true
+            if list.contains(where: { $0.isChannel }) { Task { await Lumens.shared.loadCfg() } }
             Notifier.setBadge(list.filter { !$0.muted }.reduce(0) { $0 + $1.unread })
         } catch {
             if (error as? APIError)?.status == 401 { API.shared.forgetSession() }

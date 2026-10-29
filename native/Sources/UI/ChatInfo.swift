@@ -357,7 +357,7 @@ struct EditChatView: View {
     @Environment(\.dismiss) private var dismiss
     let chatId: String
 
-    private enum Page { case main, type, admins, members }
+    private enum Page { case main, type, admins, members, reactions, discussion }
     @State private var page: Page = .main
     @State private var title = ""
     @State private var about = ""
@@ -367,6 +367,10 @@ struct EditChatView: View {
     @State private var avatarPick: PhotosPickerItem?
     @State private var busy = false
     @State private var error: String?
+    @ObservedObject private var lumens = Lumens.shared
+    @State private var rxOn = true
+    @State private var rxSet = Set(allReactions)
+    @State private var rxTouched = false
 
     private var chat: ChatItem? { model.chat(chatId) }
     private var isChannel: Bool { chat?.isChannel == true }
@@ -399,6 +403,8 @@ struct EditChatView: View {
                     switch page {
                     case .main: main
                     case .type: typePage
+                    case .reactions: reactionsPage
+                    case .discussion: discussionPage
                     case .admins: list(admins: true)
                     case .members: list(admins: false)
                     }
@@ -412,6 +418,8 @@ struct EditChatView: View {
             title = chat?.title ?? ""; about = chat?.description ?? ""
             uname = chat?.username ?? ""; isPublic = !(chat?.username ?? "").isEmpty
             Task { members = await model.members(chatId) }
+            let r = lumens.cfg[chatId]?.reactions
+            rxOn = r?.isEmpty != true; rxSet = Set(r ?? allReactions)
         }
         .onChange(of: avatarPick) { item in
             guard let item = item else { return }
@@ -421,7 +429,7 @@ struct EditChatView: View {
     }
 
     private var pageTitle: String {
-        switch page { case .type: return "Тип " + kind; case .admins: return "Администраторы"; default: return isChannel ? "Подписчики" : "Участники" }
+        switch page { case .type: return "Тип " + kind; case .admins: return "Администраторы"; case .reactions: return "Реакции"; case .discussion: return "Обсуждение"; default: return isChannel ? "Подписчики" : "Участники" }
     }
 
     private func back() { if page != .main { page = .main; error = nil } else { dismiss() } }
@@ -433,6 +441,10 @@ struct EditChatView: View {
         if isPublic, u.range(of: "^[a-z0-9_]{5,32}$", options: .regularExpression) == nil { page = .type; error = "Адрес: 5–32 символа, латиница, цифры и _"; return }
         busy = true; error = nil
         Task {
+            if isChannel && rxTouched {
+                let list: [String]? = !rxOn ? [] : (rxSet.isSuperset(of: allReactions) ? nil : allReactions.filter { rxSet.contains($0) })
+                if let e = await lumens.setReactions(chatId, list) { model.say(e) }
+            }
             let ok = await model.saveChatFull(chatId, title: title.trimmingCharacters(in: .whitespaces), description: about.trimmingCharacters(in: .whitespaces),
                                               isPublic: isPublic, username: isPublic ? u : nil)
             busy = false
@@ -462,6 +474,19 @@ struct EditChatView: View {
                 Divider().overlay(Theme.line).padding(.leading, 68)
                 Button { page = .type } label: { TGIconRow(icon: "link", color: Color(hex: 0xffa33a), title: "Ссылка", value: "@" + uname) }.buttonStyle(RowButtonStyle())
             }
+        }
+        if isChannel {
+            TGCard {
+                Button { page = .discussion } label: {
+                    TGIconRow(icon: "bubble.left.and.bubble.right.fill", color: Color(hex: 0x5b6cff), title: "Обсуждение",
+                              value: lumens.linked(chatId).flatMap { model.chat($0)?.title } ?? (lumens.linked(chatId) != nil ? "Группа" : "Добавить"))
+                }.buttonStyle(RowButtonStyle())
+                Divider().overlay(Theme.line).padding(.leading, 68)
+                Button { page = .reactions } label: {
+                    TGIconRow(icon: "heart.fill", color: Color(hex: 0xff4d6a), title: "Реакции", value: !rxOn ? "Выключены" : (rxSet.isSuperset(of: allReactions) ? "Все" : "\(rxSet.count)"))
+                }.buttonStyle(RowButtonStyle())
+            }
+            .padding(.top, 14)
         }
         TGCard {
             Button { page = .admins } label: { TGIconRow(icon: "checkmark.shield.fill", color: Color(hex: 0x2bd67b), title: "Администраторы", value: "\(members.filter { $0.role != "member" }.count)") }
@@ -506,6 +531,86 @@ struct EditChatView: View {
             if on { Image(systemName: "checkmark").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.a1) }
         }
         .padding(.horizontal, 20).frame(minHeight: 60).contentShape(Rectangle())
+    }
+
+    @ViewBuilder private var reactionsPage: some View {
+        TGCard {
+            Toggle("Реакции на посты", isOn: Binding(get: { rxOn }, set: { rxOn = $0; rxTouched = true }))
+                .font(.system(size: 17)).padding(.horizontal, 20).frame(minHeight: 56)
+        }
+        .padding(.top, 8)
+        if rxOn {
+            Text("РАЗРЕШЁННЫЕ РЕАКЦИИ").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.muted).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 32).padding(.top, 16).padding(.bottom, 6)
+            TGCard {
+                ForEach(Array(allReactions.enumerated()), id: \.element) { i, e in
+                    if i > 0 { Divider().overlay(Theme.line).padding(.leading, 20) }
+                    Button {
+                        if rxSet.contains(e) { rxSet.remove(e) } else { rxSet.insert(e) }
+                        rxTouched = true
+                    } label: {
+                        HStack {
+                            Text(e).font(.system(size: 26))
+                            Spacer()
+                            Image(systemName: rxSet.contains(e) ? "checkmark.circle.fill" : "circle").font(.system(size: 22))
+                                .foregroundColor(rxSet.contains(e) ? Theme.a1 : Theme.muted)
+                        }
+                        .padding(.horizontal, 20).padding(.vertical, 8).contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                }
+            }
+            TGHint(text: "Подписчики смогут ставить только отмеченные реакции. Если не отмечено ничего, реакции будут выключены.")
+        } else {
+            TGHint(text: "Подписчики не смогут ставить реакции на посты.")
+        }
+    }
+
+    @ViewBuilder private var discussionPage: some View {
+        let lid = lumens.linked(chatId)
+        if let lid {
+            TGCard {
+                TGIconRow(icon: "person.3.fill", color: Color(hex: 0x5b6cff), title: model.chat(lid)?.title ?? "Группа", value: "Привязана", chevron: false)
+                Divider().overlay(Theme.line).padding(.leading, 68)
+                Button { Task { if let e = await lumens.link(chatId, nil) { model.say(e) } else { model.say("Группа отвязана") } } } label: {
+                    Text("Отвязать группу").font(.system(size: 17)).foregroundColor(Theme.danger).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20).frame(height: 56).contentShape(Rectangle())
+                }.buttonStyle(RowButtonStyle())
+            }
+            .padding(.top, 8)
+            TGHint(text: "Под каждым постом канала появится кнопка «Комментарии». Комментарии хранятся в этой группе.")
+        } else {
+            let used = Set(lumens.cfg.values.compactMap { $0.linked })
+            let cand = model.chats.filter { $0.type == "group" && $0.role == "owner" && !used.contains($0.id) }
+            TGCard {
+                Button {
+                    Task {
+                        if let gid = await lumens.createDiscussion(title: "Обсуждение: " + (title.isEmpty ? (chat?.displayName ?? "") : title)) {
+                            await model.loadChats()
+                            if let e = await lumens.link(chatId, gid) { model.say(e) } else { model.say("Обсуждение подключено") }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: "plus").foregroundColor(Theme.a1)
+                        Text("Создать новую группу").font(.system(size: 17)).foregroundColor(Theme.a1)
+                        Spacer()
+                    }.padding(.horizontal, 20).frame(height: 56).contentShape(Rectangle())
+                }.buttonStyle(RowButtonStyle())
+                ForEach(cand) { g in
+                    Divider().overlay(Theme.line).padding(.leading, 20)
+                    Button {
+                        Task { if let e = await lumens.link(chatId, g.id) { model.say(e) } else { model.say("Обсуждение подключено") } }
+                    } label: {
+                        HStack(spacing: 12) {
+                            AvatarView(name: g.displayName, url: g.displayAvatar, color: g.displayColor, size: 38)
+                            Text(g.displayName).font(.system(size: 17)).foregroundColor(Theme.text)
+                            Spacer()
+                        }.padding(.horizontal, 20).padding(.vertical, 10).contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                }
+            }
+            .padding(.top, 8)
+            TGHint(text: "Чтобы включить комментарии, создайте группу и привяжите её к каналу, либо выберите свою группу. Привязать можно только группу, где вы владелец.")
+        }
     }
 
     @ViewBuilder private func list(admins: Bool) -> some View {

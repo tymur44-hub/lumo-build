@@ -5,7 +5,7 @@ import UIKit
 enum SettingsPage: Hashable {
     case premium, profile, profileEdit, calls, notifications, privacy, about, blocked, look, username, colors, devices, language
     case privacyKey(String)
-    case msgPrivacy, phone, twofa
+    case msgPrivacy, phone, twofa, wallet
 }
 
 struct SettingsView: View {
@@ -55,6 +55,19 @@ struct SettingsView: View {
                         divider
                         Button { Task { await model.openSaved() } } label: {
                             SettingsRow(icon: "bookmark.fill", color: Color(hex: 0x3a7bff), title: "Избранное", subtitle: "Заметки и сохранённые сообщения")
+                        }
+                        divider
+                        NavigationLink(value: SettingsPage.wallet) {
+                            HStack(spacing: 14) {
+                                LumenGem(size: 30).frame(width: 34, height: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Люмены").font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                                    Text("\(Lumens.shared.balance) \(lumenWord(Lumens.shared.balance))").font(.system(size: 12.5)).foregroundColor(Theme.muted)
+                                }
+                                Spacer(minLength: 6)
+                                Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundColor(Theme.muted.opacity(0.6))
+                            }
+                            .padding(.vertical, 9).padding(.horizontal, 4).contentShape(Rectangle())
                         }
                         divider
                         NavigationLink(value: SettingsPage.calls) {
@@ -125,6 +138,7 @@ struct SettingsView: View {
                 case .msgPrivacy: MsgPrivacyView()
                 case .phone: PhoneSettingsView()
                 case .twofa: TwoFAView()
+                case .wallet: WalletView()
                 }
             }
             .onChange(of: avatarPick) { item in

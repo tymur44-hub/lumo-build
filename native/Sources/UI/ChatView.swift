@@ -31,6 +31,9 @@ struct ChatView: View {
     @State private var selecting = false
     @State private var selected: Set<Int> = []
     @State private var reporting: ReportTarget?
+    @State private var tipping: Message?
+    @State private var commentsFor: Message?
+    @ObservedObject private var lumens = Lumens.shared
     @State private var transcript: String?
     @ObservedObject private var prot = ProtStore.shared
     private var isProt: Bool { prot.map[chatId] == true }
@@ -220,6 +223,8 @@ struct ChatView: View {
         }
         .sheet(item: $forwarding) { b in ForwardView(messages: b.messages).environmentObject(model) }
         .sheet(item: $reporting) { t in ReportView(target: t).environmentObject(model) }
+        .sheet(item: $tipping) { m in TipSheet(message: m).environmentObject(model) }
+        .sheet(item: $commentsFor) { m in CommentsView(chatId: chatId, postId: m.id).environmentObject(model) }
         .task(id: chatId) { await prot.load(chatId) }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
             if isProt { model.say("В этом чате запрещены скриншоты") }
@@ -425,6 +430,9 @@ struct ChatView: View {
             })
         }
         if !isProt { a.append(MsgAction(title: "Переслать", icon: "arrowshape.turn.up.right") { forwarding = ForwardBatch(messages: [m]) }) }
+        if !mine && m.senderId != nil {
+            a.append(MsgAction(title: "Отправить люмены", icon: "sparkle") { tipping = m })
+        }
         if !mine {
             a.append(MsgAction(title: "Пожаловаться", icon: "exclamationmark.bubble") {
                 reporting = ReportTarget(user: m.senderId, chat: chatId, message: m.id)
@@ -478,6 +486,12 @@ struct ChatView: View {
         .padding(.horizontal, 18).frame(height: 46)
     }
 
+    /// Реакции, доступные в этом чате (админ канала может ограничить или отключить)
+    private var menuReactions: [String] {
+        guard let a = lumens.allowed(chatId) else { return MessageRow.quick }
+        return MessageRow.quick.filter { a.contains($0) } + a.filter { !MessageRow.quick.contains($0) }
+    }
+
     private func menuOverlay(_ m: Message) -> some View {
         let mine = m.senderId == model.myId
         let acts = actions(m)
@@ -489,8 +503,9 @@ struct ChatView: View {
                 VStack(alignment: mine ? .trailing : .leading, spacing: 10) {
                     Spacer(minLength: 0)
                     // реакции
+                    if !menuReactions.isEmpty {
                     HStack(spacing: 2) {
-                        ForEach(MessageRow.quick, id: \.self) { e in
+                        ForEach(menuReactions, id: \.self) { e in
                             Button {
                                 closeMenu()
                                 Task { await model.react(m, e) }
@@ -503,6 +518,7 @@ struct ChatView: View {
                     .padding(.horizontal, 6)
                     .background(Capsule().fill(Theme.panel))
                     .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+                    }
                     // само сообщение
                     MessageRow(m: m, chat: chat, first: true, last: true,
                                onReply: { _ in }, onEdit: { _ in }, onForward: { _ in },
@@ -574,6 +590,7 @@ struct ChatView: View {
                                        onImage: { imageURL = IdentifiedURL(url: $0) },
                                        onVideo: { videoURL = IdentifiedURL(url: $0) },
                                        onReport: { m in reporting = ReportTarget(user: m.senderId, chat: chatId, message: m.id) },
+                                       onComments: { commentsFor = $0 },
                                        onMenu: { m in withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) { menuMsg = m } },
                                        selecting: selecting, isSelected: selected.contains(f.id), onToggle: { toggle($0) })
                                 .background(RoundedRectangle(cornerRadius: 12).fill(highlight == f.id ? Theme.a1.opacity(0.25) : Color.clear))

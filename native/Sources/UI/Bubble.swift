@@ -80,6 +80,8 @@ struct MessageRow: View {
     var selecting = false
     var isSelected = false
     var onToggle: (Message) -> Void = { _ in }
+    var onComments: (Message) -> Void = { _ in }
+    @ObservedObject private var lumens = Lumens.shared
     @State private var swipe: CGFloat = 0
     @State private var pressing = false
     @State private var swipeHit = false
@@ -123,6 +125,7 @@ struct MessageRow: View {
                 }
                 VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
                     content
+                        .task(id: m.id) { if m.id > 0 && !m.deleted { lumens.request(m.id, withComments: chat?.isChannel == true && lumens.linked(chat?.id) != nil) } }
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { Task { await model.react(m, "❤️") } }
                         .scaleEffect(pressing ? 0.96 : 1)
@@ -136,6 +139,8 @@ struct MessageRow: View {
                             onMenu(m)
                         })
                     reactionsRow
+                    TipPill(id: m.id)
+                    commentsButton
                     botButtons
                 }
                 if !mine { Spacer(minLength: 44) }
@@ -218,6 +223,23 @@ struct MessageRow: View {
                 }
             }
             .frame(minWidth: 220)
+        }
+    }
+
+    @ViewBuilder private var commentsButton: some View {
+        if chat?.isChannel == true, lumens.linked(chat?.id) != nil, m.id > 0, !m.deleted {
+            let n = lumens.comments[m.id] ?? 0
+            Button { onComments(m) } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "bubble.left").font(.system(size: 14, weight: .semibold))
+                    Text(n == 0 ? "Оставить комментарий" : "\(n) \(commentWord(n))").font(.system(size: 14, weight: .semibold))
+                    Spacer(minLength: 20)
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold))
+                }
+                .foregroundColor(Theme.a1).padding(.horizontal, 12).padding(.vertical, 8)
+                .background(Theme.a1.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
         }
     }
 
