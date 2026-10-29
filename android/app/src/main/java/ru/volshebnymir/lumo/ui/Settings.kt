@@ -48,6 +48,7 @@ import ru.volshebnymir.lumo.core.isPremium
 import ru.volshebnymir.lumo.core.Fmt
 import ru.volshebnymir.lumo.core.Screen
 import ru.volshebnymir.lumo.core.PhoneStore
+import ru.volshebnymir.lumo.core.Lumens
 
 private fun share(ctx: android.content.Context, text: String) {
     runCatching { ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Поделиться").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -115,6 +116,8 @@ fun SettingsScreen() {
             SettingsRow(Icons.Filled.Person, p.a1, "Мой профиль", "Имя, юзернейм, о себе, пароль") { AppModel.push(Screen.MyProfile) }
             Divider()
             SettingsRow(Icons.Filled.Bookmark, Color(0xFF3A7BFF), "Избранное", "Заметки и сохранённые сообщения") { scope.launch { AppModel.myId?.let { AppModel.openDM(it) } } }
+            Divider()
+            SettingsRow(Icons.Filled.Star, Color(0xFFFF9A3D), "Люмены", "${Lumens.balance} ${lumenWord(Lumens.balance)}", lead = { LumenIcon(26.dp) }) { AppModel.push(Screen.Wallet) }
             Divider()
             SettingsRow(Icons.Filled.Call, Color(0xFF2BD67B), "Звонки", "Недавние и пропущенные") { AppModel.push(Screen.CallsHistory) }
         }

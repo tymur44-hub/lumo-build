@@ -41,6 +41,8 @@ sealed class Screen {
     data object Devices : Screen()
     data object Language : Screen()
     data object Phone : Screen()
+    data object Wallet : Screen()
+    data class Comments(val chatId: String, val postId: Int) : Screen()
     data class EditChat(val chatId: String) : Screen()
     data object TwoFa : Screen()
 }
@@ -176,6 +178,7 @@ object AppModel {
             netStatus = "Соединение…"
             Realtime.onState = { ok -> netChanged(ok) }
             loadMe()
+            launch { Lumens.load(); Lumens.loadCfg() }
             launch { PhoneStore.load(); if (PhoneStore.hasContactsAccess()) PhoneStore.syncContacts() }
             myId?.let { E2E.setup(it) }
             netStatus = "Обновление…"
@@ -312,6 +315,7 @@ object AppModel {
 
     fun resetAfterLogout() {
         PhoneStore.reset()
+        Lumens.reset()
         ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE).edit().putBoolean("lm_sess_active", false).apply()
         LumoService.stop(ctx)
         CallsBridge.detach()
@@ -461,6 +465,7 @@ object AppModel {
             unreadTotal = list.filter { !it.muted }.sumOf { it.unread }
             syncTyping()
             loadProfiles(list.mapNotNull { it.peerId })
+            if (list.any { it.isChannel }) scope.launch { Lumens.loadCfg() }
         } catch (e: ApiError) {
             if (e.status == 401) Api.forget()
         } catch (_: Exception) {}
@@ -944,6 +949,15 @@ object AppModel {
             Api.update("lm_chats", mapOf("id" to chatId), jsonOf("title" to title, "description" to description, "is_public" to isPublic, "username" to username))
             loadChats()
         }.isSuccess
+
+    suspend fun setReactions(chatId: String, list: List<String>?) {
+        runCatching { Api.rpc("lm_set_reactions", jsonOf("p_chat" to chatId, "p_list" to (list?.let { JSONArray(it) } ?: JSONObject.NULL))); Lumens.loadCfg() }.onFailure { say(it.message ?: "Ошибка") }
+    }
+
+    suspend fun linkDiscussion(channel: String, group: String?) {
+        runCatching { Api.rpc("lm_link_discussion", jsonOf("p_channel" to channel, "p_group" to group)); Lumens.loadCfg(); loadChats() }
+            .onSuccess { say(if (group == null) "Группа отвязана" else "Обсуждение подключено") }.onFailure { say(it.message ?: "Ошибка") }
+    }
 
     suspend fun setChatAvatar(chatId: String, jpeg: ByteArray) {
         runCatching {

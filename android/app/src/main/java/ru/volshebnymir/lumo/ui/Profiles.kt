@@ -42,6 +42,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import ru.volshebnymir.lumo.core.AppModel
+import ru.volshebnymir.lumo.core.Lumens
 import ru.volshebnymir.lumo.core.premium
 import ru.volshebnymir.lumo.core.isPremium
 import ru.volshebnymir.lumo.core.Message
@@ -874,6 +875,8 @@ fun NewChatScreen() {
 
 // ---------------- изменение канала / группы (как в Telegram) ----------------
 
+val ALL_REACTIONS = listOf("👍", "❤️", "😂", "😮", "😢", "🔥", "🙏", "👏", "🎉", "🤔", "😍", "👎", "💯", "🤝", "😡", "🥰")
+
 @Composable
 fun EditChatScreen(chatId: String) {
     val p = P
@@ -886,7 +889,12 @@ fun EditChatScreen(chatId: String) {
     var about by remember { mutableStateOf(c.description ?: "") }
     var isPublic by remember { mutableStateOf(!c.username.isNullOrEmpty()) }
     var uname by remember { mutableStateOf(c.username ?: "") }
-    var page by remember { mutableStateOf("main") }   // main | type | admins | members
+    var page by remember { mutableStateOf("main") }   // main | type | admins | members | reactions | discussion
+    val cfg0 = Lumens.cfg[chatId]
+    var rxOn by remember(cfg0) { mutableStateOf(cfg0?.reactions?.isNotEmpty() != false) }
+    var rxSet by remember(cfg0) { mutableStateOf((cfg0?.reactions ?: ALL_REACTIONS).toSet()) }
+    var rxTouched by remember { mutableStateOf(false) }
+    val linkedId = Lumens.linked(chatId)
     var members by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var memberMenu by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -909,6 +917,10 @@ fun EditChatScreen(chatId: String) {
             else -> {
                 busy = true; err = null
                 scope.launch {
+                    if (c.isChannel && rxTouched) {
+                        val list = if (!rxOn) emptyList() else if (rxSet.containsAll(ALL_REACTIONS)) null else ALL_REACTIONS.filter { it in rxSet }
+                        AppModel.setReactions(chatId, list)
+                    }
                     val ok = AppModel.saveChatFull(chatId, title.trim(), about.trim(), isPublic, if (isPublic) u else null)
                     busy = false
                     if (ok) AppModel.pop() else { page = "type"; err = "Этот адрес уже занят или недоступен" }
@@ -922,7 +934,7 @@ fun EditChatScreen(chatId: String) {
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             RoundIcon(if (page == "main") Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack) { back() }
             Spacer(Modifier.weight(1f))
-            if (page != "main") Text(when (page) { "type" -> "Тип $kind"; "admins" -> "Администраторы"; else -> if (c.isChannel) "Подписчики" else "Участники" }, color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            if (page != "main") Text(when (page) { "type" -> "Тип $kind"; "admins" -> "Администраторы"; "reactions" -> "Реакции"; "discussion" -> "Обсуждение"; else -> if (c.isChannel) "Подписчики" else "Участники" }, color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
             Spacer(Modifier.weight(1f))
             Box(Modifier.size(44.dp).clip(CircleShape).background(p.accent).bouncy { if (!busy) save() }, contentAlignment = Alignment.Center) {
                 if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Icon(Icons.Filled.Check, null, tint = Color.White)
@@ -948,6 +960,14 @@ fun EditChatScreen(chatId: String) {
                         if (isPublic && uname.isNotBlank()) { CardDivider(70); IconRow(Icons.Filled.Link, Color(0xFFFFA33A), "Ссылка", "@" + uname) { page = "type" } }
                     }
                     Spacer(Modifier.height(14.dp))
+                    if (c.isChannel) {
+                        GroupCard {
+                            IconRow(Icons.Filled.ChatBubble, Color(0xFF5B6CFF), "Обсуждение", linkedId?.let { AppModel.chat(it)?.title ?: "Группа" } ?: "Добавить") { page = "discussion" }
+                            CardDivider(70)
+                            IconRow(Icons.Filled.Favorite, Color(0xFFFF4D6A), "Реакции", if (!rxOn) "Выключены" else if (rxSet.containsAll(ALL_REACTIONS)) "Все" else "${rxSet.size}") { page = "reactions" }
+                        }
+                        Spacer(Modifier.height(14.dp))
+                    }
                     GroupCard {
                         IconRow(Icons.Filled.Shield, Color(0xFF2BD67B), "Администраторы", members.count { it.second == "admin" || it.second == "owner" }.toString()) { page = "admins" }
                         CardDivider(70)
@@ -975,6 +995,59 @@ fun EditChatScreen(chatId: String) {
                             modifier = Modifier.padding(start = 30.dp).clickable { copy(ctx, ru.volshebnymir.lumo.core.Config.SITE + "#@" + uname) })
                     }
                     err?.let { Text(it, color = p.danger, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 30.dp, vertical = 8.dp)) }
+                }
+                "reactions" -> {
+                    GroupCard {
+                        Row(Modifier.fillMaxWidth().clickable { rxOn = !rxOn; rxTouched = true }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Реакции на посты", color = p.text, fontSize = 17.sp, modifier = Modifier.weight(1f))
+                            androidx.compose.material3.Switch(rxOn, { rxOn = it; rxTouched = true })
+                        }
+                    }
+                    if (rxOn) {
+                        Text("РАЗРЕШЁННЫЕ РЕАКЦИИ", color = p.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 30.dp, top = 16.dp, bottom = 6.dp))
+                        GroupCard {
+                            ALL_REACTIONS.forEachIndexed { i, e ->
+                                if (i > 0) CardDivider()
+                                val on = e in rxSet
+                                Row(Modifier.fillMaxWidth().clickable { rxSet = if (on) rxSet - e else rxSet + e; rxTouched = true }.padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(e, fontSize = 26.sp, modifier = Modifier.weight(1f))
+                                    Icon(if (on) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, tint = if (on) p.a1 else p.muted)
+                                }
+                            }
+                        }
+                        HintWithLink("Подписчики смогут ставить только отмеченные реакции. Если не отмечено ничего, реакции будут выключены.")
+                    } else HintWithLink("Подписчики не смогут ставить реакции на посты.")
+                }
+                "discussion" -> {
+                    val linkedChat = linkedId?.let { AppModel.chat(it) }
+                    if (linkedId != null) {
+                        GroupCard {
+                            IconRow(Icons.Filled.Groups, Color(0xFF5B6CFF), linkedChat?.title ?: "Группа", "Привязана") { linkedChat?.let { AppModel.push(Screen.Chat(it.id)) } }
+                            CardDivider(70)
+                            Row(Modifier.fillMaxWidth().clickable { scope.launch { AppModel.linkDiscussion(chatId, null) } }.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                                Text("Отвязать группу", color = p.danger, fontSize = 17.sp)
+                            }
+                        }
+                        HintWithLink("Под каждым постом канала появится кнопка «Комментарии». Комментарии хранятся в этой группе.")
+                    } else {
+                        val cand = AppModel.chats.filter { it.type == "group" && it.role == "owner" && Lumens.cfg.values.none { v -> v.linked == it.id } }
+                        GroupCard {
+                            Row(Modifier.fillMaxWidth().clickable {
+                                scope.launch { AppModel.createChat("group", "Обсуждение: " + title.ifBlank { c.displayName }, "", emptyList())?.let { gid -> AppModel.linkDiscussion(chatId, gid) } }
+                            }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Add, null, tint = p.a1); Spacer(Modifier.width(14.dp))
+                                Text("Создать новую группу", color = p.a1, fontSize = 17.sp)
+                            }
+                            cand.forEach { g ->
+                                CardDivider()
+                                Row(Modifier.fillMaxWidth().clickable { scope.launch { AppModel.linkDiscussion(chatId, g.id) } }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Avatar(g.displayName, g.displayAvatar, g.displayColor, 38.dp); Spacer(Modifier.width(12.dp))
+                                    Text(g.displayName, color = p.text, fontSize = 17.sp)
+                                }
+                            }
+                        }
+                        HintWithLink("Чтобы включить комментарии, создайте группу и привяжите её к каналу, либо выберите свою группу. Привязать можно только группу, где вы владелец.")
+                    }
                 }
                 else -> {
                     val list = if (page == "admins") members.filter { it.second == "admin" || it.second == "owner" } else members

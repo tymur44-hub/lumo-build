@@ -94,6 +94,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import ru.volshebnymir.lumo.core.AppModel
+import ru.volshebnymir.lumo.core.Lumens
 import ru.volshebnymir.lumo.core.ChatItem
 import ru.volshebnymir.lumo.core.Fmt
 import ru.volshebnymir.lumo.core.Message
@@ -143,6 +144,7 @@ fun ChatScreen(chatId: String) {
     var flash by remember { mutableStateOf<Int?>(null) }
     var note by remember { mutableStateOf<NoteSession?>(null) }
     var reportMsg by remember { mutableStateOf<Message?>(null) }
+    var tipMsg by remember { mutableStateOf<Message?>(null) }
     val notePerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
         if (r.values.all { it }) note = NoteSession(true) else AppModel.say("Нужен доступ к камере и микрофону")
     }
@@ -338,9 +340,11 @@ fun ChatScreen(chatId: String) {
                 onDelete = { menuFor = null; deleting = listOf(m) },
                 onOpen = { menuFor = null; MediaUtil.open(ctx, m.mediaUrl) },
                 onReport = { menuFor = null; reportMsg = m },
+                onTip = { menuFor = null; tipMsg = m },
             )
         }
         viewer?.let { MediaViewer(it) { viewer = null } }
+        tipMsg?.let { m -> TipDialog(m) { tipMsg = null } }
         reportMsg?.let { m -> ReportDialog(m.senderId, chatId, m.id) { reportMsg = null } }
         LaunchedEffect(note) {
             val ns = note ?: return@LaunchedEffect
@@ -610,6 +614,7 @@ private fun MessageRow(
             Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
                 Bubble(m, chat, mine, group && !mine && first, last, onReplyTap)
                 Reactions(m, mine)
+                TipPill(m, mine)
             }
         }
         if (dx.value < -8f) {
@@ -692,6 +697,18 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
             if (m.kind == "text") RichText(m.body, fg, mine, cmdChat = cmdChat) else RichText(m.body, fg, mine, Modifier.padding(horizontal = 6.dp, vertical = 3.dp), cmdChat)
         }
         BotButtons(m, mine)
+        val grp = if (chat?.isChannel == true) Lumens.linked(chat.id) else null
+        LaunchedEffect(m.id) { if (m.id > 0 && !m.deleted) Lumens.request(m.id, grp != null) }
+        if (grp != null && m.id > 0 && !m.deleted && m.kind != "system") {
+            val n = Lumens.comments[m.id] ?: 0
+            Row(Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (mine) Color.White.copy(alpha = 0.16f) else p.a1.copy(alpha = 0.1f))
+                .clickable { AppModel.push(Screen.Comments(m.chatId, m.id)) }.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.ChatBubbleOutline, null, tint = if (mine) Color.White else p.a1, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(if (n == 0) "Оставить комментарий" else "$n ${lumenCommentWord(n)}", color = if (mine) Color.White else p.a1, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Icon(Icons.Filled.ChevronRight, null, tint = if (mine) Color.White else p.a1, modifier = Modifier.size(18.dp))
+            }
+        }
         // время и галочки
         val read = mine && chat != null && chat.othersReadAt != null && !chat.othersReadAt.before(m.createdAt)
         Row(Modifier.align(Alignment.End).then(if (bare) Modifier.padding(top = 3.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = 0.35f)).padding(horizontal = 7.dp, vertical = 1.dp) else pad),
@@ -763,7 +780,7 @@ private fun Reactions(m: Message, mine: Boolean) {
 @Composable
 private fun MessageMenu(
     m: Message, chat: ChatItem?, onClose: () -> Unit, onReact: (String) -> Unit, onReply: () -> Unit, onCopy: () -> Unit, onEdit: () -> Unit,
-    onForward: () -> Unit, onPin: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit, onOpen: () -> Unit, onReport: () -> Unit,
+    onForward: () -> Unit, onPin: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit, onOpen: () -> Unit, onReport: () -> Unit, onTip: () -> Unit = {},
 ) {
     val p = P
     BackHandler { onClose() }
@@ -774,8 +791,10 @@ private fun MessageMenu(
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).clickable(remember { MutableInteractionSource() }, null) { onClose() }, contentAlignment = Alignment.Center) {
         AnimatedVisibility(shown, enter = scaleIn(initialScale = 0.85f) + fadeIn(), exit = fadeOut()) {
             Column(Modifier.padding(24.dp).widthIn(max = 340.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                if (m.id > 0 && !m.deleted) Row(Modifier.clip(RoundedCornerShape(28.dp)).background(p.panel).horizontalScroll(rememberScrollState()).padding(6.dp)) {
-                    QUICK.forEach { e -> Text(e, fontSize = 28.sp, modifier = Modifier.clip(CircleShape).bouncy { onReact(e) }.padding(6.dp)) }
+                val allowedRx = Lumens.allowed(chat?.id)
+                val rxList = if (allowedRx == null) QUICK else QUICK.filter { it in allowedRx } + allowedRx.filter { it !in QUICK }
+                if (m.id > 0 && !m.deleted && rxList.isNotEmpty()) Row(Modifier.clip(RoundedCornerShape(28.dp)).background(p.panel).horizontalScroll(rememberScrollState()).padding(6.dp)) {
+                    rxList.forEach { e -> Text(e, fontSize = 28.sp, modifier = Modifier.clip(CircleShape).bouncy { onReact(e) }.padding(6.dp)) }
                 }
                 Spacer(Modifier.height(10.dp))
                 Box(Modifier.clip(RoundedCornerShape(18.dp)).background(p.panel2).padding(12.dp).widthIn(max = 300.dp)) {
@@ -810,6 +829,7 @@ private fun MessageMenu(
                         item(Icons.Filled.PushPin, if (chat.pinnedMessageId == m.id) "Открепить" else "Закрепить", f = onPin)
                     if (ok && !prot) item(Icons.AutoMirrored.Filled.Forward, "Переслать", f = onForward)
                     if (!m.mediaUrl.isNullOrEmpty() && ok && !prot) item(Icons.Filled.Download, "Скачать", f = onOpen)
+                    if (!mine && ok && m.senderId != null) item(Icons.Filled.Star, "Отправить люмены", f = onTip)
                     if (!mine && ok) item(Icons.Filled.Flag, "Пожаловаться", f = onReport)
                     if (ok) item(Icons.Filled.DeleteOutline, "Удалить", danger = true, f = onDelete)
                     if (m.id > 0) {
