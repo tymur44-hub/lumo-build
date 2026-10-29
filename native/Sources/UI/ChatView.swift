@@ -574,7 +574,7 @@ struct ChatView: View {
                                        onImage: { imageURL = IdentifiedURL(url: $0) },
                                        onVideo: { videoURL = IdentifiedURL(url: $0) },
                                        onReport: { m in reporting = ReportTarget(user: m.senderId, chat: chatId, message: m.id) },
-                                       ctxItems: { ctxMenu($0) }, ctxPreview: { ctxPreview($0) },
+                                       onMenu: { m in withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) { menuMsg = m } },
                                        selecting: selecting, isSelected: selected.contains(f.id), onToggle: { toggle($0) })
                                 .background(RoundedRectangle(cornerRadius: 12).fill(highlight == f.id ? Theme.a1.opacity(0.25) : Color.clear))
                         }

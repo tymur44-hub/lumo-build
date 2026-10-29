@@ -81,6 +81,7 @@ struct MessageRow: View {
     var isSelected = false
     var onToggle: (Message) -> Void = { _ in }
     @State private var swipe: CGFloat = 0
+    @State private var pressing = false
     @State private var swipeHit = false
     @State private var swipeActive = false
     @State private var noteText: String?
@@ -124,10 +125,15 @@ struct MessageRow: View {
                     content
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { Task { await model.react(m, "❤️") } }
-                        .contextMenu(menuItems: {
-                            if let f = ctxItems, !selecting, !m.deleted, m.id > 0 { f(m) }
-                        }, preview: {
-                            if let p = ctxPreview { p(m) } else { Color.clear.frame(width: 1, height: 1) }
+                        .scaleEffect(pressing ? 0.96 : 1)
+                        .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 14, pressing: { p in
+                            guard !selecting, !m.deleted, m.id > 0 else { return }
+                            withAnimation(.easeOut(duration: 0.18)) { pressing = p }
+                        }, perform: {
+                            guard !selecting, !m.deleted, m.id > 0 else { return }
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            withAnimation(.easeOut(duration: 0.12)) { pressing = false }
+                            onMenu(m)
                         })
                     reactionsRow
                     botButtons
