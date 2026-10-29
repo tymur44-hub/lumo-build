@@ -71,7 +71,7 @@ struct SettingsView: View {
                         }
                         divider
                         NavigationLink(value: SettingsPage.gifts) {
-                            SettingsRow(icon: "gift.fill", color: Color(hex: 0xff5e8a), title: "Подарки", subtitle: "NFT-подарки за люмены · в разработке")
+                            SettingsRow(icon: "gift.fill", color: Color(hex: 0xff5e8a), title: "Подарки", subtitle: "NFT-подарки за люмены")
                         }
                         divider
                         NavigationLink(value: SettingsPage.calls) {

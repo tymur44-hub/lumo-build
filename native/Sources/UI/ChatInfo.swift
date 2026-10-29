@@ -19,6 +19,7 @@ struct ChatInfoView: View {
     @State private var members: [Member] = []
     @State private var aliasEdit = false
     @State private var lumenTarget: LumenTarget?
+    @State private var giftTarget: GiftTarget?
     @State private var alias = ""
     @State private var report: ReportTarget?
     @State private var addMembers = false
@@ -74,6 +75,7 @@ struct ChatInfoView: View {
         }
         .sheet(item: $report) { t in ReportView(target: t).environmentObject(model) }
         .sheet(item: $lumenTarget) { t in SendLumensSheet(userId: t.id).environmentObject(model) }
+        .sheet(item: $giftTarget) { t in GiftShopSheet(user: t.id).environmentObject(model) }
         .sheet(isPresented: $addMembers) {
             PeoplePicker(title: "Добавить участников", exclude: Set(members.map { $0.userId })) { ids in
                 Task { await model.addMembers(chatId, ids); members = await model.members(chatId) }
@@ -161,6 +163,7 @@ struct ChatInfoView: View {
                 }
                 if c.isPrivate, !saved, let pid = c.peerId, pid != model.myId, !(c.peerBot || (model.profiles[pid]?.isBot ?? false)) {
                     actionButton("sparkle", "люмены") { lumenTarget = LumenTarget(id: pid) }
+                    actionButton("gift.fill", "подарок") { giftTarget = GiftTarget(id: pid) }
                 }
                 if !saved {
                     actionButton(c.muted ? "bell.slash.fill" : "bell.fill", c.muted ? "без звука" : "звук") {

@@ -404,42 +404,6 @@ struct TipSheet: View {
     var body: some View { SendLumensSheet(userId: message.senderId ?? "", msgId: message.id) }
 }
 
-/// Подарки за люмены: NFT в разработке
-struct GiftsView: View {
-    @State private var glow = false
-    private let tones: [UInt32] = [0xff9a3d, 0x7c5cff, 0x2bd67b, 0xff5e8a, 0x22a6ff, 0xffd36b]
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 8) {
-                LumenLive(size: 70)
-                Text("NFT-подарки").font(.system(size: 26, weight: .black)).foregroundColor(Theme.text)
-                Text("Скоро за люмены можно будет покупать редкие подарки, дарить их друзьям и собирать коллекцию. Сейчас раздел в разработке: мы делаем каждый подарок отдельно и тщательно.")
-                    .font(.system(size: 15)).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(.horizontal, 28)
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                    ForEach(0..<6, id: \.self) { i in
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 28, style: .continuous).fill(.ultraThinMaterial)
-                            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                .fill(RadialGradient(colors: [Color(hex: tones[i]).opacity(glow ? 0.5 : 0.2), .clear], center: .center, startRadius: 0, endRadius: 90))
-                            VStack(spacing: 8) {
-                                Image(systemName: "lock.fill").font(.system(size: 30)).foregroundColor(Theme.text.opacity(0.55))
-                                Text("Скоро").font(.system(size: 15, weight: .bold)).foregroundColor(Theme.text.opacity(0.7))
-                            }
-                        }
-                        .frame(height: 150)
-                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(Theme.line, lineWidth: 1))
-                    }
-                }
-                .padding(.horizontal, 14).padding(.top, 14)
-            }
-            .padding(.bottom, 30)
-        }
-        .background(Theme.bg.ignoresSafeArea())
-        .navigationTitle("Подарки").navigationBarTitleDisplayMode(.inline)
-        .onAppear { withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { glow = true } }
-    }
-}
-
 /// Сумма люменов под сообщением
 struct TipPill: View {
     @ObservedObject private var lumens = Lumens.shared

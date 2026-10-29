@@ -177,6 +177,7 @@ fun PersonScreen(userId: String) {
     val pr = AppModel.profiles[userId]
     var viewer by remember { mutableStateOf<Message?>(null) }
     var sendLumens by remember { mutableStateOf(false) }
+    var giftShop by remember { mutableStateOf(false) }
     val writePerm = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { _ ->
         scope.launch { AppModel.addContact(userId) }
     }
@@ -209,12 +210,14 @@ fun PersonScreen(userId: String) {
                 }
             })
             if (sendLumens) LumenSendDialog(userId) { sendLumens = false }
+            if (giftShop) GiftShopDialog(userId) { giftShop = false }
             ProfileHead(AppModel.displayName(userId), pr?.avatarUrl, pr?.color ?: 0, AppModel.lastSeenText(userId), AppModel.isOnline(userId)) {
                 pr?.avatarUrl?.let { viewer = avatarMsg(it) }
             }
             Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionTile(Icons.Filled.ChatBubble, "Чат", Modifier.weight(1f)) { scope.launch { AppModel.openDM(userId) } }
                 if (userId != AppModel.myId && pr?.isBot != true) ActionTile(Icons.Filled.Diamond, "Люмены", Modifier.weight(1f)) { sendLumens = true }
+                if (userId != AppModel.myId && pr?.isBot != true) ActionTile(Icons.Filled.CardGiftcard, "Подарок", Modifier.weight(1f)) { giftShop = true }
                 if (pr?.isBot != true && dm?.peerBot != true) {
                     ActionTile(Icons.Filled.Call, "Звонок", Modifier.weight(1f)) {
                         if (dm != null) call(dm, false) else scope.launch { AppModel.openDM(userId) }
@@ -235,6 +238,7 @@ fun PersonScreen(userId: String) {
                 if (AppModel.isContact(userId)) { Divider(); InfoLine(AppModel.aliases[userId]?.takeIf { it.isNotEmpty() } ?: "Не задано", "Имя в контактах · видите только вы") { alias = AppModel.aliases[userId] ?: "" } }
             }
             Spacer(Modifier.height(14.dp))
+            if (pr?.isBot != true) ProfileGifts(userId)
             if (pr?.premium == true && pr.isBot != true) ProfileLinks(userId)
             Card {
                 SettingsRow(Icons.Filled.Lock, p.a1, "Код безопасности", "Проверить сквозное шифрование") { safety = true }

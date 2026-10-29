@@ -119,7 +119,7 @@ fun SettingsScreen() {
             Divider()
             SettingsRow(Icons.Filled.Star, Color(0xFFFF9A3D), "Люмены", "${Lumens.balance} ${lumenWord(Lumens.balance)}", lead = { LumenIcon(26.dp) }) { AppModel.push(Screen.Wallet) }
             Divider()
-            SettingsRow(Icons.Filled.CardGiftcard, Color(0xFFFF5E8A), "Подарки", "NFT-подарки за люмены · в разработке") { AppModel.push(Screen.Gifts) }
+            SettingsRow(Icons.Filled.CardGiftcard, Color(0xFFFF5E8A), "Подарки", "NFT-подарки за люмены") { AppModel.push(Screen.Gifts) }
             Divider()
             SettingsRow(Icons.Filled.Call, Color(0xFF2BD67B), "Звонки", "Недавние и пропущенные") { AppModel.push(Screen.CallsHistory) }
         }

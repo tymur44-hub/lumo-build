@@ -115,7 +115,7 @@ fun WalletScreen() {
         Card {
             SettingsRow(Icons.Filled.AddCard, Color(0xFF2BD67B), "Пополнить", "Покупка люменов — в разработке") { AppModel.say("Пополнение пока недоступно") }
             Divider()
-            SettingsRow(Icons.Filled.CardGiftcard, Color(0xFFFF5E8A), "Подарки", "NFT-подарки за люмены — в разработке") { AppModel.push(Screen.Gifts) }
+            SettingsRow(Icons.Filled.CardGiftcard, Color(0xFFFF5E8A), "Подарки", "NFT-подарки за люмены") { AppModel.push(Screen.Gifts) }
             Divider()
             SettingsRow(Icons.Filled.Info, p.a1, "Как это работает", "Откройте профиль человека и нажмите «Люмены», либо удерживайте его сообщение, либо нажмите на скрепку в личном чате.") {}
         }
@@ -268,41 +268,6 @@ fun TipDialog(m: Message, onClose: () -> Unit) {
     val id = m.senderId
     if (id == null) { onClose(); return }
     LumenSendDialog(id, m.id, onClose)
-}
-
-/** Подарки за люмены: NFT-подарки в разработке */
-@Composable
-fun GiftsScreen() {
-    val p = P
-    val tr = androidx.compose.animation.core.rememberInfiniteTransition(label = "gifts")
-    val glow by tr.animateFloat(0.35f, 0.9f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1800), androidx.compose.animation.core.RepeatMode.Reverse), label = "g")
-    Column(Modifier.fillMaxSize().background(p.bg).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-        TopBar("Подарки")
-        LumenLive(80.dp)
-        Text("NFT-подарки", color = p.text, fontSize = 26.sp, fontWeight = FontWeight.Black, modifier = Modifier.offset(y = (-10).dp))
-        Text("Скоро за люмены можно будет покупать редкие подарки, дарить их друзьям и собирать коллекцию. Сейчас раздел в разработке: мы делаем каждый подарок отдельно и тщательно.",
-            color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp).offset(y = (-4).dp))
-        Spacer(Modifier.height(18.dp))
-        val tones = listOf(Color(0xFFFF9A3D), Color(0xFF7C5CFF), Color(0xFF2BD67B), Color(0xFFFF5E8A), Color(0xFF22A6FF), Color(0xFFFFD36B))
-        for (row in 0 until 3) {
-            Row(Modifier.padding(horizontal = 14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                for (col in 0 until 2) {
-                    val c = tones[row * 2 + col]
-                    GlassCard(Modifier.weight(1f).height(150.dp).padding(0.dp)) {
-                        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(c.copy(alpha = 0.35f * glow), Color.Transparent))), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Filled.Lock, null, tint = p.text.copy(alpha = 0.55f), modifier = Modifier.size(34.dp))
-                                Spacer(Modifier.height(8.dp))
-                                Text("Скоро", color = p.text.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-        }
-        Spacer(Modifier.height(20.dp))
-    }
 }
 
 /** Сумма люменов под сообщением */

@@ -173,6 +173,7 @@ struct PersonSheet: View {
     @State private var report: ReportTarget?
     @State private var showSafety = false
     @State private var lumenTarget: LumenTarget?
+    @State private var giftTarget: GiftTarget?
     @State private var phone: String?
 
     var body: some View {
@@ -210,6 +211,7 @@ struct PersonSheet: View {
                             Text(bio).frame(maxWidth: .infinity, alignment: .leading).padding(10)
                         }
                     }
+                    if !(model.profiles[userId]?.isBot ?? false) { ProfileGiftsRow(userId: userId) }
                     if userId != model.myId {
                         SettingsGroup {
                             Button { dismiss(); Task { await model.openDM(userId) } } label: {
@@ -219,6 +221,10 @@ struct PersonSheet: View {
                             if !(model.profiles[userId]?.isBot ?? false) {
                                 Button { lumenTarget = LumenTarget(id: userId) } label: {
                                     SettingsRow(icon: "sparkle", color: Color(hex: 0xff9a3d), title: "Отправить люмены", chevron: false)
+                                }
+                                Divider().overlay(Theme.line)
+                                Button { giftTarget = GiftTarget(id: userId) } label: {
+                                    SettingsRow(icon: "gift.fill", color: Color(hex: 0xff5e8a), title: "Подарить подарок", chevron: false)
                                 }
                                 Divider().overlay(Theme.line)
                             }
@@ -254,6 +260,7 @@ struct PersonSheet: View {
             .sheet(item: $report) { t in ReportView(target: t).environmentObject(model) }
             .sheet(isPresented: $showSafety) { SafetyView(peerId: userId) }
             .sheet(item: $lumenTarget) { t in SendLumensSheet(userId: t.id).environmentObject(model) }
+            .sheet(item: $giftTarget) { t in GiftShopSheet(user: t.id).environmentObject(model) }
             .task {
                 await model.refreshProfile(userId)
                 if userId != model.myId { phone = (try? await API.shared.rpc("lm_phone_of", ["p_user": userId])) as? String }
