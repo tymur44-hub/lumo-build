@@ -41,6 +41,7 @@ sealed class Screen {
     data object Devices : Screen()
     data object Language : Screen()
     data object Phone : Screen()
+    data class EditChat(val chatId: String) : Screen()
     data object TwoFa : Screen()
 }
 
@@ -937,6 +938,12 @@ object AppModel {
     suspend fun saveChat(chatId: String, title: String, description: String) {
         runCatching { Api.update("lm_chats", mapOf("id" to chatId), jsonOf("title" to title, "description" to description)); loadChats() }.onFailure { say(it.message ?: "Ошибка") }
     }
+
+    suspend fun saveChatFull(chatId: String, title: String, description: String, isPublic: Boolean, username: String?): Boolean =
+        runCatching {
+            Api.update("lm_chats", mapOf("id" to chatId), jsonOf("title" to title, "description" to description, "is_public" to isPublic, "username" to username))
+            loadChats()
+        }.isSuccess
 
     suspend fun setChatAvatar(chatId: String, jpeg: ByteArray) {
         runCatching {

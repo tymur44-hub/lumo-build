@@ -175,6 +175,7 @@ fun MainScreen() {
             Screen.Devices -> DevicesScreen()
             Screen.Language -> LanguageScreen()
             Screen.Phone -> PhoneSettingsScreen()
+            is Screen.EditChat -> EditChatScreen(s.chatId)
             Screen.TwoFa -> TwoFaScreen()
         }
     }

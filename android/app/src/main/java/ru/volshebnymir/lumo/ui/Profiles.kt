@@ -291,7 +291,7 @@ fun InfoScreen(chatId: String) {
     }
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            TopBar("", right = { if (admin) Text("Изм.", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.clickable { edit = true }.padding(12.dp)) })
+            TopBar("", right = { if (admin) Text("Изм.", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.clickable { if (c?.isPrivate == false) AppModel.push(Screen.EditChat(chatId)) else edit = true }.padding(12.dp)) })
             ProfileHead(c?.displayName ?: "", c?.displayAvatar, c?.displayColor ?: 0,
                 if (c?.isChannel == true) "${c.membersCount} подписч." else "${c?.membersCount ?: 0} участн.", false) {
                 c?.displayAvatar?.let { viewer = avatarMsg(it) }
@@ -314,7 +314,7 @@ fun InfoScreen(chatId: String) {
             }
             if (admin) {
                 Card {
-                    SettingsRow(Icons.Filled.Edit, p.a1, "Изменить название и описание") { edit = true }
+                    SettingsRow(Icons.Filled.Edit, p.a1, "Изменить ${if (c?.isChannel == true) "канал" else "группу"}") { AppModel.push(Screen.EditChat(chatId)) }
                     Divider()
                     SettingsRow(Icons.Filled.CameraAlt, Color(0xFF22A6FF), "Сменить фото") { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                     if (c?.type == "group") { Divider(); SettingsRow(Icons.Filled.PersonAdd, Color(0xFF2BD67B), "Добавить участников") { adding = true } }
@@ -869,5 +869,144 @@ fun NewChatScreen() {
                 scope.launch { AppModel.createChat(type, t, "", picked.toList()) }
             }) { Text("Создать") } },
             dismissButton = { TextButton({ creating = null }) { Text("Отмена") } })
+    }
+}
+
+// ---------------- изменение канала / группы (как в Telegram) ----------------
+
+@Composable
+fun EditChatScreen(chatId: String) {
+    val p = P
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val c = AppModel.chat(chatId)
+    if (c == null) { AppModel.pop(); return }
+    val owner = c.role == "owner"
+    var title by remember { mutableStateOf(c.title ?: "") }
+    var about by remember { mutableStateOf(c.description ?: "") }
+    var isPublic by remember { mutableStateOf(!c.username.isNullOrEmpty()) }
+    var uname by remember { mutableStateOf(c.username ?: "") }
+    var page by remember { mutableStateOf("main") }   // main | type | admins | members
+    var members by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var memberMenu by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var err by remember { mutableStateOf<String?>(null) }
+    val kind = if (c.isChannel) "канала" else "группы"
+    suspend fun reload() { members = AppModel.members(chatId) }
+    LaunchedEffect(chatId) { reload() }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
+        if (u == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val d = withContext(Dispatchers.IO) { MediaUtil.read(ctx, u)?.let { MediaUtil.jpeg(it) } } ?: return@launch
+            AppModel.setChatAvatar(chatId, d.first)
+        }
+    }
+    fun save() {
+        val u = uname.trim().lowercase().removePrefix("@")
+        when {
+            title.isBlank() -> err = "Введите название"
+            isPublic && !Regex("^[a-z0-9_]{5,32}$").matches(u) -> { page = "type"; err = "Адрес: 5–32 символа, латиница, цифры и _" }
+            else -> {
+                busy = true; err = null
+                scope.launch {
+                    val ok = AppModel.saveChatFull(chatId, title.trim(), about.trim(), isPublic, if (isPublic) u else null)
+                    busy = false
+                    if (ok) AppModel.pop() else { page = "type"; err = "Этот адрес уже занят или недоступен" }
+                }
+            }
+        }
+    }
+    fun back() { if (page != "main") { page = "main"; err = null } else AppModel.pop() }
+    androidx.activity.compose.BackHandler(page != "main") { back() }
+    Column(Modifier.fillMaxSize().background(p.bg).imePadding()) {
+        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            RoundIcon(if (page == "main") Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack) { back() }
+            Spacer(Modifier.weight(1f))
+            if (page != "main") Text(when (page) { "type" -> "Тип $kind"; "admins" -> "Администраторы"; else -> if (c.isChannel) "Подписчики" else "Участники" }, color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            Spacer(Modifier.weight(1f))
+            Box(Modifier.size(44.dp).clip(CircleShape).background(p.accent).bouncy { if (!busy) save() }, contentAlignment = Alignment.Center) {
+                if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Icon(Icons.Filled.Check, null, tint = Color.White)
+            }
+        }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            when (page) {
+                "main" -> {
+                    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Avatar(c.displayName, c.displayAvatar, c.displayColor, 110.dp)
+                        Text("Изменить фотографию", color = p.a1, fontSize = 18.sp, fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(top = 10.dp).clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }.padding(8.dp))
+                    }
+                    GroupCard {
+                        PlainField(title, { title = it.take(64) }, "Название")
+                        CardDivider()
+                        PlainField(about, { about = it.take(300) }, "Описание", singleLine = false)
+                    }
+                    HintWithLink("Любые подробности о ${if (c.isChannel) "канале" else "группе"}: чем он занимается, ссылки, правила.")
+                    err?.let { Text(it, color = p.danger, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 30.dp, vertical = 4.dp)) }
+                    GroupCard {
+                        IconRow(if (c.isChannel) Icons.Filled.Campaign else Icons.Filled.Groups, Color(0xFF2B8CFF), "Тип $kind", if (isPublic) "Публичный" else "Частный") { page = "type" }
+                        if (isPublic && uname.isNotBlank()) { CardDivider(70); IconRow(Icons.Filled.Link, Color(0xFFFFA33A), "Ссылка", "@" + uname) { page = "type" } }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    GroupCard {
+                        IconRow(Icons.Filled.Shield, Color(0xFF2BD67B), "Администраторы", members.count { it.second == "admin" || it.second == "owner" }.toString()) { page = "admins" }
+                        CardDivider(70)
+                        IconRow(Icons.Filled.People, Color(0xFF2B8CFF), if (c.isChannel) "Подписчики" else "Участники", members.size.toString()) { page = "members" }
+                    }
+                    Spacer(Modifier.height(30.dp))
+                }
+                "type" -> {
+                    GroupCard {
+                        Row(Modifier.fillMaxWidth().clickable { isPublic = false }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) { Text("Частный", color = p.text, fontSize = 17.sp); Text("Попасть можно только по приглашению", color = p.muted, fontSize = 13.sp) }
+                            if (!isPublic) Icon(Icons.Filled.Check, null, tint = p.a1)
+                        }
+                        CardDivider()
+                        Row(Modifier.fillMaxWidth().clickable { isPublic = true }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) { Text("Публичный", color = p.text, fontSize = 17.sp); Text("Можно найти через поиск по адресу", color = p.muted, fontSize = 13.sp) }
+                            if (isPublic) Icon(Icons.Filled.Check, null, tint = p.a1)
+                        }
+                    }
+                    if (isPublic) {
+                        Text("АДРЕС", color = p.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 30.dp, top = 16.dp, bottom = 6.dp))
+                        GroupCard { PlainField(uname, { uname = it.lowercase().filter { ch -> ch.isLetterOrDigit() || ch == '_' }.take(32); err = null }, "username") }
+                        HintWithLink("Можно использовать a–z, 0–9 и _. Минимум 5 символов. Ссылка: " + ru.volshebnymir.lumo.core.Config.SITE + "#@" + uname.ifBlank { "..." })
+                        if (uname.length >= 5) Text("Скопировать ссылку", color = p.a1, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(start = 30.dp).clickable { copy(ctx, ru.volshebnymir.lumo.core.Config.SITE + "#@" + uname) })
+                    }
+                    err?.let { Text(it, color = p.danger, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 30.dp, vertical = 8.dp)) }
+                }
+                else -> {
+                    val list = if (page == "admins") members.filter { it.second == "admin" || it.second == "owner" } else members
+                    GroupCard {
+                        list.forEachIndexed { i, (uid, role) ->
+                            if (i > 0) CardDivider(70)
+                            Box {
+                                Row(Modifier.fillMaxWidth().clickable { if (uid != AppModel.myId) memberMenu = uid }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Avatar(AppModel.displayName(uid), AppModel.profiles[uid]?.avatarUrl, AppModel.profiles[uid]?.color ?: 0, 42.dp)
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(AppModel.displayName(uid), color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                        Text(AppModel.lastSeenText(uid), color = p.muted, fontSize = 13.sp)
+                                    }
+                                    if (role == "owner" || role == "admin") Text(if (role == "owner") "владелец" else "админ", color = p.a1, fontSize = 13.sp)
+                                }
+                                androidx.compose.material3.DropdownMenu(memberMenu == uid, { memberMenu = null }) {
+                                    androidx.compose.material3.DropdownMenuItem(text = { Text("Профиль") }, onClick = { memberMenu = null; AppModel.push(Screen.Person(uid)) })
+                                    if (owner && role != "owner") androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(if (role == "admin") "Снять админа" else "Сделать админом") },
+                                        onClick = { memberMenu = null; scope.launch { AppModel.setRole(chatId, uid, if (role == "admin") "member" else "admin"); reload() } })
+                                    if (role != "owner" && (owner || role != "admin")) androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Исключить", color = p.danger) },
+                                        onClick = { memberMenu = null; scope.launch { AppModel.removeMember(chatId, uid); reload() } })
+                                }
+                            }
+                        }
+                    }
+                    if (page == "admins") HintWithLink(if (owner) "Нажмите на участника на вкладке «${if (c.isChannel) "Подписчики" else "Участники"}», чтобы сделать его админом." else "Назначать администраторов может только владелец.")
+                    Spacer(Modifier.height(30.dp))
+                }
+            }
+        }
     }
 }

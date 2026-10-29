@@ -772,6 +772,15 @@ final class AppModel: ObservableObject {
         catch { say(error.localizedDescription) }
     }
 
+    func saveChatFull(_ chatId: String, title: String, description: String, isPublic: Bool, username: String?) async -> Bool {
+        do {
+            var vals: JSON = ["title": title, "description": description, "is_public": isPublic]
+            vals["username"] = username ?? NSNull()
+            try await API.shared.update("lm_chats", match: ["id": chatId], vals)
+            await loadChats(); return true
+        } catch { return false }
+    }
+
     func setChatAvatar(_ chatId: String, _ image: UIImage) async {
         guard let data = Media.squareJPEG(image, side: 640) else { return }
         do {

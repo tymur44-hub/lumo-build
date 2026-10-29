@@ -78,7 +78,7 @@ struct ChatInfoView: View {
             }
             .environmentObject(model)
         }
-        .sheet(isPresented: $editChat) { EditChatView(chatId: chatId).environmentObject(model) }
+        .fullScreenCover(isPresented: $editChat) { EditChatView(chatId: chatId).environmentObject(model) }
         .fullScreenCover(item: $avatarFull) { ImageScreen(url: $0.url) }
         .sheet(isPresented: $showQR) {
             if let c = chat {
@@ -356,32 +356,190 @@ struct EditChatView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let chatId: String
+
+    private enum Page { case main, type, admins, members }
+    @State private var page: Page = .main
     @State private var title = ""
     @State private var about = ""
+    @State private var isPublic = false
+    @State private var uname = ""
+    @State private var members: [Member] = []
+    @State private var avatarPick: PhotosPickerItem?
+    @State private var busy = false
+    @State private var error: String?
+
+    private var chat: ChatItem? { model.chat(chatId) }
+    private var isChannel: Bool { chat?.isChannel == true }
+    private var kind: String { isChannel ? "канала" : "группы" }
+    private var owner: Bool { chat?.role == "owner" }
+    private var link: String { "https://volshebny-mir.ru/page322172009.html#@" + uname }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 12) {
-                TextField("Название", text: $title).lumoField()
-                TextField("Описание", text: $about, axis: .vertical).lineLimit(2...6).padding(14)
-                    .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 16))
-                GradientButton(title: "Сохранить") {
-                    Task { await model.saveChat(chatId, title: title.trimmingCharacters(in: .whitespaces), description: about); dismiss() }
+        VStack(spacing: 0) {
+            HStack {
+                Button { back() } label: {
+                    Image(systemName: page == .main ? "xmark" : "chevron.left").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text)
+                        .frame(width: 44, height: 44).background(.ultraThinMaterial, in: Circle())
                 }
-                .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                 Spacer()
+                if page != .main {
+                    Text(pageTitle).font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text)
+                }
+                Spacer()
+                Button { save() } label: {
+                    Group {
+                        if busy { ProgressView().tint(.white) } else { Image(systemName: "checkmark").font(.system(size: 18, weight: .bold)).foregroundColor(.white) }
+                    }
+                    .frame(width: 44, height: 44).background(Circle().fill(Theme.accent))
+                }
             }
-            .padding(16)
-            .background(Theme.bg.ignoresSafeArea())
-            .navigationTitle("Изменить")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
-            .onAppear {
-                title = model.chat(chatId)?.title ?? ""
-                about = model.chat(chatId)?.description ?? ""
+            .padding(.horizontal, 14).padding(.top, 8)
+            ScrollView {
+                VStack(spacing: 0) {
+                    switch page {
+                    case .main: main
+                    case .type: typePage
+                    case .admins: list(admins: true)
+                    case .members: list(admins: false)
+                    }
+                }
+                .padding(.bottom, 30)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .background(Theme.bg.ignoresSafeArea())
+        .onAppear {
+            title = chat?.title ?? ""; about = chat?.description ?? ""
+            uname = chat?.username ?? ""; isPublic = !(chat?.username ?? "").isEmpty
+            Task { members = await model.members(chatId) }
+        }
+        .onChange(of: avatarPick) { item in
+            guard let item = item else { return }
+            avatarPick = nil
+            Task { if let d = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: d) { await model.setChatAvatar(chatId, img) } }
+        }
+    }
+
+    private var pageTitle: String {
+        switch page { case .type: return "Тип " + kind; case .admins: return "Администраторы"; default: return isChannel ? "Подписчики" : "Участники" }
+    }
+
+    private func back() { if page != .main { page = .main; error = nil } else { dismiss() } }
+
+    private func save() {
+        guard !busy else { return }
+        let u = uname.trimmingCharacters(in: .whitespaces).lowercased().replacingOccurrences(of: "@", with: "")
+        if title.trimmingCharacters(in: .whitespaces).isEmpty { error = "Введите название"; return }
+        if isPublic, u.range(of: "^[a-z0-9_]{5,32}$", options: .regularExpression) == nil { page = .type; error = "Адрес: 5–32 символа, латиница, цифры и _"; return }
+        busy = true; error = nil
+        Task {
+            let ok = await model.saveChatFull(chatId, title: title.trimmingCharacters(in: .whitespaces), description: about.trimmingCharacters(in: .whitespaces),
+                                              isPublic: isPublic, username: isPublic ? u : nil)
+            busy = false
+            if ok { dismiss() } else { page = .type; error = "Этот адрес уже занят или недоступен" }
+        }
+    }
+
+    @ViewBuilder private var main: some View {
+        VStack(spacing: 10) {
+            AvatarView(name: chat?.displayName ?? "", url: chat?.displayAvatar, color: chat?.displayColor ?? 0, size: 110)
+            PhotosPicker(selection: $avatarPick, matching: .images) {
+                Text("Изменить фотографию").font(.system(size: 18)).foregroundColor(Theme.a1)
             }
         }
-        .presentationDetents([.medium])
+        .padding(.vertical, 12)
+        TGCard {
+            TextField("Название", text: $title).font(.system(size: 17)).padding(.horizontal, 20).frame(height: 56)
+            Divider().overlay(Theme.line).padding(.leading, 20)
+            TextField("Описание", text: $about, axis: .vertical).lineLimit(2...8).font(.system(size: 17)).padding(.horizontal, 20).padding(.vertical, 16)
+        }
+        TGHint(text: "Любые подробности о \(isChannel ? "канале" : "группе"): чем он занимается, ссылки, правила.")
+        if let e = error { Text(e).font(.subheadline).foregroundColor(Theme.danger).padding(.horizontal, 30).padding(.bottom, 8) }
+        TGCard {
+            Button { page = .type } label: { TGIconRow(icon: isChannel ? "megaphone.fill" : "person.3.fill", color: Color(hex: 0x2b8cff), title: "Тип " + kind, value: isPublic ? "Публичный" : "Частный") }
+                .buttonStyle(RowButtonStyle())
+            if isPublic && !uname.isEmpty {
+                Divider().overlay(Theme.line).padding(.leading, 68)
+                Button { page = .type } label: { TGIconRow(icon: "link", color: Color(hex: 0xffa33a), title: "Ссылка", value: "@" + uname) }.buttonStyle(RowButtonStyle())
+            }
+        }
+        TGCard {
+            Button { page = .admins } label: { TGIconRow(icon: "checkmark.shield.fill", color: Color(hex: 0x2bd67b), title: "Администраторы", value: "\(members.filter { $0.role != "member" }.count)") }
+                .buttonStyle(RowButtonStyle())
+            Divider().overlay(Theme.line).padding(.leading, 68)
+            Button { page = .members } label: { TGIconRow(icon: "person.2.fill", color: Color(hex: 0x2b8cff), title: isChannel ? "Подписчики" : "Участники", value: "\(members.count)") }
+                .buttonStyle(RowButtonStyle())
+        }
+        .padding(.top, 14)
+    }
+
+    @ViewBuilder private var typePage: some View {
+        TGCard {
+            Button { isPublic = false } label: { typeRow("Частный", "Попасть можно только по приглашению", !isPublic) }.buttonStyle(RowButtonStyle())
+            Divider().overlay(Theme.line).padding(.leading, 20)
+            Button { isPublic = true } label: { typeRow("Публичный", "Можно найти через поиск по адресу", isPublic) }.buttonStyle(RowButtonStyle())
+        }
+        .padding(.top, 8)
+        if isPublic {
+            Text("АДРЕС").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.muted).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 32).padding(.top, 16).padding(.bottom, 6)
+            TGCard {
+                TextField("username", text: Binding(get: { uname }, set: { v in
+                    uname = String(v.lowercased().filter { $0.isLetter || $0.isNumber || $0 == "_" }.prefix(32)); error = nil
+                })).textInputAutocapitalization(.never).autocorrectionDisabled().font(.system(size: 17)).padding(.horizontal, 20).frame(height: 56)
+            }
+            TGHint(text: "Можно использовать a–z, 0–9 и _. Минимум 5 символов. Ссылка: " + (uname.isEmpty ? "..." : link))
+            if uname.count >= 5 {
+                Button("Скопировать ссылку") { UIPasteboard.general.string = link; model.say("Ссылка скопирована") }
+                    .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 32)
+            }
+        }
+        if let e = error { Text(e).font(.subheadline).foregroundColor(Theme.danger).padding(.horizontal, 30).padding(.top, 10) }
+    }
+
+    private func typeRow(_ t: String, _ s: String, _ on: Bool) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(t).font(.system(size: 17)).foregroundColor(Theme.text)
+                Text(s).font(.system(size: 13)).foregroundColor(Theme.muted)
+            }
+            Spacer()
+            if on { Image(systemName: "checkmark").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.a1) }
+        }
+        .padding(.horizontal, 20).frame(minHeight: 60).contentShape(Rectangle())
+    }
+
+    @ViewBuilder private func list(admins: Bool) -> some View {
+        let rows = admins ? members.filter { $0.role != "member" } : members
+        TGCard {
+            ForEach(Array(rows.enumerated()), id: \.element.userId) { i, m in
+                if i > 0 { Divider().overlay(Theme.line).padding(.leading, 70) }
+                Menu {
+                    if m.userId != model.myId {
+                        if owner && m.role != "owner" {
+                            Button(m.role == "admin" ? "Снять админа" : "Сделать админом") {
+                                Task { await model.setRole(chatId, m.userId, m.role == "admin" ? "member" : "admin"); members = await model.members(chatId) }
+                            }
+                        }
+                        if m.role != "owner" && (owner || m.role != "admin") {
+                            Button("Исключить", role: .destructive) { Task { await model.removeMember(chatId, m.userId); members = await model.members(chatId) } }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        AvatarView(name: model.displayName(m.userId), url: model.profiles[m.userId]?.avatarURL, color: model.profiles[m.userId]?.color ?? 0, size: 42)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(model.displayName(m.userId)).font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                            Text(model.lastSeenText(m.userId)).font(.system(size: 13)).foregroundColor(Theme.muted)
+                        }
+                        Spacer()
+                        if m.role != "member" { Text(m.role == "owner" ? "владелец" : "админ").font(.system(size: 13)).foregroundColor(Theme.a1) }
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 10).contentShape(Rectangle())
+                }
+            }
+        }
+        .padding(.top, 8)
+        if admins { TGHint(text: owner ? "Нажмите на участника на вкладке «\(isChannel ? "Подписчики" : "Участники")», чтобы сделать его админом." : "Назначать администраторов может только владелец.") }
     }
 }
 
