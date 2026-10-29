@@ -12,6 +12,7 @@ struct LoginView: View {
     @State private var tgWaiting = false
     @State private var tgBusy = false
     @State private var tgTask: Task<Void, Never>?
+    @State private var phoneAuth = false
     @Environment(\.scenePhase) private var phase
 
     var body: some View {
@@ -55,6 +56,15 @@ struct LoginView: View {
                 }
                 .padding(.vertical, 2)
 
+                Button { phoneAuth = true } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "phone.fill").font(.system(size: 17, weight: .semibold))
+                        Text(register ? "Зарегистрироваться по номеру" : "Войти по номеру телефона").font(.system(size: 16, weight: .bold))
+                    }
+                    .foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 50)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(Color(hex: 0x2bd67b)))
+                }
+
                 Button { telegram() } label: {
                     HStack(spacing: 10) {
                         if tgWaiting { ProgressView().tint(.white) }
@@ -84,6 +94,7 @@ struct LoginView: View {
         .background(AuroraBackground(intensity: 0.4, speed: 0.6, base: Theme.bg, dim: 0))
         .onChange(of: phase) { p in if p == .active && tgWaiting { Task { await tgCheck() } } }
         .onDisappear { tgTask?.cancel() }
+        .fullScreenCover(isPresented: $phoneAuth) { PhoneAuthView(mode: .login) { phoneAuth = false } }
     }
 
     private func telegram() {

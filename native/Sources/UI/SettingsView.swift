@@ -5,7 +5,7 @@ import UIKit
 enum SettingsPage: Hashable {
     case premium, profile, profileEdit, calls, notifications, privacy, about, blocked, look, username, colors, devices, language
     case privacyKey(String)
-    case msgPrivacy
+    case msgPrivacy, phone, twofa
 }
 
 struct SettingsView: View {
@@ -123,6 +123,8 @@ struct SettingsView: View {
                 case .colors: ColorsEditView()
                 case .privacyKey(let k): PrivacyKeyView(key: k)
                 case .msgPrivacy: MsgPrivacyView()
+                case .phone: PhoneSettingsView()
+                case .twofa: TwoFAView()
                 }
             }
             .onChange(of: avatarPick) { item in
@@ -851,6 +853,7 @@ let privacyItems: [PrivItem] = [
     PrivItem(key: "seen", title: "Время захода", question: "Кто видит время моего последнего входа?", hint: "Если вы скрываете время захода, вы тоже не увидите его у других. Вместо времени будет «был(а) недавно»."),
     PrivItem(key: "photo", title: "Фотографии профиля", question: "Кто видит фотографию моего профиля?", hint: "Те, кому фото недоступно, увидят цветной кружок с инициалами."),
     PrivItem(key: "bio", title: "Раздел «О себе»", question: "Кто видит раздел «О себе»?", hint: "Текст из раздела «О себе» в вашем профиле."),
+    PrivItem(key: "phone", title: "Номер телефона", question: "Кто видит мой номер телефона?", hint: "Если выбрать «Никто», друзья не найдут вас по номеру в записной книжке."),
     PrivItem(key: "birthday", title: "День рождения", question: "Кто видит мой день рождения?", hint: "Дата рождения в вашем профиле."),
     PrivItem(key: "calls", title: "Звонки", question: "Кто может мне звонить?", hint: "Остальные не смогут вам позвонить."),
     PrivItem(key: "voice", title: "Голосовые сообщения", question: "Кто может присылать мне голосовые и видеосообщения?", hint: "Остальные смогут писать только текстом."),
@@ -862,6 +865,7 @@ struct PrivacyView: View {
     @EnvironmentObject var model: AppModel
     @ObservedObject private var e2e = E2E.shared
     @ObservedObject private var ex = ExtraStore.shared
+    @ObservedObject private var store = PhoneStore.shared
     @State private var showLock = false
 
     var body: some View {
@@ -879,6 +883,18 @@ struct PrivacyView: View {
                     Button { if e2e.status == .ready { e2e.promptBackup = true } } label: {
                         TGIconRow(icon: "lock.shield.fill", color: Theme.a1, title: "Сквозное шифрование",
                                   value: e2e.status == .ready ? (e2e.backedUp ? "Копия ключей сохранена" : "Задайте пароль копии") : "Личные чаты")
+                    }
+                    .buttonStyle(RowButtonStyle())
+                }
+                .padding(.top, 12)
+                TGCard {
+                    NavigationLink(value: SettingsPage.phone) {
+                        TGIconRow(icon: "phone.fill", color: Color(hex: 0x2bd67b), title: "Номер телефона", value: store.phone.map { PhoneStore.pretty($0) } ?? "Не привязан")
+                    }
+                    .buttonStyle(RowButtonStyle())
+                    Divider().overlay(Theme.line).padding(.leading, 66)
+                    NavigationLink(value: SettingsPage.twofa) {
+                        TGIconRow(icon: "lock.shield.fill", color: Color(hex: 0xff8a3d), title: "Двухэтапная защита", value: store.tfa ? "Включена" : "Выключена")
                     }
                     .buttonStyle(RowButtonStyle())
                 }
@@ -909,7 +925,7 @@ struct PrivacyView: View {
                             HStack {
                                 Text(it.title).font(.system(size: 17)).foregroundColor(Theme.text)
                                 Spacer()
-                                Text(privLabel(model.me?.priv(it.key) ?? "all")).font(.system(size: 17)).foregroundColor(Theme.muted)
+                                Text(privLabel(it.key == "phone" ? (model.me?.privacy["phone"] ?? "contacts") : (model.me?.priv(it.key) ?? "all"))).font(.system(size: 17)).foregroundColor(Theme.muted)
                                 Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.muted.opacity(0.6))
                             }
                             .padding(.horizontal, 20).frame(height: 58).contentShape(Rectangle())
@@ -925,7 +941,7 @@ struct PrivacyView: View {
         .sheet(isPresented: $showLock) { LockSettingsSheet().environmentObject(model) }
         .navigationTitle("Конфиденциальность")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await model.loadBlocks(); await model.loadMe() }
+        .task { await model.loadBlocks(); await model.loadMe(); await store.load() }
     }
 }
 
@@ -935,7 +951,7 @@ struct PrivacyKeyView: View {
 
     var body: some View {
         let item = privacyItems.first { $0.key == key }
-        let cur = model.me?.priv(key) ?? "all"
+        let cur = key == "phone" ? (model.me?.privacy["phone"] ?? "contacts") : (model.me?.priv(key) ?? "all")
         let opts = ["all", "contacts"] + ((item?.noneAllowed ?? true) ? ["none"] : [])
         ScrollView {
             VStack(spacing: 0) {

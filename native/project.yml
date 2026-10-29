@@ -50,6 +50,7 @@ targets:
         NSSpeechRecognitionUsageDescription: "Распознавание речи нужно для расшифровки голосовых сообщений и кружков"
         NSMicrophoneUsageDescription: "Микрофон нужен для звонков и голосовых сообщений"
         NSPhotoLibraryUsageDescription: "Доступ к фото нужен, чтобы отправлять фото и видео и ставить аватарку"
+        NSContactsUsageDescription: "Контакты нужны, чтобы найти друзей, которые уже в Lumo, и пригласить остальных"
         NSPhotoLibraryAddUsageDescription: "Чтобы сохранять фото и видео из чатов"
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false

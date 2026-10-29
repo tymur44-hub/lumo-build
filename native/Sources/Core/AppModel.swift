@@ -192,6 +192,7 @@ final class AppModel: ObservableObject {
         Notifier.askPermission()
         presence(true)
         Task { await touchSession() }
+        Task { await PhoneStore.shared.load(); await PhoneStore.shared.syncIfAllowed() }
         presenceTimer?.invalidate()
         presenceTimer = Timer.scheduledTimer(withTimeInterval: 45, repeats: true) { [weak self] _ in
             Task { @MainActor in if let self = self, self.isActive { self.presence(true); await self.touchSession() } }
@@ -311,6 +312,7 @@ final class AppModel: ObservableObject {
 
     func resetAfterLogout() {
         UserDefaults.standard.set(false, forKey: "lm_sess_active")
+        PhoneStore.shared.reset()
         if ProcessInfo.processInfo.environment["LUMO_SNAPSHOT"] != nil { NSLog("LUMODBG resetAfterLogout %@", Thread.callStackSymbols.prefix(14).joined(separator: " | ")) }
         netTask?.cancel()
         netStatus = nil

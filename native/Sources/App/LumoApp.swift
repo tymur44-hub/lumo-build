@@ -82,11 +82,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 struct RootView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var calls: CallManager
+    @ObservedObject private var phones = PhoneStore.shared
+    @AppStorage("lm_perms_done") private var permsDone = false
 
     var body: some View {
         ZStack {
             Theme.bg.ignoresSafeArea()
             if model.loggedIn { MainView() } else { LoginView() }
+            if model.loggedIn && phones.loaded && phones.status == "required" {
+                PhoneAuthView(mode: .bind, required: true).transition(.opacity)
+            }
+            if !permsDone { PermissionsView { withAnimation { permsDone = true } }.transition(.opacity) }
             MiniNoteOverlay()
             if let t = model.toast {
                 VStack {
@@ -106,6 +112,8 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.2), value: model.toast)
         .fullScreenCover(isPresented: $calls.showUI) { CallView().environmentObject(calls) }
         .modifier(E2ESheets())
+        .sheet(isPresented: Binding(get: { model.loggedIn && phones.loaded && permsDone && !phones.reminderShown && (phones.status == "remind" || phones.status == "skipped") },
+                                    set: { if !$0 { phones.reminderShown = true } })) { PhoneReminderSheet() }
         .task {
             if let d = ProcessInfo.processInfo.environment["LUMO_SNAPSHOT"] { model.loadDemo(d); return }
             await model.start()

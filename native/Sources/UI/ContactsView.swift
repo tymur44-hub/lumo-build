@@ -7,6 +7,21 @@ struct ContactsView: View {
     @State private var found: [SearchResult] = []
     @State private var person: IdentifiedString?
     @State private var share = false
+    @ObservedObject private var store = PhoneStore.shared
+
+    private var friends: [MatchedContact] {
+        let s = q.lowercased()
+        return store.matched.filter { !model.isContact($0.id) && (s.isEmpty || $0.bookName.lowercased().contains(s) || $0.name.lowercased().contains(s)) }
+    }
+    private var inviteList: [InviteContact] {
+        let s = q.lowercased()
+        return store.invites.filter { s.isEmpty || $0.name.lowercased().contains(s) || $0.phone.contains(s) }
+    }
+    private func invite(_ c: InviteContact) {
+        let body = "Я в Lumo — мессенджере. Присоединяйся: " + model.profileLink
+        let enc = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let u = URL(string: "sms:+\(c.phone)&body=\(enc)") { UIApplication.shared.open(u) }
+    }
 
     private var list: [String] {
         let s = q.lowercased().replacingOccurrences(of: "@", with: "")
@@ -47,6 +62,50 @@ struct ContactsView: View {
                             ForEach(list, id: \.self) { id in personRow(id: id, name: model.displayName(id), url: model.profiles[id]?.avatarURL,
                                                                         color: model.profiles[id]?.color ?? 0, sub: model.lastSeenText(id), contact: true) }
                         }
+                        if q.isEmpty && store.contactsState != "ok" {
+                            Button {
+                                if store.contactsState == "denied", let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
+                                else { Task { await store.syncContacts() } }
+                            } label: {
+                                HStack(spacing: 12) {
+                                    AvatarView(name: "", url: nil, color: 4, size: 50, icon: "person.crop.circle.badge.checkmark")
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Найти друзей в Lumo").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
+                                        Text(store.contactsState == "denied" ? "Разрешите доступ к контактам в настройках" : "Разрешите доступ к контактам")
+                                            .font(.subheadline).foregroundColor(Theme.muted)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 10).padding(.vertical, 8)
+                            }
+                            .buttonStyle(RowButtonStyle())
+                        }
+                        if !friends.isEmpty {
+                            SectionTitle(text: "Друзья в Lumo · \(friends.count)")
+                            ForEach(friends) { f in
+                                personRow(id: f.id, name: f.bookName.isEmpty ? f.name : f.bookName, url: f.avatarURL?.absoluteString, color: f.color,
+                                          sub: "@" + f.username + " · из контактов", contact: false)
+                            }
+                        }
+                        if !inviteList.isEmpty {
+                            SectionTitle(text: "Пригласить в Lumo · \(inviteList.count)")
+                            ForEach(inviteList.prefix(200)) { c in
+                                HStack(spacing: 12) {
+                                    AvatarView(name: c.name, url: nil, color: abs(c.name.hashValue) % 8, size: 50)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(c.name).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
+                                        Text(PhoneStore.pretty(c.phone)).font(.subheadline).foregroundColor(Theme.muted)
+                                    }
+                                    Spacer()
+                                    Button { invite(c) } label: {
+                                        Text("Пригласить").font(.system(size: 14, weight: .bold)).foregroundColor(Theme.a1)
+                                            .padding(.horizontal, 14).frame(height: 34).background(Capsule().fill(Theme.panel2))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                            }
+                        }
                         let global = found.filter { $0.kind == "user" && $0.id != model.myId && !model.isContact($0.id) }
                         if !q.isEmpty && !global.isEmpty {
                             SectionTitle(text: "Глобальный поиск")
@@ -62,14 +121,14 @@ struct ContactsView: View {
                     .padding(.horizontal, 8)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .refreshable { await model.loadContacts() }
+                .refreshable { await model.loadContacts(); await store.syncIfAllowed() }
             }
             .background(Theme.bg.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .onChange(of: q) { t in search(t) }
             .sheet(item: $person) { p in PersonSheet(userId: p.value).environmentObject(model) }
             .sheet(isPresented: $share) { ShareSheet(items: [model.profileLink]) }
-            .task { await model.loadContacts() }
+            .task { await model.loadContacts(); if store.matched.isEmpty && store.invites.isEmpty { await store.syncIfAllowed() } }
         }
     }
 
@@ -113,6 +172,7 @@ struct PersonSheet: View {
     let userId: String
     @State private var report: ReportTarget?
     @State private var showSafety = false
+    @State private var phone: String?
 
     var body: some View {
         let p = model.profiles[userId]
@@ -134,6 +194,16 @@ struct PersonSheet: View {
                     .background(RoundedRectangle(cornerRadius: 26).fill(LinearGradient(colors: [Theme.a1.opacity(0.16), Theme.a2.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)))
                     .padding(.horizontal, 14)
 
+                    if let ph = phone {
+                        SettingsGroup {
+                            HStack {
+                                Text("Телефон").foregroundColor(Theme.muted)
+                                Spacer()
+                                Text(PhoneStore.pretty(ph)).font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                            }
+                            .padding(12)
+                        }
+                    }
                     if let bio = p?.bio, !bio.isEmpty {
                         SettingsGroup {
                             Text(bio).frame(maxWidth: .infinity, alignment: .leading).padding(10)
@@ -176,7 +246,10 @@ struct PersonSheet: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
             .sheet(item: $report) { t in ReportView(target: t).environmentObject(model) }
             .sheet(isPresented: $showSafety) { SafetyView(peerId: userId) }
-            .task { await model.refreshProfile(userId) }
+            .task {
+                await model.refreshProfile(userId)
+                if userId != model.myId { phone = (try? await API.shared.rpc("lm_phone_of", ["p_user": userId])) as? String }
+            }
         }
     }
 }
