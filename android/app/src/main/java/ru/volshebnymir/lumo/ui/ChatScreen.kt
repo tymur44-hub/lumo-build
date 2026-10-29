@@ -887,6 +887,8 @@ private fun Composer(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     var attach by remember { mutableStateOf(false) }
+    var sendLumensTo by remember { mutableStateOf<String?>(null) }
+    val chat = AppModel.chat(chatId)
     var recording by remember { mutableStateOf(false) }
     var locked by remember { mutableStateOf(false) }
     var dragX by remember { mutableFloatStateOf(0f) }
@@ -1001,6 +1003,7 @@ private fun Composer(
             } else {
                 Box {
                     RoundIcon(Icons.Filled.AttachFile, 48.dp, tint = p.muted) { attach = true }
+                    sendLumensTo?.let { u -> LumenSendDialog(u) { sendLumensTo = null } }
                     androidx.compose.material3.DropdownMenu(attach, { attach = false }) {
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Фото или видео") }, leadingIcon = { Icon(Icons.Filled.Photo, null) }, onClick = {
                             attach = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
@@ -1012,6 +1015,9 @@ private fun Composer(
                         })
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Файл") }, leadingIcon = { Icon(Icons.Filled.Description, null) }, onClick = {
                             attach = false; pickFile.launch(arrayOf("*/*"))
+                        })
+                        if (chat?.isPrivate == true && chat.peerId != AppModel.myId && !peerBadges(chat).first) androidx.compose.material3.DropdownMenuItem(text = { Text("Отправить люмены") }, leadingIcon = { Icon(Icons.Filled.Diamond, null) }, onClick = {
+                            attach = false; sendLumensTo = chat.peerId
                         })
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Видеосообщение") }, leadingIcon = { Icon(Icons.Filled.SlowMotionVideo, null) }, onClick = {
                             attach = false; onVideoNote(true)

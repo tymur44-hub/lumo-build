@@ -153,7 +153,7 @@ struct PremiumPageView: View {
                         LinearGradient(colors: [Color(hex: 0x9b6bff).opacity(0.22), .clear], startPoint: .top, endPoint: .bottom).frame(height: 240)
                         SparkleFieldView().frame(height: 240)
                         VStack(spacing: 4) {
-                            PremiumStarView(size: 130)
+                            StarEmitterView(size: 110)
                             Text("Lumo Premium").font(.system(size: 26, weight: .heavy)).foregroundColor(Theme.text)
                             Text("Больше свободы и десятки эксклюзивных функций").font(.system(size: 14)).foregroundColor(Theme.muted)
                                 .multilineTextAlignment(.center).padding(.horizontal, 40)

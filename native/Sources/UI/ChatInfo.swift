@@ -18,6 +18,7 @@ struct ChatInfoView: View {
 
     @State private var members: [Member] = []
     @State private var aliasEdit = false
+    @State private var lumenTarget: LumenTarget?
     @State private var alias = ""
     @State private var report: ReportTarget?
     @State private var addMembers = false
@@ -72,6 +73,7 @@ struct ChatInfoView: View {
             if let pid = chat?.peerId { ContactEditView(peerId: pid).environmentObject(model) }
         }
         .sheet(item: $report) { t in ReportView(target: t).environmentObject(model) }
+        .sheet(item: $lumenTarget) { t in SendLumensSheet(userId: t.id).environmentObject(model) }
         .sheet(isPresented: $addMembers) {
             PeoplePicker(title: "Добавить участников", exclude: Set(members.map { $0.userId })) { ids in
                 Task { await model.addMembers(chatId, ids); members = await model.members(chatId) }
@@ -156,6 +158,9 @@ struct ChatInfoView: View {
                 if c.isPrivate, !saved, !(c.peerBot || (c.peerId.flatMap { model.profiles[$0]?.isBot } ?? false)), model.peerBlockText(c.peerId) == nil {
                     actionButton("phone.fill", "звонок") { calls.startCall(chat: c, video: false) }
                     actionButton("video.fill", "видео") { calls.startCall(chat: c, video: true) }
+                }
+                if c.isPrivate, !saved, let pid = c.peerId, pid != model.myId, !(c.peerBot || (model.profiles[pid]?.isBot ?? false)) {
+                    actionButton("sparkle", "люмены") { lumenTarget = LumenTarget(id: pid) }
                 }
                 if !saved {
                     actionButton(c.muted ? "bell.slash.fill" : "bell.fill", c.muted ? "без звука" : "звук") {

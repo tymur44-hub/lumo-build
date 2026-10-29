@@ -306,6 +306,43 @@ struct PremiumStarView: View {
     }
 }
 
+/// Звезда Premium, от которой разлетаются маленькие звёздочки
+struct StarEmitterView: View {
+    var size: CGFloat = 110
+    var body: some View {
+        ZStack {
+            TimelineView(.animation) { tl in
+                let t = (tl.date.timeIntervalSinceReferenceDate / 3.6).truncatingRemainder(dividingBy: 1)
+                Canvas { ctx, sz in
+                    let c = CGPoint(x: sz.width / 2, y: sz.height / 2)
+                    let n = 16
+                    for i in 0..<n {
+                        let ph = (t + Double(i) / Double(n)).truncatingRemainder(dividingBy: 1)
+                        let ang = Double(i) * 137.5 * .pi / 180
+                        let dist = size * CGFloat(0.38 + 0.9 * ph) + CGFloat(i % 3) * 6
+                        let x = c.x + CGFloat(cos(ang)) * dist
+                        let y = c.y + CGFloat(sin(ang)) * dist - CGFloat(ph) * size * 0.1
+                        let a = (1 - ph) * (ph < 0.08 ? ph / 0.08 : 1)
+                        let r = CGFloat(4 + Double(i % 4) * 2.2) * CGFloat(1 - 0.5 * ph)
+                        let col = i % 2 == 0 ? Color(hex: 0xffd36b) : Color(hex: 0xb69cff)
+                        var path = Path()
+                        for k in 0..<10 {
+                            let rr = k % 2 == 0 ? r : r * 0.45
+                            let aa = (Double(k) * 36 - 90) * .pi / 180 + ph * 3.8 + Double(i) * 0.35
+                            let p = CGPoint(x: x + CGFloat(cos(aa)) * rr, y: y + CGFloat(sin(aa)) * rr)
+                            if k == 0 { path.move(to: p) } else { path.addLine(to: p) }
+                        }
+                        path.closeSubpath()
+                        ctx.fill(path, with: .color(col.opacity(max(0, a))))
+                    }
+                }
+            }
+            PremiumStarView(size: size)
+        }
+        .frame(width: size * 2.4, height: size * 1.4)
+    }
+}
+
 /// Поле мерцающих искр в шапке Premium
 struct SparkleFieldView: View {
     private let pts: [(CGFloat, CGFloat, CGFloat, Double)] = {

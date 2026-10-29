@@ -235,7 +235,7 @@ fun PremiumScreen() {
             Box(Modifier.fillMaxWidth().height(230.dp).background(Brush.verticalGradient(listOf(Color(0xFF9B6BFF).copy(alpha = 0.22f), Color.Transparent))), contentAlignment = Alignment.TopCenter) {
                 SparkleField(Modifier.fillMaxSize())
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    PremiumStar(130.dp)
+                    StarEmitter(110.dp, Modifier.height(150.dp))
                     Text("Lumo Premium", color = p.text, fontWeight = FontWeight.Black, fontSize = 26.sp)
                     Text("Больше свободы и десятки эксклюзивных функций", color = p.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 40.dp, vertical = 4.dp))
                 }

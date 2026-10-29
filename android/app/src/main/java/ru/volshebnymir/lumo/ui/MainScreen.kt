@@ -176,6 +176,7 @@ fun MainScreen() {
             Screen.Language -> LanguageScreen()
             Screen.Phone -> PhoneSettingsScreen()
             Screen.Wallet -> WalletScreen()
+            Screen.Gifts -> GiftsScreen()
             is Screen.Comments -> CommentsScreen(s.chatId, s.postId)
             is Screen.EditChat -> EditChatScreen(s.chatId)
             Screen.TwoFa -> TwoFaScreen()

@@ -176,6 +176,10 @@ fun PersonScreen(userId: String) {
     val scope = rememberCoroutineScope()
     val pr = AppModel.profiles[userId]
     var viewer by remember { mutableStateOf<Message?>(null) }
+    var sendLumens by remember { mutableStateOf(false) }
+    val writePerm = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { _ ->
+        scope.launch { AppModel.addContact(userId) }
+    }
     var alias by remember { mutableStateOf<String?>(null) }
     var menu by remember { mutableStateOf(false) }
     var report by remember { mutableStateOf(false) }
@@ -204,11 +208,13 @@ fun PersonScreen(userId: String) {
                     }
                 }
             })
+            if (sendLumens) LumenSendDialog(userId) { sendLumens = false }
             ProfileHead(AppModel.displayName(userId), pr?.avatarUrl, pr?.color ?: 0, AppModel.lastSeenText(userId), AppModel.isOnline(userId)) {
                 pr?.avatarUrl?.let { viewer = avatarMsg(it) }
             }
             Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionTile(Icons.Filled.ChatBubble, "Чат", Modifier.weight(1f)) { scope.launch { AppModel.openDM(userId) } }
+                if (userId != AppModel.myId && pr?.isBot != true) ActionTile(Icons.Filled.Diamond, "Люмены", Modifier.weight(1f)) { sendLumens = true }
                 if (pr?.isBot != true && dm?.peerBot != true) {
                     ActionTile(Icons.Filled.Call, "Звонок", Modifier.weight(1f)) {
                         if (dm != null) call(dm, false) else scope.launch { AppModel.openDM(userId) }
@@ -234,7 +240,7 @@ fun PersonScreen(userId: String) {
                 SettingsRow(Icons.Filled.Lock, p.a1, "Код безопасности", "Проверить сквозное шифрование") { safety = true }
                 Divider()
                 if (AppModel.isContact(userId)) SettingsRow(Icons.Filled.PersonRemove, p.danger, "Удалить из контактов", titleColor = p.danger) { scope.launch { AppModel.removeContact(userId) } }
-                else SettingsRow(Icons.Filled.PersonAdd, p.a1, "Добавить в контакты") { scope.launch { AppModel.addContact(userId) } }
+                else SettingsRow(Icons.Filled.PersonAdd, p.a1, "Добавить в контакты") { if (Phone.canWriteContacts()) scope.launch { AppModel.addContact(userId) } else writePerm.launch(android.Manifest.permission.WRITE_CONTACTS) }
                 Divider()
                 SettingsRow(Icons.Filled.Block, p.danger, if (blocked) "Разблокировать" else "Заблокировать", titleColor = p.danger) {
                     if (blocked) scope.launch { AppModel.setBlocked(userId, false) } else confirmBlock = true

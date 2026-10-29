@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.graphicsLayer
@@ -322,6 +323,42 @@ fun SparkleField(modifier: Modifier = Modifier, count: Int = 46) {
             drawLine(col.copy(alpha = a * 0.8f), Offset(x - r, y), Offset(x + r, y), 2f, StrokeCap.Round)
             drawLine(col.copy(alpha = a * 0.8f), Offset(x, y - r), Offset(x, y + r), 2f, StrokeCap.Round)
         }
+    }
+}
+
+/** Звезда Premium с маленькими звёздочками, которые отлетают от неё во все стороны */
+@Composable
+fun StarEmitter(size: Dp = 130.dp, modifier: Modifier = Modifier) {
+    val tr = rememberInfiniteTransition(label = "se")
+    val t by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(3600, easing = LinearEasing), RepeatMode.Restart), label = "t")
+    Box(modifier.size(size * 2.4f), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val c = center
+            val n = 16
+            for (i in 0 until n) {
+                val ph = (t + i.toFloat() / n) % 1f
+                val ang = (i * 137.5f) * (PI / 180f).toFloat()
+                val dist = size.toPx() * (0.38f + 0.9f * ph) + (i % 3) * 6f
+                val x = c.x + cos(ang) * dist
+                val y = c.y + sin(ang) * dist - ph * size.toPx() * 0.1f
+                val a = (1f - ph) * (if (ph < 0.08f) ph / 0.08f else 1f)
+                val r = (4f + (i % 4) * 2.2f) * (1f - 0.5f * ph) * density
+                val col = if (i % 2 == 0) Color(0xFFFFD36B) else Color(0xFFB69CFF)
+                val rot = ph * 220f + i * 20f
+                rotate(rot, Offset(x, y)) {
+                    val path = androidx.compose.ui.graphics.Path()
+                    for (k in 0 until 10) {
+                        val rr = if (k % 2 == 0) r else r * 0.45f
+                        val aa = (k * 36f - 90f) * (PI / 180f).toFloat()
+                        val px = x + cos(aa) * rr; val py = y + sin(aa) * rr
+                        if (k == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                    }
+                    path.close()
+                    drawPath(path, col.copy(alpha = a.coerceIn(0f, 1f)))
+                }
+            }
+        }
+        PremiumStar(size)
     }
 }
 

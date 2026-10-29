@@ -380,7 +380,7 @@ fun PermissionsScreen(onDone: () -> Unit) {
         buildList {
             if (Build.VERSION.SDK_INT >= 33) { add(Manifest.permission.POST_NOTIFICATIONS); add(Manifest.permission.READ_MEDIA_IMAGES); add(Manifest.permission.READ_MEDIA_VIDEO) }
             else add(Manifest.permission.READ_EXTERNAL_STORAGE)
-            add(Manifest.permission.CAMERA); add(Manifest.permission.RECORD_AUDIO); add(Manifest.permission.READ_CONTACTS)
+            add(Manifest.permission.CAMERA); add(Manifest.permission.RECORD_AUDIO); add(Manifest.permission.READ_CONTACTS); add(Manifest.permission.WRITE_CONTACTS)
         }.toTypedArray()
     }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { onDone() }

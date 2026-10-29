@@ -5,7 +5,7 @@ import UIKit
 enum SettingsPage: Hashable {
     case premium, profile, profileEdit, calls, notifications, privacy, about, blocked, look, username, colors, devices, language
     case privacyKey(String)
-    case msgPrivacy, phone, twofa, wallet
+    case msgPrivacy, phone, twofa, wallet, gifts
 }
 
 struct SettingsView: View {
@@ -68,6 +68,10 @@ struct SettingsView: View {
                                 Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundColor(Theme.muted.opacity(0.6))
                             }
                             .padding(.vertical, 9).padding(.horizontal, 4).contentShape(Rectangle())
+                        }
+                        divider
+                        NavigationLink(value: SettingsPage.gifts) {
+                            SettingsRow(icon: "gift.fill", color: Color(hex: 0xff5e8a), title: "Подарки", subtitle: "NFT-подарки за люмены · в разработке")
                         }
                         divider
                         NavigationLink(value: SettingsPage.calls) {
@@ -139,6 +143,7 @@ struct SettingsView: View {
                 case .phone: PhoneSettingsView()
                 case .twofa: TwoFAView()
                 case .wallet: WalletView()
+                case .gifts: GiftsView()
                 }
             }
             .onChange(of: avatarPick) { item in

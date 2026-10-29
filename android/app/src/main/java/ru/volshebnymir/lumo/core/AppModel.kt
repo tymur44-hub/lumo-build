@@ -42,6 +42,7 @@ sealed class Screen {
     data object Language : Screen()
     data object Phone : Screen()
     data object Wallet : Screen()
+    data object Gifts : Screen()
     data class Comments(val chatId: String, val postId: Int) : Screen()
     data class EditChat(val chatId: String) : Screen()
     data object TwoFa : Screen()
@@ -433,7 +434,9 @@ object AppModel {
 
     suspend fun addContact(id: String) {
         runCatching { Api.insertQuiet("lm_contacts", jsonOf("contact_id" to id)) }.onFailure { say(it.message ?: "Ошибка") }
-        loadContacts(); say("Добавлено в контакты")
+        loadContacts()
+        val saved = Phone.saveToPhonebook(id, displayName(id))
+        say(if (saved) "Добавлено в контакты и в телефон" else "Добавлено в контакты")
     }
 
     suspend fun removeContact(id: String) {

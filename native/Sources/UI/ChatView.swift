@@ -32,6 +32,7 @@ struct ChatView: View {
     @State private var selected: Set<Int> = []
     @State private var reporting: ReportTarget?
     @State private var tipping: Message?
+    @State private var sendLumensTo: LumenTarget?
     @State private var commentsFor: Message?
     @ObservedObject private var lumens = Lumens.shared
     @State private var transcript: String?
@@ -224,6 +225,7 @@ struct ChatView: View {
         .sheet(item: $forwarding) { b in ForwardView(messages: b.messages).environmentObject(model) }
         .sheet(item: $reporting) { t in ReportView(target: t).environmentObject(model) }
         .sheet(item: $tipping) { m in TipSheet(message: m).environmentObject(model) }
+        .sheet(item: $sendLumensTo) { t in SendLumensSheet(userId: t.id).environmentObject(model) }
         .sheet(item: $commentsFor) { m in CommentsView(chatId: chatId, postId: m.id).environmentObject(model) }
         .task(id: chatId) { await prot.load(chatId) }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
@@ -847,6 +849,9 @@ struct ComposerView: View {
                             Button { showPhotos = true } label: { Label("Фото или видео", systemImage: "photo.on.rectangle") }
                             Button { showCamera = true } label: { Label("Камера", systemImage: "camera") }
                             Button { showFiles = true } label: { Label("Файл", systemImage: "doc") }
+                            if let c = model.chat(chatId), c.isPrivate, let pid = c.peerId, pid != model.myId, !(c.peerBot || (model.profiles[pid]?.isBot ?? false)) {
+                                Button { sendLumensTo = LumenTarget(id: pid) } label: { Label("Отправить люмены", systemImage: "sparkle") }
+                            }
                             Button { startNote(locked: true) } label: { Label("Видеосообщение", systemImage: "video.circle") }
                         } label: {
                             Image(systemName: "paperclip").font(.system(size: 21, weight: .semibold))

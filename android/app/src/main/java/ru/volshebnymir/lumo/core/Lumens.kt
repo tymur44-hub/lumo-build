@@ -52,6 +52,11 @@ object Lumens {
         tips[msgId] = (tips[msgId] ?: 0L) + amount
     }
 
+    suspend fun send(userId: String, amount: Int) {
+        Api.rpc("lm_wallet_send", jsonOf("p_user" to userId, "p_amount" to amount))
+        load()
+    }
+
     suspend fun history(): List<LedgerRow> {
         val a = runCatching { Api.rpc("lm_wallet_history", jsonOf("p_limit" to 80)) as? JSONArray }.getOrNull().objects()
         return a.map { LedgerRow(it.optLong("id"), it.optLong("delta"), it.optString("kind"), it.str("ref_user"), if (it.isNull("ref_message")) null else it.optLong("ref_message"),

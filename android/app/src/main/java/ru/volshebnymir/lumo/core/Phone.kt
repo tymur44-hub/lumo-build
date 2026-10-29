@@ -93,6 +93,39 @@ object PhoneStore {
         return if (d.length == 11 && d.startsWith("79")) d else null
     }
 
+    fun canWriteContacts(): Boolean =
+        ContextCompat.checkSelfPermission(AppModel.ctx, Manifest.permission.WRITE_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
+    /** Сохранить человека в записную книжку телефона (если номер известен и его там ещё нет) */
+    suspend fun saveToPhonebook(userId: String, name: String): Boolean {
+        if (!canWriteContacts()) return false
+        val raw = runCatching { Api.rpc("lm_phone_of", jsonOf("p_user" to userId))?.toString() }.getOrNull()
+        val num = raw?.filter { it.isDigit() }.orEmpty()
+        if (num.length < 10) return false
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val cr = AppModel.ctx.contentResolver
+                val lookup = android.net.Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, android.net.Uri.encode("+$num"))
+                val exists = cr.query(lookup, arrayOf(ContactsContract.PhoneLookup._ID), null, null, null)?.use { it.moveToFirst() } ?: false
+                if (exists) return@runCatching true
+                val ops = ArrayList<android.content.ContentProviderOperation>()
+                ops.add(android.content.ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
+                    .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, null).withValue(ContactsContract.RawContacts.ACCOUNT_NAME, null).build())
+                ops.add(android.content.ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                    .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
+                    .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name).build())
+                ops.add(android.content.ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                    .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+                    .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, "+$num")
+                    .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE).build())
+                cr.applyBatch(ContactsContract.AUTHORITY, ops)
+                true
+            }.getOrDefault(false)
+        }
+    }
+
     fun hasContactsAccess(): Boolean =
         ContextCompat.checkSelfPermission(AppModel.ctx, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
 

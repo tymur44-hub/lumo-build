@@ -54,6 +54,11 @@ final class Lumens: ObservableObject {
         tips[msgId, default: 0] += amount
     }
 
+    func send(_ user: String, _ amount: Int) async throws {
+        _ = try await API.shared.rpc("lm_wallet_send", ["p_user": user, "p_amount": amount])
+        await load()
+    }
+
     func history() async -> [LedgerRow] {
         let a = ((try? await API.shared.rpc("lm_wallet_history", ["p_limit": 80])) as? [JSON]) ?? []
         return a.map { LedgerRow(id: $0.int("id") ?? 0, delta: $0.int("delta") ?? 0, kind: $0.str("kind") ?? "", refUser: $0.str("ref_user"), at: $0.date("created_at") ?? Date()) }
@@ -189,7 +194,7 @@ struct WalletView: View {
                     HStack(alignment: .top, spacing: 16) {
                         Image(systemName: "info.circle.fill").font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
                             .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 9).fill(Theme.a1))
-                        Text("Нажмите и удерживайте чужое сообщение и выберите «Отправить люмены». Автор получит их на свой счёт.")
+                        Text("Откройте профиль человека и нажмите «Отправить люмены», либо удерживайте его сообщение, либо выберите это в меню скрепки в личном чате.")
                             .font(.system(size: 14)).foregroundColor(Theme.muted)
                     }
                     .padding(.horizontal, 18).padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading)
@@ -247,44 +252,191 @@ struct WalletView: View {
     }
 }
 
-/// Отправить люмены за сообщение
-struct TipSheet: View {
+struct LumenTarget: Identifiable { let id: String; var msg: Int? = nil }
+
+/// Живая иконка люмена: свечение, покачивание и разлетающиеся искры
+struct LumenLive: View {
+    var size: CGFloat = 90
+    var body: some View {
+        TimelineView(.animation) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            let pulse = 1 + 0.07 * sin(t * 3.4)
+            let sway = 9 * sin(t * 2.6)
+            ZStack {
+                Canvas { ctx, sz in
+                    let c = CGPoint(x: sz.width / 2, y: sz.height / 2)
+                    let R = min(sz.width, sz.height) / 2
+                    ctx.fill(Path(ellipseIn: CGRect(x: c.x - R * 0.9, y: c.y - R * 0.9, width: R * 1.8, height: R * 1.8)),
+                             with: .radialGradient(Gradient(colors: [Color(hex: 0xffb347).opacity(0.5 * pulse), .clear]), center: c, startRadius: 0, endRadius: R * 0.9))
+                    let cycle = (t / 3).truncatingRemainder(dividingBy: 1)
+                    for i in 0..<12 {
+                        let ph = (cycle + Double(i) / 12).truncatingRemainder(dividingBy: 1)
+                        let ang = Double(i) * .pi / 6 + t * 0.4
+                        let d = size * (0.5 + 0.62 * ph)
+                        let a = 1 - ph
+                        let x = c.x + CGFloat(cos(ang)) * d, y = c.y + CGFloat(sin(ang)) * d
+                        let r = CGFloat(3.5 + 4 * (1 - ph))
+                        let col = i % 2 == 0 ? Color(hex: 0xffe08a) : Color(hex: 0xff8fb5)
+                        var p = Path()
+                        p.move(to: CGPoint(x: x - r, y: y)); p.addLine(to: CGPoint(x: x + r, y: y))
+                        p.move(to: CGPoint(x: x, y: y - r)); p.addLine(to: CGPoint(x: x, y: y + r))
+                        ctx.stroke(p, with: .color(col.opacity(a)), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                    }
+                }
+                LumenGem(size: size).scaleEffect(pulse).rotationEffect(.degrees(sway))
+            }
+        }
+        .frame(width: size * 2.2, height: size * 2.2)
+    }
+}
+
+/// Отправка люменов в стиле «жидкого стекла»
+struct SendLumensSheet: View {
     @EnvironmentObject var model: AppModel
     @ObservedObject private var lumens = Lumens.shared
     @Environment(\.dismiss) private var dismiss
-    let message: Message
-    @State private var amount = 5
+    let userId: String
+    var msgId: Int? = nil
+    @State private var text = "5"
     @State private var busy = false
+    @State private var done = false
+    @FocusState private var focused: Bool
+
+    private var amount: Int { Int(text) ?? 0 }
+    private var owner: Bool { model.staffRole == "owner" }
 
     var body: some View {
-        VStack(spacing: 16) {
-            LumenGem(size: 64).padding(.top, 26)
-            Text("Отправить люмены").font(.system(size: 22, weight: .heavy)).foregroundColor(Theme.text)
-            Text("Автору: " + model.displayName(message.senderId)).foregroundColor(Theme.muted)
-            HStack(spacing: 8) {
-                ForEach([1, 5, 10, 50, 100], id: \.self) { n in
-                    Button { amount = n } label: {
-                        Text("\(n)").font(.system(size: 17, weight: .bold)).foregroundColor(amount == n ? .white : Theme.text)
-                            .padding(.horizontal, 16).padding(.vertical, 10)
-                            .background(amount == n ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.panel2), in: Capsule())
+        ZStack {
+            LinearGradient(colors: [Color(hex: 0x1a1030), Color(hex: 0x0b0a18)], startPoint: .top, endPoint: .bottom).ignoresSafeArea()
+            Circle().fill(Color(hex: 0xff9a3d).opacity(0.5)).frame(width: 300).blur(radius: 70).offset(x: -110, y: -200)
+            Circle().fill(Color(hex: 0x7c5cff).opacity(0.55)).frame(width: 340).blur(radius: 80).offset(x: 120, y: 240)
+            VStack(spacing: 0) {
+                Spacer()
+                glass.padding(.horizontal, 20)
+                Spacer()
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDetents([.large])
+        .task { await lumens.load() }
+    }
+
+    private var glass: some View {
+        VStack(spacing: 14) {
+            if done {
+                LumenLive(size: 100)
+                Text("Отправлено").font(.system(size: 26, weight: .black)).foregroundColor(.white)
+                Text("\(amount) \(lumenWord(amount)) для \(model.displayName(userId))").foregroundColor(.white.opacity(0.8))
+                Spacer().frame(height: 12)
+            } else {
+                LumenLive(size: 78).padding(.top, -10).padding(.bottom, -30)
+                HStack(spacing: 10) {
+                    AvatarView(name: model.displayName(userId), url: model.profiles[userId]?.avatarURL, color: model.profiles[userId]?.color ?? 0, size: 34)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Получатель").font(.system(size: 12)).foregroundColor(.white.opacity(0.7))
+                        Text(model.displayName(userId)).font(.system(size: 17, weight: .bold)).foregroundColor(.white)
                     }
                 }
-            }
-            Text("На вашем счёте: \(lumens.balance) \(lumenWord(lumens.balance))").font(.footnote).foregroundColor(Theme.muted)
-            Spacer()
-            GradientButton(title: "Отправить", loading: busy) {
-                busy = true
-                Task {
-                    defer { busy = false }
-                    do { try await lumens.tip(message.id, amount); model.say("Отправлено: \(amount) \(lumenWord(amount))"); dismiss() }
-                    catch { model.say(error.localizedDescription) }
+                HStack(spacing: 8) {
+                    TextField("0", text: $text).keyboardType(.numberPad).focused($focused)
+                        .multilineTextAlignment(.center).font(.system(size: 44, weight: .black)).foregroundColor(.white)
+                        .frame(maxWidth: 200)
+                        .onChange(of: text) { t in
+                            let f = String(t.filter { $0.isNumber }.prefix(owner ? 7 : 4))
+                            if f != t { text = f }
+                        }
+                    LumenGem(size: 30)
                 }
+                .padding(.vertical, 10).frame(maxWidth: .infinity)
+                .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(0.12)))
+                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(.white.opacity(0.3), lineWidth: 1))
+                HStack(spacing: 8) {
+                    ForEach([1, 5, 10, 50, 100, 500], id: \.self) { n in
+                        Button { text = "\(n)" } label: {
+                            Text("\(n)").font(.system(size: 14, weight: .bold)).foregroundColor(.white)
+                                .padding(.horizontal, 11).padding(.vertical, 8)
+                                .background(Capsule().fill(.white.opacity(amount == n ? 0.32 : 0.1)))
+                                .overlay(Capsule().stroke(.white.opacity(amount == n ? 0.7 : 0.25), lineWidth: 1))
+                        }
+                    }
+                }
+                Text(owner ? "Вы владелец: люмены начисляются без списания с вашего счёта" : "На вашем счёте: \(lumens.balance) \(lumenWord(lumens.balance))")
+                    .font(.system(size: 13)).foregroundColor(.white.opacity(0.75)).multilineTextAlignment(.center)
+                Button { send() } label: {
+                    ZStack {
+                        if busy { ProgressView().tint(.white) } else { Text("Отправить").font(.system(size: 17, weight: .bold)).foregroundColor(.white) }
+                    }
+                    .frame(maxWidth: .infinity).frame(height: 54)
+                    .background(amount > 0 ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.white.opacity(0.15)), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(.white.opacity(0.5), lineWidth: 1))
+                }
+                .disabled(amount <= 0 || busy)
+                Button("Закрыть") { dismiss() }.font(.system(size: 15)).foregroundColor(.white.opacity(0.7))
             }
-            .padding(.horizontal, 20).padding(.bottom, 10)
+        }
+        .padding(22)
+        .background(
+            RoundedRectangle(cornerRadius: 34, style: .continuous).fill(.ultraThinMaterial)
+                .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(LinearGradient(colors: [.white.opacity(0.2), .white.opacity(0.04)], startPoint: .topLeading, endPoint: .bottomTrailing)))
+        )
+        .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous)
+            .stroke(LinearGradient(colors: [.white.opacity(0.65), .white.opacity(0.08), .white.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2))
+    }
+
+    private func send() {
+        guard amount > 0, !busy else { return }
+        busy = true
+        Task {
+            defer { busy = false }
+            do {
+                if let m = msgId { try await lumens.tip(m, amount) } else { try await lumens.send(userId, amount) }
+                withAnimation(.spring()) { done = true }
+                try? await Task.sleep(nanoseconds: 1_700_000_000)
+                dismiss()
+            } catch { model.say(error.localizedDescription) }
+        }
+    }
+}
+
+/// Отправить люмены за сообщение
+struct TipSheet: View {
+    let message: Message
+    var body: some View { SendLumensSheet(userId: message.senderId ?? "", msgId: message.id) }
+}
+
+/// Подарки за люмены: NFT в разработке
+struct GiftsView: View {
+    @State private var glow = false
+    private let tones: [UInt32] = [0xff9a3d, 0x7c5cff, 0x2bd67b, 0xff5e8a, 0x22a6ff, 0xffd36b]
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                LumenLive(size: 70)
+                Text("NFT-подарки").font(.system(size: 26, weight: .black)).foregroundColor(Theme.text)
+                Text("Скоро за люмены можно будет покупать редкие подарки, дарить их друзьям и собирать коллекцию. Сейчас раздел в разработке: мы делаем каждый подарок отдельно и тщательно.")
+                    .font(.system(size: 15)).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(.horizontal, 28)
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    ForEach(0..<6, id: \.self) { i in
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 28, style: .continuous).fill(.ultraThinMaterial)
+                            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                .fill(RadialGradient(colors: [Color(hex: tones[i]).opacity(glow ? 0.5 : 0.2), .clear], center: .center, startRadius: 0, endRadius: 90))
+                            VStack(spacing: 8) {
+                                Image(systemName: "lock.fill").font(.system(size: 30)).foregroundColor(Theme.text.opacity(0.55))
+                                Text("Скоро").font(.system(size: 15, weight: .bold)).foregroundColor(Theme.text.opacity(0.7))
+                            }
+                        }
+                        .frame(height: 150)
+                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(Theme.line, lineWidth: 1))
+                    }
+                }
+                .padding(.horizontal, 14).padding(.top, 14)
+            }
+            .padding(.bottom, 30)
         }
         .background(Theme.bg.ignoresSafeArea())
-        .presentationDetents([.medium])
-        .task { await lumens.load() }
+        .navigationTitle("Подарки").navigationBarTitleDisplayMode(.inline)
+        .onAppear { withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { glow = true } }
     }
 }
 

@@ -2,6 +2,7 @@ package ru.volshebnymir.lumo.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeJoin
@@ -112,7 +114,9 @@ fun WalletScreen() {
         Card {
             SettingsRow(Icons.Filled.AddCard, Color(0xFF2BD67B), "Пополнить", "Покупка люменов — в разработке") { AppModel.say("Пополнение пока недоступно") }
             Divider()
-            SettingsRow(Icons.Filled.Info, p.a1, "Как это работает", "Нажмите и удерживайте чужое сообщение и выберите «Отправить люмены». Автор получит их на свой счёт.") {}
+            SettingsRow(Icons.Filled.CardGiftcard, Color(0xFFFF5E8A), "Подарки", "NFT-подарки за люмены — в разработке") { AppModel.push(Screen.Gifts) }
+            Divider()
+            SettingsRow(Icons.Filled.Info, p.a1, "Как это работает", "Откройте профиль человека и нажмите «Люмены», либо удерживайте его сообщение, либо нажмите на скрепку в личном чате.") {}
         }
         Text("ИСТОРИЯ", color = p.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 22.dp))
         if (rows.isEmpty()) Text("Пока пусто", color = p.muted, modifier = Modifier.padding(horizontal = 22.dp))
@@ -135,38 +139,169 @@ fun WalletScreen() {
     }
 }
 
-/** Отправить люмены за сообщение */
+/** Живая иконка люмена: мерцающее свечение, покачивание и искры, которые разлетаются вокруг */
 @Composable
-fun TipDialog(m: Message, onClose: () -> Unit) {
+fun LumenLive(size: Dp = 96.dp, modifier: Modifier = Modifier) {
+    val tr = androidx.compose.animation.core.rememberInfiniteTransition(label = "lumen")
+    val t by tr.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(3000, easing = androidx.compose.animation.core.LinearEasing)), label = "t")
+    val pulse by tr.animateFloat(0.9f, 1.08f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1600, easing = androidx.compose.animation.core.FastOutSlowInEasing), androidx.compose.animation.core.RepeatMode.Reverse), label = "p")
+    val sway by tr.animateFloat(-9f, 9f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(2400, easing = androidx.compose.animation.core.FastOutSlowInEasing), androidx.compose.animation.core.RepeatMode.Reverse), label = "s")
+    Box(modifier.size(size * 2.2f), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val c = center
+            val R = this.size.minDimension / 2
+            drawCircle(Brush.radialGradient(listOf(Color(0xFFFFB347).copy(alpha = 0.55f * pulse), Color.Transparent), center = c, radius = R * 0.9f * pulse), radius = R * 0.9f * pulse, center = c)
+            for (i in 0 until 12) {
+                val ph = (t + i / 12f) % 1f
+                val ang = Math.toRadians(i * 30.0 + 360.0 * t * 0.25)
+                val d = size.toPx() * (0.5f + 0.62f * ph)
+                val a = (1f - ph).coerceIn(0f, 1f)
+                val x = c.x + cos(ang).toFloat() * d; val y = c.y + sin(ang).toFloat() * d
+                val r = (3.5f + 4f * (1 - ph)) * density
+                val col = if (i % 2 == 0) Color(0xFFFFE08A) else Color(0xFFFF8FB5)
+                drawLine(col.copy(alpha = a), Offset(x - r, y), Offset(x + r, y), 2.2f * density, androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(col.copy(alpha = a), Offset(x, y - r), Offset(x, y + r), 2.2f * density, androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+        }
+        LumenIcon(size, Modifier.graphicsLayer { rotationZ = sway; scaleX = pulse; scaleY = pulse })
+    }
+}
+
+/** Стеклянная карточка в стиле «жидкого стекла» */
+@Composable
+fun GlassCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(34.dp)
+    Column(
+        modifier.clip(shape)
+            .background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.07f), Color(0xFFB69CFF).copy(alpha = 0.14f))))
+            .border(1.2.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.65f), Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.35f))), shape),
+        content = content,
+    )
+}
+
+/** Отправить люмены человеку (msgId — если это благодарность за конкретное сообщение) */
+@Composable
+fun LumenSendDialog(userId: String, msgId: Int? = null, onClose: () -> Unit) {
     val p = P
     val scope = rememberCoroutineScope()
-    var amount by remember { mutableStateOf(5) }
+    val owner = AppModel.staffRole == "owner"
+    var amount by remember { mutableStateOf("5") }
     var busy by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf(false) }
+    val pr = AppModel.profiles[userId]
     LaunchedEffect(Unit) { Lumens.load() }
-    AlertDialog(onDismissRequest = onClose,
-        title = { Row(verticalAlignment = Alignment.CenterVertically) { LumenIcon(26.dp); Spacer(Modifier.width(8.dp)); Text("Отправить люмены") } },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Автору: " + AppModel.displayName(m.senderId), color = p.muted)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(1, 5, 10, 50, 100).forEach { n ->
-                        Box(Modifier.clip(RoundedCornerShape(14.dp)).background(if (amount == n) p.accent else SolidColor(p.panel2)).clickable { amount = n }.padding(horizontal = 12.dp, vertical = 9.dp)) {
-                            Text("$n", color = if (amount == n) Color.White else p.text, fontWeight = FontWeight.Bold)
+    val n = amount.toIntOrNull() ?: 0
+    androidx.compose.ui.window.Dialog(onDismissRequest = { if (!busy) onClose() }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { if (!busy) onClose() }, contentAlignment = Alignment.Center) {
+            Box(Modifier.padding(18.dp).widthIn(max = 380.dp).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) {}) {
+                // цветные пятна позади стекла
+                Canvas(Modifier.matchParentSize().padding(0.dp)) {
+                    drawCircle(Brush.radialGradient(listOf(Color(0xFFFF9A3D).copy(alpha = 0.45f), Color.Transparent), center = Offset(size.width * 0.15f, size.height * 0.1f), radius = size.width * 0.7f), center = Offset(size.width * 0.15f, size.height * 0.1f), radius = size.width * 0.7f)
+                    drawCircle(Brush.radialGradient(listOf(Color(0xFF7C5CFF).copy(alpha = 0.5f), Color.Transparent), center = Offset(size.width * 0.9f, size.height * 0.85f), radius = size.width * 0.8f), center = Offset(size.width * 0.9f, size.height * 0.85f), radius = size.width * 0.8f)
+                }
+                GlassCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(horizontal = 22.dp, vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (done) {
+                            Spacer(Modifier.height(10.dp))
+                            LumenLive(110.dp)
+                            Text("Отправлено", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Black)
+                            Text("$n ${lumenWord(n.toLong())} для ${AppModel.displayName(userId)}", color = Color.White.copy(alpha = 0.8f), fontSize = 15.sp)
+                            Spacer(Modifier.height(24.dp))
+                            LaunchedEffect(Unit) { delay(1700); onClose() }
+                        } else {
+                            LumenLive(84.dp, Modifier.offset(y = (-6).dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.offset(y = (-14).dp)) {
+                                Avatar(AppModel.displayName(userId), pr?.avatarUrl, pr?.color ?: 0, 34.dp)
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text("Получатель", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                                    Text(AppModel.displayName(userId), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = 0.12f)).border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(22.dp)).padding(vertical = 10.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                                BasicTextField(amount, { amount = it.filter { c -> c.isDigit() }.take(if (owner) 7 else 4) },
+                                    textStyle = TextStyle(color = Color.White, fontSize = 44.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center), cursorBrush = SolidColor(Color.White),
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number), modifier = Modifier.widthIn(min = 60.dp, max = 200.dp))
+                                Spacer(Modifier.width(8.dp))
+                                LumenIcon(30.dp)
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf(1, 5, 10, 50, 100, 500).forEach { v ->
+                                    val on = n == v
+                                    Box(Modifier.clip(RoundedCornerShape(16.dp)).background(if (on) Color.White.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.1f))
+                                        .border(1.dp, Color.White.copy(alpha = if (on) 0.7f else 0.25f), RoundedCornerShape(16.dp)).bouncy { amount = v.toString() }.padding(horizontal = 11.dp, vertical = 8.dp)) {
+                                        Text("$v", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Text(if (owner) "Вы владелец: люмены начисляются без списания с вашего счёта" else "На вашем счёте: ${Lumens.balance} ${lumenWord(Lumens.balance)}",
+                                color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, textAlign = TextAlign.Center)
+                            Spacer(Modifier.height(14.dp))
+                            Box(Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(20.dp)).background(if (n > 0) p.accent else SolidColor(Color.White.copy(alpha = 0.15f)))
+                                .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(20.dp)).bouncy {
+                                    if (n <= 0 || busy) return@bouncy
+                                    busy = true
+                                    scope.launch {
+                                        try {
+                                            if (msgId != null) Lumens.tip(msgId, n) else Lumens.send(userId, n)
+                                            done = true
+                                        } catch (e: Exception) { AppModel.say(e.message ?: "Ошибка"); busy = false }
+                                    }
+                                }, contentAlignment = Alignment.Center) {
+                                if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.5.dp)
+                                else Text("Отправить", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                            }
+                            Spacer(Modifier.height(10.dp))
                         }
                     }
                 }
-                Text("На вашем счёте: ${Lumens.balance} ${lumenWord(Lumens.balance)}", color = p.muted, fontSize = 13.sp)
             }
-        },
-        confirmButton = { TextButton({
-            if (busy) return@TextButton
-            busy = true
-            scope.launch {
-                try { Lumens.tip(m.id, amount); AppModel.say("Отправлено: $amount ${lumenWord(amount.toLong())}"); onClose() }
-                catch (e: Exception) { AppModel.say(e.message ?: "Ошибка"); busy = false }
+        }
+    }
+}
+
+@Composable
+fun TipDialog(m: Message, onClose: () -> Unit) {
+    val id = m.senderId
+    if (id == null) { onClose(); return }
+    LumenSendDialog(id, m.id, onClose)
+}
+
+/** Подарки за люмены: NFT-подарки в разработке */
+@Composable
+fun GiftsScreen() {
+    val p = P
+    val tr = androidx.compose.animation.core.rememberInfiniteTransition(label = "gifts")
+    val glow by tr.animateFloat(0.35f, 0.9f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1800), androidx.compose.animation.core.RepeatMode.Reverse), label = "g")
+    Column(Modifier.fillMaxSize().background(p.bg).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+        TopBar("Подарки")
+        LumenLive(80.dp)
+        Text("NFT-подарки", color = p.text, fontSize = 26.sp, fontWeight = FontWeight.Black, modifier = Modifier.offset(y = (-10).dp))
+        Text("Скоро за люмены можно будет покупать редкие подарки, дарить их друзьям и собирать коллекцию. Сейчас раздел в разработке: мы делаем каждый подарок отдельно и тщательно.",
+            color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp).offset(y = (-4).dp))
+        Spacer(Modifier.height(18.dp))
+        val tones = listOf(Color(0xFFFF9A3D), Color(0xFF7C5CFF), Color(0xFF2BD67B), Color(0xFFFF5E8A), Color(0xFF22A6FF), Color(0xFFFFD36B))
+        for (row in 0 until 3) {
+            Row(Modifier.padding(horizontal = 14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                for (col in 0 until 2) {
+                    val c = tones[row * 2 + col]
+                    GlassCard(Modifier.weight(1f).height(150.dp).padding(0.dp)) {
+                        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(c.copy(alpha = 0.35f * glow), Color.Transparent))), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Filled.Lock, null, tint = p.text.copy(alpha = 0.55f), modifier = Modifier.size(34.dp))
+                                Spacer(Modifier.height(8.dp))
+                                Text("Скоро", color = p.text.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
             }
-        }) { Text("Отправить") } },
-        dismissButton = { TextButton(onClose) { Text("Отмена") } })
+            Spacer(Modifier.height(12.dp))
+        }
+        Spacer(Modifier.height(20.dp))
+    }
 }
 
 /** Сумма люменов под сообщением */

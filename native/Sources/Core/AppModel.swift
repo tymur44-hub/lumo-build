@@ -1,4 +1,5 @@
 import SwiftUI
+import Contacts
 import UIKit
 import AudioToolbox
 
@@ -549,13 +550,34 @@ final class AppModel: ObservableObject {
 
     func isContact(_ id: String) -> Bool { contacts.contains(id) }
 
+    /// Сохранить человека в записную книжку телефона (если номер известен и его там ещё нет)
+    func savePhonebook(_ id: String) async -> Bool {
+        guard let raw = (try? await API.shared.rpc("lm_phone_of", ["p_user": id])) as? String else { return false }
+        let digits = raw.filter { $0.isNumber }
+        guard digits.count >= 10 else { return false }
+        let store = CNContactStore()
+        var ok = CNContactStore.authorizationStatus(for: .contacts) == .authorized
+        if !ok { ok = (try? await store.requestAccess(for: .contacts)) ?? false }
+        guard ok else { return false }
+        let number = CNPhoneNumber(stringValue: "+" + digits)
+        let pred = CNContact.predicateForContacts(matching: number)
+        if let ex = try? store.unifiedContacts(matching: pred, keysToFetch: [CNContactGivenNameKey as CNKeyDescriptor]), !ex.isEmpty { return true }
+        let c = CNMutableContact()
+        c.givenName = displayName(id)
+        c.phoneNumbers = [CNLabeledValue(label: CNLabelPhoneNumberMobile, value: number)]
+        let req = CNSaveRequest()
+        req.add(c, toContainerWithIdentifier: nil)
+        return (try? store.execute(req)) != nil
+    }
+
     func addContact(_ id: String) async {
         guard id != myId, !isContact(id) else { return }
         do {
             _ = try await API.shared.insert("lm_contacts", ["contact_id": id])
             contacts.insert(id, at: 0)
             _ = await profile(id)
-            say("Добавлено в контакты")
+            let saved = await savePhonebook(id)
+            say(saved ? "Добавлено в контакты и в телефон" : "Добавлено в контакты")
         } catch { say(error.localizedDescription) }
     }
 
