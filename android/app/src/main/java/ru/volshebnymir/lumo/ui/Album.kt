@@ -126,7 +126,8 @@ suspend fun buildAlbumParts(ctx: Context, uris: List<Uri>): List<AppModel.AlbumP
     val out = mutableListOf<AppModel.AlbumPart>()
     for (u in uris) {
         val type = ctx.contentResolver.getType(u) ?: ""
-        val data = withContext(Dispatchers.IO) { MediaUtil.read(ctx, u) } ?: run { AppModel.say("Не удалось открыть файл"); continue }
+        val data = withContext(Dispatchers.IO) { MediaUtil.read(ctx, u) }
+        if (data == null) { AppModel.say("Не удалось открыть файл"); continue }
         if (data.size > 50 * 1024 * 1024) { AppModel.say("Файл больше 50 МБ пропущен"); continue }
         if (type.startsWith("video")) {
             val ext = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(type) ?: "mp4"

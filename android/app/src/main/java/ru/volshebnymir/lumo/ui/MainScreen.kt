@@ -452,7 +452,7 @@ fun ChatPreviewMenu(c: ChatItem, onClose: () -> Unit) {
                     if (c.unread > 0) row(Icons.Filled.MarkChatRead, "Прочитано") { scope.launch { AppModel.loadMessages(c.id); AppModel.markRead(c.id) } }
                     row(Icons.Filled.PushPin, if (c.pinned) "Открепить" else "Закрепить") { scope.launch { AppModel.setPinned(c.id, !c.pinned) } }
                     row(if (c.muted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff, if (c.muted) "Включить уведомления" else "Выключить уведомления") { scope.launch { AppModel.setMuted(c.id, !c.muted) } }
-                    if (c.isPrivate) row(Icons.Filled.CleaningServices, "Очистить историю") { scope.launch { AppModel.clearChat(c.id) } }
+                    if (c.isPrivate) row(Icons.Filled.Delete, "Очистить историю") { scope.launch { AppModel.clearChat(c.id) } }
                     row(if (c.isPrivate || c.role == "owner") Icons.Filled.Delete else Icons.AutoMirrored.Filled.ExitToApp, chatDeleteTitle(c), danger = true, close = false) { deleteTarget = c }
                 }
             }
