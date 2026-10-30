@@ -252,6 +252,7 @@ fun PersonScreen(userId: String) {
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             TopBar("", right = {
+              if (dm != null) ChatMenu(dm) else
                 Box {
                     RoundIcon(Icons.Filled.MoreVert) { menu = true }
                     androidx.compose.material3.DropdownMenu(menu, { menu = false }) {
@@ -395,7 +396,10 @@ fun InfoScreen(chatId: String) {
     }
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            TopBar("", right = { if (admin) Text("Изм.", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.bouncy { if (c?.isPrivate == false) AppModel.push(Screen.EditChat(chatId)) else edit = true }.padding(12.dp)) })
+            TopBar("", right = {
+                if (admin) Text("Изм.", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.bouncy { if (c?.isPrivate == false) AppModel.push(Screen.EditChat(chatId)) else edit = true }.padding(12.dp))
+                if (c != null && !c.isPrivate) ChatMenu(c)
+            })
             ProfileHead(c?.displayName ?: "", c?.displayAvatar, c?.displayColor ?: 0,
                 if (c?.isChannel == true) "${c.membersCount} подписч." else "${c?.membersCount ?: 0} участн.", false) {
                 c?.displayAvatar?.let { viewer = avatarMsg(it) }
@@ -717,7 +721,7 @@ fun EditProfileScreen() {
                     }
                     CardDivider(72)
                 }
-                IconRow(Icons.Filled.PersonAdd, p.a1, "Добавить аккаунт", null) { ru.volshebnymir.lumo.core.AppModel.addAccount() }
+                IconRow(Icons.Filled.PersonAdd, p.a1, "Добавить аккаунт", null) { if (!ru.volshebnymir.lumo.core.AppModel.addAccount()) ru.volshebnymir.lumo.core.AppModel.say(if (ru.volshebnymir.lumo.core.AppModel.isPremium) "Можно добавить не больше 3 аккаунтов" else "Несколько аккаунтов доступны в Premium") }
             }
             HintWithLink("Без Premium доступен один аккаунт, с Premium — до 3. Переключаться между ними можно здесь.")
             GroupCard {

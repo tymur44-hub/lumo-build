@@ -146,6 +146,7 @@ fun ChatScreen(chatId: String) {
     var note by remember { mutableStateOf<NoteSession?>(null) }
     var reportMsg by remember { mutableStateOf<Message?>(null) }
     var tipMsg by remember { mutableStateOf<Message?>(null) }
+    var readersMsg by remember { mutableStateOf<Message?>(null) }
     val notePerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
         if (r.values.all { it }) note = NoteSession(true) else AppModel.say("Нужен доступ к камере и микрофону")
     }
@@ -155,6 +156,7 @@ fun ChatScreen(chatId: String) {
         AppModel.openChatId = chatId
         AppModel.loadMessages(chatId); loaded = true
         AppModel.markRead(chatId)
+        AppModel.loadViews(chatId)
     }
     DisposableEffect(chatId) { onDispose { if (AppModel.openChatId == chatId) AppModel.openChatId = null; Voice.stop() } }
 
@@ -280,8 +282,11 @@ fun ChatScreen(chatId: String) {
                 }
             } else if (chat != null && !chat.canPost) {
                 Box(Modifier.fillMaxWidth().background(p.panel).navigationBarsPadding().padding(16.dp), contentAlignment = Alignment.Center) {
-                    Text(if (chat.muted) "Включить уведомления" else "Выключить уведомления", color = p.a1, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.bouncy { scope.launch { AppModel.setMuted(chatId, !chat.muted) } })
+                    Row(Modifier.bouncy { scope.launch { AppModel.setMuted(chatId, !chat.muted) } }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (chat.muted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff, null, tint = p.a1, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (chat.muted) "Включить звук" else "Убрать звук", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    }
                 }
             } else Composer(chatId, text, { text = it; if (it.isNotEmpty()) AppModel.userTyping(chatId) }, reply, editing,
                 onCancel = { if (editing != null) text = ""; reply = null; editing = null },
@@ -343,10 +348,12 @@ fun ChatScreen(chatId: String) {
                 onOpen = { menuFor = null; MediaUtil.save(ctx, m.mediaUrl, m.kind) },
                 onReport = { menuFor = null; reportMsg = m },
                 onTip = { menuFor = null; tipMsg = m },
+                onReaders = { menuFor = null; readersMsg = m },
             )
         }
         viewer?.let { MediaViewer(it) { viewer = null } }
-        tipMsg?.let { m -> TipDialog(m) { tipMsg = null } }
+        tipMsg?.let { m -> if (chat?.isChannel == true) LumenReactDialog(m, chat.displayName) { tipMsg = null } else TipDialog(m) { tipMsg = null } }
+        readersMsg?.let { m -> ReadersDialog(m) { readersMsg = null } }
         reportMsg?.let { m -> ReportDialog(m.senderId, chatId, m.id) { reportMsg = null } }
         LaunchedEffect(note) {
             val ns = note ?: return@LaunchedEffect
@@ -434,12 +441,11 @@ private fun ChatHeader(chatId: String, chat: ChatItem?) {
             RoundIcon(Icons.Filled.Videocam) { call(chat, true) }
             RoundIcon(Icons.Filled.Call) { call(chat, false) }
         }
-        if (chat != null) ChatMenu(chat)
     }
 }
 
 @Composable
-private fun ChatMenu(c: ChatItem) {
+fun ChatMenu(c: ChatItem) {
     val p = P
     val scope = rememberCoroutineScope()
     var open by remember { mutableStateOf(false) }
@@ -594,6 +600,8 @@ private fun MessageRow(
     val p = P
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
+    var lumenDlg by remember { mutableStateOf(false) }
+    if (lumenDlg && chat != null) LumenReactDialog(m, chat.displayName) { lumenDlg = false }
     if (m.kind == "gift") { GiftMessageCard(m, chat); return }
     if (m.kind == "system") {
         Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
@@ -655,7 +663,7 @@ private fun MessageRow(
             Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
                 Bubble(m, chat, mine, group && !mine && first, last, onReplyTap)
                 Reactions(m, mine)
-                TipPill(m, mine)
+                if (chat?.isChannel == true && m.id > 0 && !m.deleted) LumenReactChip(m) { lumenDlg = true } else TipPill(m, mine)
             }
         }
         if (dx.value < -8f) {
@@ -755,6 +763,10 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
         Row(Modifier.align(Alignment.End).then(if (bare) Modifier.padding(top = 3.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = 0.35f)).padding(horizontal = 7.dp, vertical = 1.dp) else pad),
             verticalAlignment = Alignment.CenterVertically) {
             if (m.editedAt != null && !m.deleted) Text("изм. ", color = if (bare) Color.White else sub, fontSize = 11.sp)
+            if (chat?.isChannel == true) AppModel.msgViews[m.id]?.takeIf { it > 0 }?.let { v ->
+                Icon(Icons.Filled.Visibility, null, tint = if (bare) Color.White else sub, modifier = Modifier.size(13.dp))
+                Text(" " + viewsText(v) + "  ", color = if (bare) Color.White else sub, fontSize = 11.sp)
+            }
             Text(Fmt.clock(m.createdAt), color = if (bare) Color.White else sub, fontSize = 11.sp)
             if (mine && chat?.isChannel != true) {
                 Spacer(Modifier.width(3.dp))
@@ -821,7 +833,7 @@ private fun Reactions(m: Message, mine: Boolean) {
 @Composable
 private fun MessageMenu(
     m: Message, chat: ChatItem?, onClose: () -> Unit, onReact: (String) -> Unit, onReply: () -> Unit, onCopy: () -> Unit, onEdit: () -> Unit,
-    onForward: () -> Unit, onPin: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit, onOpen: () -> Unit, onReport: () -> Unit, onTip: () -> Unit = {},
+    onForward: () -> Unit, onPin: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit, onOpen: () -> Unit, onReport: () -> Unit, onTip: () -> Unit = {}, onReaders: () -> Unit = {},
 ) {
     val p = P
     BackHandler { onClose() }
@@ -870,6 +882,7 @@ private fun MessageMenu(
                         item(Icons.Filled.PushPin, if (chat.pinnedMessageId == m.id) "Открепить" else "Закрепить", f = onPin)
                     if (ok && !prot) item(Icons.AutoMirrored.Filled.Forward, "Переслать", f = onForward)
                     if (!m.mediaUrl.isNullOrEmpty() && ok && !prot) item(Icons.Filled.Download, "Скачать", f = onOpen)
+                    if (mine && ok && chat != null && !chat.isPrivate && !chat.isChannel) item(Icons.Filled.Visibility, "Кто прочитал и отреагировал", f = onReaders)
                     if (!mine && ok && m.senderId != null) item(Icons.Filled.Star, "Отправить люмены", f = onTip)
                     if (!mine && ok) item(Icons.Filled.Flag, "Пожаловаться", f = onReport)
                     if (ok) item(Icons.Filled.DeleteOutline, "Удалить", danger = true, f = onDelete)
@@ -1179,3 +1192,6 @@ class NoteSession(locked: Boolean) {
     var locked by mutableStateOf(locked)
     var command by mutableStateOf<String?>(null)
 }
+
+
+fun viewsText(n: Int): String = if (n >= 1000) String.format(java.util.Locale.US, "%.1fK", n / 1000.0).replace(".0K", "K") else n.toString()

@@ -286,16 +286,15 @@ object AppModel {
         }
     }
 
-    /** Добавить аккаунт: текущий остаётся сохранённым, открывается экран входа */
-    fun addAccount() {
-        if (Accounts.list.size >= Accounts.limit()) {
-            say(if (isPremium) "Можно добавить не больше 3 аккаунтов" else "Несколько аккаунтов доступны в Premium"); return
-        }
+    /** Добавить аккаунт: текущий остаётся сохранённым, открывается экран входа. false — достигнут лимит */
+    fun addAccount(): Boolean {
+        if (Accounts.list.size >= Accounts.limit()) return false
         scope.launch {
             presence(false)
             resetAfterLogout()
             Api.forget()
         }
+        return true
     }
 
     /** Переключиться на сохранённый аккаунт */
@@ -394,6 +393,18 @@ object AppModel {
     /** Профили с учётом настроек конфиденциальности (сервер скрывает то, что видеть нельзя) */
     private suspend fun fetchProfiles(ids: Collection<String>): List<Profile> =
         (runCatching { Api.rpc("lm_profiles_get", jsonOf("p_ids" to JSONArray(ids.distinct()))) }.getOrNull() as? JSONArray).objects().map { Profile.from(it) }
+
+    val msgViews = mutableStateMapOf<Int, Int>()
+
+    /** Просмотры постов канала: число подписчиков, дочитавших чат до поста */
+    suspend fun loadViews(chatId: String) {
+        val c = chat(chatId) ?: return
+        if (!c.isChannel) return
+        val ids = (messages[chatId] ?: emptyList()).filter { it.id > 0 }.takeLast(80).map { it.id }
+        if (ids.isEmpty()) return
+        val a = runCatching { Api.rpc("lm_msg_views", jsonOf("p_chat" to chatId, "p_ids" to org.json.JSONArray(ids))) as? org.json.JSONArray }.getOrNull() ?: return
+        for (i in 0 until a.length()) { val o = a.optJSONObject(i) ?: continue; msgViews[o.optInt("id")] = o.optInt("n") }
+    }
 
     suspend fun loadMe() {
         val id = myId ?: return

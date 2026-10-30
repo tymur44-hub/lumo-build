@@ -104,6 +104,27 @@ fun SettingsScreen() {
                 Chip(Icons.Filled.QrCode, "QR-код") { Ui.qrMine = true }
             }
         }
+        var limitDlg by remember { mutableStateOf(false) }
+        if (limitDlg) AlertDialog(onDismissRequest = { limitDlg = false }, containerColor = p.panel,
+            title = { Text("Достигнут лимит", color = p.text) },
+            text = { Text(if (AppModel.isPremium) "Можно подключить не больше 3 аккаунтов." else "Без Premium можно подключить 1 аккаунт, с Premium — до 3. Чтобы увеличить лимит, оформите Lumo Premium.", color = p.text) },
+            confirmButton = { if (!AppModel.isPremium) TextButton({ limitDlg = false; AppModel.push(Screen.Premium) }) { Text("Увеличить лимит") } else TextButton({ limitDlg = false }) { Text("Ок") } },
+            dismissButton = { if (!AppModel.isPremium) TextButton({ limitDlg = false }) { Text("Закрыть") } })
+        Card {
+            ru.volshebnymir.lumo.core.Accounts.list.filter { it.id != AppModel.myId }.forEach { a ->
+                Row(Modifier.fillMaxWidth().bouncy { AppModel.switchAccount(a.id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(a.name.ifEmpty { a.username }, a.avatar, 0, 40.dp)
+                    Spacer(Modifier.width(14.dp))
+                    Text(a.name.ifEmpty { "Аккаунт" }, color = p.text, fontSize = 17.sp, modifier = Modifier.weight(1f), maxLines = 1)
+                }
+                Divider()
+            }
+            Row(Modifier.fillMaxWidth().bouncy { if (!AppModel.addAccount()) limitDlg = true }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(40.dp), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Add, null, tint = p.a1, modifier = Modifier.size(26.dp)) }
+                Spacer(Modifier.width(14.dp))
+                Text("Добавить аккаунт", color = p.a1, fontSize = 17.sp)
+            }
+        }
         AppModel.staffRole?.let { r ->
             Card {
                 SettingsRow(Icons.Filled.Shield, Color(0xFFFF8A3D), "Админ-панель", (if (r == "owner") "Вы владелец Lumo" else "Вы администратор Lumo") + " · открывается на сайте") {

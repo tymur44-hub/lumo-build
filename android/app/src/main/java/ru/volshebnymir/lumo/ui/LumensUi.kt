@@ -21,6 +21,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Slider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -344,3 +345,101 @@ fun CommentsScreen(chatId: String, postId: Int) {
 }
 
 fun lumenCommentWord(n: Int) = plr(n.toLong(), "комментарий", "комментария", "комментариев")
+
+
+/** Люмены как реакция на пост канала (без имени получателя) */
+@Composable
+fun LumenReactDialog(m: Message, channel: String, onClose: () -> Unit) {
+    val p = P
+    val scope = rememberCoroutineScope()
+    val owner = AppModel.staffRole == "owner"
+    LaunchedEffect(Unit) { Lumens.load() }
+    val maxV = if (owner) 1000 else minOf(1000L, Lumens.balance).toInt()
+    var amount by remember { mutableStateOf(10f) }
+    var busy by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf(false) }
+    val n = amount.coerceIn(1f, maxOf(1, maxV).toFloat()).toInt()
+    AlertDialog(
+        onDismissRequest = { if (!busy) onClose() }, containerColor = p.panel,
+        title = { Text("Реакция люменами", color = p.text) },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                if (done) {
+                    LumenLive(90.dp)
+                    Text("Отправлено", color = p.text, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                } else if (maxV < 1) {
+                    LumenLive(80.dp)
+                    Text("У вас пока нет люменов. Их можно получить в разделе «Мои люмены» в настройках.", color = p.muted, textAlign = TextAlign.Center)
+                } else {
+                    Row(Modifier.clip(RoundedCornerShape(20.dp)).background(Brush.verticalGradient(listOf(Color(0xFFFFB347), Color(0xFFF2994A)))).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        LumenIcon(22.dp)
+                        Text(" $n", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Black)
+                    }
+                    if (maxV > 1) Slider(value = n.toFloat(), onValueChange = { amount = it }, valueRange = 1f..maxV.toFloat())
+                    Text("Выберите количество люменов для отправки $channel в поддержку этой публикации.", color = p.text, textAlign = TextAlign.Center, fontSize = 15.sp)
+                }
+            }
+        },
+        confirmButton = {
+            if (!done && maxV >= 1) TextButton(enabled = !busy, onClick = {
+                busy = true
+                scope.launch {
+                    runCatching { Lumens.tip(m.id, n) }
+                        .onSuccess { done = true; delay(1200); onClose() }
+                        .onFailure { AppModel.say(it.message ?: "Ошибка"); busy = false }
+                }
+            }) { Text("Отправить $n") }
+        },
+        dismissButton = { TextButton({ onClose() }) { Text("Закрыть") } },
+    )
+}
+
+/** Кнопка-реакция «люмены» под постом канала */
+@Composable
+fun LumenReactChip(m: Message, onClick: () -> Unit) {
+    val p = P
+    val n = Lumens.tips[m.id] ?: 0L
+    Row(Modifier.padding(top = 3.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xFFF5B04A).copy(alpha = 0.22f))
+        .border(1.dp, Color(0xFFF5B04A).copy(alpha = 0.5f), RoundedCornerShape(16.dp)).bouncy(onClick).padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        LumenIcon(17.dp)
+        if (n > 0) Text(" $n", color = p.text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** Кто прочитал сообщение в группе и кто поставил реакцию */
+@Composable
+fun ReadersDialog(m: Message, onClose: () -> Unit) {
+    val p = P
+    var rows by remember { mutableStateOf<List<Triple<String, java.util.Date?, String?>>>(emptyList()) }
+    var loaded by remember { mutableStateOf(false) }
+    LaunchedEffect(m.id) {
+        val a = runCatching { Api.rpc("lm_msg_readers", jsonOf("p_msg" to m.id)) as? org.json.JSONArray }.getOrNull()
+        val out = ArrayList<Triple<String, java.util.Date?, String?>>(); val seen = HashSet<String>()
+        if (a != null) for (i in 0 until a.length()) {
+            val o = a.optJSONObject(i) ?: continue
+            val u = o.optString("user_id"); if (u.isEmpty() || !seen.add(u)) continue
+            out.add(Triple(u, o.date("read_at"), o.str("emoji")))
+        }
+        AppModel.loadProfiles(out.map { it.first })
+        rows = out; loaded = true
+    }
+    AlertDialog(onDismissRequest = onClose, containerColor = p.panel, title = { Text("Просмотры", color = p.text) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                if (loaded && rows.isEmpty()) Text("Пока никто не прочитал", color = p.muted)
+                rows.forEach { (u, d, e) ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        val pr = AppModel.profiles[u]
+                        Avatar(AppModel.displayName(u), pr?.avatarUrl, pr?.color ?: 0, 42.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(AppModel.displayName(u), color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1)
+                            if (d != null) Text(whenText(d), color = p.muted, fontSize = 13.sp)
+                        }
+                        if (e != null) Text(e, fontSize = 24.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClose) { Text("Готово") } })
+}
