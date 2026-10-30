@@ -10,6 +10,7 @@ struct FeedItem: Identifiable {
     let first: Bool
     let last: Bool
     let showDay: Bool
+    var album: [Message] = []
 }
 
 struct ChatView: View {
@@ -41,6 +42,7 @@ struct ChatView: View {
     @State private var showSearch = false
     @State private var confirmClear = false
     @State private var confirmLeave = false
+    @State private var deleting: ChatItem?
     @State private var highlight: Int?
     @State private var menuMsg: Message?
     @State private var deleteList: [Message] = []
@@ -80,7 +82,27 @@ struct ChatView: View {
 
     /// Лента: новые сообщения первыми (список перевёрнут — открывается сразу на последнем сообщении)
     private var feed: [FeedItem] {
-        let list = (model.messages[chatId] ?? []).filter { !$0.deleted }
+        let raw = (model.messages[chatId] ?? []).filter { !$0.deleted }
+        // альбомы: подряд идущие фото/видео с общим meta.album сворачиваем в одно сообщение (по последнему)
+        var albums: [Int: [Message]] = [:]
+        var list: [Message] = []
+        list.reserveCapacity(raw.count)
+        var k = 0
+        while k < raw.count {
+            let m = raw[k]
+            if let a = m.meta["album"] as? String, m.kind == "image" || m.kind == "video" {
+                var grp = [m]
+                var j = k + 1
+                while j < raw.count, (raw[j].meta["album"] as? String) == a, raw[j].senderId == m.senderId { grp.append(raw[j]); j += 1 }
+                let rep = grp[grp.count - 1]
+                list.append(rep)
+                if grp.count > 1 { albums[rep.id] = grp }
+                k = j
+            } else {
+                list.append(m)
+                k += 1
+            }
+        }
         var out: [FeedItem] = []
         out.reserveCapacity(list.count)
         for i in stride(from: list.count - 1, through: 0, by: -1) {
@@ -94,7 +116,7 @@ struct ChatView: View {
                 let nextNewDay = !Calendar.current.isDate(n.createdAt, inSameDayAs: m.createdAt)
                 last = nextNewDay || n.senderId != m.senderId || n.kind == "system" || n.createdAt.timeIntervalSince(m.createdAt) > 300
             }
-            out.append(FeedItem(id: m.id, message: m, first: first, last: last, showDay: newDay))
+            out.append(FeedItem(id: m.id, message: m, first: first, last: last, showDay: newDay, album: albums[m.id] ?? []))
         }
         return out
     }
@@ -257,9 +279,7 @@ struct ChatView: View {
         .confirmationDialog("Очистить историю этого чата? Сообщения пропадут только у вас.", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Очистить", role: .destructive) { Task { await model.clearChat(chatId) } }
         }
-        .confirmationDialog("Покинуть «\(chat?.displayName ?? "")»?", isPresented: $confirmLeave, titleVisibility: .visible) {
-            Button("Покинуть", role: .destructive) { Task { await model.leave(chatId) } }
-        }
+        .chatDeletion($deleting)
     }
 
     // MARK: - выбор нескольких сообщений
@@ -594,7 +614,7 @@ struct ChatView: View {
                     ForEach(feed) { f in
                         VStack(spacing: 2) {
                             if f.showDay { DayLabel(date: f.message.createdAt) }
-                            MessageRow(m: f.message, chat: chat, first: f.first, last: f.last,
+                            MessageRow(m: f.message, chat: chat, first: f.first, last: f.last, album: f.album,
                                        onReply: { reply = $0; editing = nil },
                                        onEdit: { editing = $0; reply = nil; text = $0.body ?? "" },
                                        onForward: { forwarding = ForwardBatch(messages: [$0]) },
@@ -774,10 +794,8 @@ struct ChatView: View {
                     Button { reporting = ReportTarget(user: nil, chat: c.id, message: nil) } label: {
                         Label("Пожаловаться", systemImage: "exclamationmark.bubble")
                     }
-                    Button(role: .destructive) { confirmLeave = true } label: {
-                        Label(c.isChannel ? "Отписаться" : "Покинуть группу", systemImage: "rectangle.portrait.and.arrow.right")
-                    }
                 }
+                Button(role: .destructive) { deleting = c } label: { Label(c.deleteTitle, systemImage: c.deleteIcon) }
             }
         } label: { Image(systemName: "ellipsis.circle") }
     }
@@ -810,7 +828,15 @@ struct ComposerView: View {
     @StateObject private var rec = VoiceRecorder()
     @State private var picks: [PhotosPickerItem] = []
     @State private var showPhotos = false
+    @State private var showAttach = false
     @State private var sendLumensTo: LumenTarget?
+
+    /// Собеседник, которому можно отправить люмены (личный чат с человеком, не с ботом и не «Избранное»)
+    private var lumensPeer: String? {
+        guard let c = model.chat(chatId), c.isPrivate, let pid = c.peerId, pid != model.myId,
+              !(c.peerBot || (model.profiles[pid]?.isBot ?? false)) else { return nil }
+        return pid
+    }
     @State private var showFiles = false
     @State private var showCamera = false
     @State private var showStickers = false
@@ -866,19 +892,29 @@ struct ComposerView: View {
                         }
                         recordingBar
                     } else {
-                        Menu {
-                            Button { showPhotos = true } label: { Label("Фото или видео", systemImage: "photo.on.rectangle") }
-                            Button { showCamera = true } label: { Label("Камера", systemImage: "camera") }
-                            Button { showFiles = true } label: { Label("Файл", systemImage: "doc") }
-                            if let c = model.chat(chatId), c.isPrivate, let pid = c.peerId, pid != model.myId, !(c.peerBot || (model.profiles[pid]?.isBot ?? false)) {
-                                Button { sendLumensTo = LumenTarget(id: pid) } label: { Label("Отправить люмены", systemImage: "sparkle") }
-                            }
-                            Button { startNote(locked: true) } label: { Label("Видеосообщение", systemImage: "video.circle") }
-                        } label: {
+                        Button { focused = false; showAttach = true } label: {
                             Image(systemName: "paperclip").font(.system(size: 21, weight: .semibold))
                                 .foregroundColor(Theme.muted).frame(width: 40, height: 44)
                         }
                         .sheet(item: $sendLumensTo) { t in SendLumensSheet(userId: t.id).environmentObject(model) }
+                        .sheet(isPresented: $showAttach) {
+                            AttachSheet(canLumens: lumensPeer != nil,
+                                        onSend: { parts, cap in
+                                            let r = reply?.id
+                                            reply = nil
+                                            model.sendAlbum(chatId: chatId, parts: parts, caption: cap, replyTo: r)
+                                        },
+                                        onFile: { sendFile($0) },
+                                        onAction: { a in
+                                            switch a {
+                                            case "camera": showCamera = true
+                                            case "note": startNote(locked: true)
+                                            case "lumens": if let p = lumensPeer { sendLumensTo = LumenTarget(id: p) }
+                                            default: break
+                                            }
+                                        })
+                            .environmentObject(model)
+                        }
                         HStack(alignment: .bottom, spacing: 4) {
                             TextField("Сообщение", text: $text, axis: .vertical)
                                 .lineLimit(1...6)
@@ -939,16 +975,6 @@ struct ComposerView: View {
         // «записывает голосовое/видео…» у собеседника
         .onReceive(Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()) { _ in reportActivity() }
         .onChange(of: rec.recording) { _ in reportActivity() }
-        .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
-        .onChange(of: picks) { items in
-            guard !items.isEmpty else { return }
-            let chosen = items
-            picks = []
-            Task { await sendPicked(chosen) }
-        }
-        .fileImporter(isPresented: $showFiles, allowedContentTypes: [.item], allowsMultipleSelection: false) { r in
-            if case .success(let urls) = r, let u = urls.first { sendFile(u) }
-        }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPicker { img, video in
                 if let i = img, let res = Media.jpeg(i) {

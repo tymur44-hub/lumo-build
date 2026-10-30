@@ -20,6 +20,7 @@ struct ChatListView: View {
     @State private var searching = false
     @State private var folder: ChatFolder = .all
     @State private var showNew = false
+    @State private var deleting: ChatItem?
     @State private var storyStart: String?
     @State private var addStory = false
     @FocusState private var searchFocused: Bool
@@ -172,13 +173,12 @@ struct ChatListView: View {
                                     }
                                 }
                                 if c.isPrivate {
-                                    Button(role: .destructive) { Task { await model.clearChat(c.id) } } label: {
-                                        Label("Очистить историю", systemImage: "trash")
+                                    Button { Task { await model.clearChat(c.id) } } label: {
+                                        Label("Очистить историю", systemImage: "eraser")
                                     }
-                                } else {
-                                    Button(role: .destructive) { Task { await model.leave(c.id) } } label: {
-                                        Label(c.isChannel ? "Отписаться" : "Покинуть группу", systemImage: "rectangle.portrait.and.arrow.right")
-                                    }
+                                }
+                                Button(role: .destructive) { deleting = c } label: {
+                                    Label(c.deleteTitle, systemImage: c.deleteIcon)
                                 }
                             } preview: {
                                 ChatPreviewCard(chat: c).environmentObject(model)
@@ -189,6 +189,7 @@ struct ChatListView: View {
             }
             .padding(.horizontal, 8)
         }
+        .chatDeletion($deleting)
         .refreshable {
             await model.loadChats()
             await model.loadStories()

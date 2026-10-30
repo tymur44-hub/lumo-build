@@ -38,6 +38,10 @@ struct LumoApp: App {
             let u = String(s[r].dropFirst(2))
             Task { await model.openByUsername(u) }
         }
+        if let r = s.range(of: #"#\+([a-zA-Z0-9]{12,24})"#, options: .regularExpression) {
+            let code = String(s[r].dropFirst(2))
+            Task { await model.joinByCode(code) }
+        }
     }
 }
 

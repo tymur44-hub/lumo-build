@@ -24,9 +24,12 @@ struct ChatInfoView: View {
     @State private var alias = ""
     @State private var report: ReportTarget?
     @State private var addMembers = false
+    @State private var showRequests = false
+    @State private var inviteLink: String?
     @State private var editChat = false
     @State private var confirmLeave = false
     @State private var confirmClear = false
+    @State private var deleting: ChatItem?
     @State private var avatarPick: PhotosPickerItem?
     @State private var avatarFull: IdentifiedURL?
     @State private var showQR = false
@@ -86,6 +89,7 @@ struct ChatInfoView: View {
         .sheet(item: $lumenTarget) { t in SendLumensSheet(userId: t.id).environmentObject(model) }
         .sheet(item: $giftTarget) { t in GiftShopSheet(user: t.id).environmentObject(model) }
         .task(id: chat?.peerId) { await loadPeerPhone(chat?.peerId) }
+        .sheet(isPresented: $showRequests) { JoinRequestsSheet(chatId: chatId).environmentObject(model) }
         .sheet(isPresented: $addMembers) {
             PeoplePicker(title: "Добавить участников", exclude: Set(members.map { $0.userId })) { ids in
                 Task { await model.addMembers(chatId, ids); members = await model.members(chatId) }
@@ -100,9 +104,7 @@ struct ChatInfoView: View {
                     .environmentObject(model)
             }
         }
-        .confirmationDialog("Покинуть «\(chat?.displayName ?? "")»?", isPresented: $confirmLeave, titleVisibility: .visible) {
-            Button("Покинуть", role: .destructive) { dismiss(); Task { await model.leave(chatId) } }
-        }
+        .chatDeletion($deleting, onDone: { dismiss() })
         .confirmationDialog("Очистить историю? Сообщения пропадут только у вас.", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Очистить", role: .destructive) { Task { await model.clearChat(chatId) } }
         }
@@ -227,10 +229,8 @@ struct ChatInfoView: View {
         }
         if !c.isPrivate {
             Button { report = ReportTarget(user: nil, chat: c.id, message: nil) } label: { Label("Пожаловаться", systemImage: "exclamationmark.bubble") }
-            Button(role: .destructive) { confirmLeave = true } label: {
-                Label(c.isChannel ? "Отписаться" : "Покинуть группу", systemImage: "rectangle.portrait.and.arrow.right")
-            }
         }
+        Button(role: .destructive) { deleting = c } label: { Label(c.deleteTitle, systemImage: c.deleteIcon) }
     }
 
     private func actionLabel(_ icon: String, _ title: String) -> some View {
@@ -341,6 +341,18 @@ struct ChatInfoView: View {
                 Button { addMembers = true } label: {
                     SettingsRow(icon: "person.badge.plus", color: Color(hex: 0x2bd67b), title: c.isChannel ? "Добавить подписчиков" : "Добавить участников")
                 }
+                Divider().overlay(Theme.line)
+                Button {
+                    Task {
+                        if let code = await model.inviteCode(c.id) {
+                            let l = "https://volshebny-mir.ru/page322172009.html#+" + code
+                            UIPasteboard.general.string = l
+                            model.say("Ссылка-приглашение скопирована")
+                        }
+                    }
+                } label: { SettingsRow(icon: "link.badge.plus", color: Color(hex: 0x3a7bff), title: "Ссылка-приглашение", subtitle: "Нажмите, чтобы скопировать", chevron: false) }
+                Divider().overlay(Theme.line)
+                Button { showRequests = true } label: { SettingsRow(icon: "person.crop.circle.badge.questionmark", color: Color(hex: 0xff8a3d), title: "Заявки на вступление") }
             }
         }
         if !c.isChannel || c.isAdmin {
@@ -388,9 +400,9 @@ struct ChatInfoView: View {
                 SettingsRow(icon: "eraser", color: Color(hex: 0x8e8ea8), title: "Очистить историю", chevron: false)
             }
             Divider().overlay(Theme.line)
-            Button { confirmLeave = true } label: {
-                SettingsRow(icon: "rectangle.portrait.and.arrow.right", color: Theme.danger,
-                            title: c.isChannel ? "Отписаться" : "Покинуть группу", titleColor: Theme.danger, chevron: false)
+            Button { deleting = c } label: {
+                SettingsRow(icon: c.deleteIcon, color: Theme.danger,
+                            title: c.deleteTitle, titleColor: Theme.danger, chevron: false)
             }
         }
     }
@@ -908,94 +920,353 @@ struct PeoplePicker: View {
     }
 }
 
-/// Новый чат: группа, канал или сообщение человеку
+/// Новый чат: группа, канал или сообщение человеку. Канал и группа создаются мастером из нескольких экранов (как в Telegram)
 struct NewChatView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
-    @State private var mode: String?
+
+    enum Step { case menu, intro, details, type, members }
+
+    @State private var step: Step = .menu
+    @State private var mode = "group"
     @State private var title = ""
     @State private var about = ""
+    @State private var isPublic = false
     @State private var username = ""
+    @State private var invite = NewChatView.makeCode()
+    @State private var requests = false
+    @State private var noCopy = false
     @State private var members: [String] = []
     @State private var pickMembers = false
     @State private var busy = false
+    @State private var avatarPick: PhotosPickerItem?
+    @State private var avatar: UIImage?
+    @FocusState private var titleFocus: Bool
+
+    static func makeCode() -> String { String((0..<16).map { _ in "abcdef0123456789".randomElement()! }) }
+
+    private var isChannel: Bool { mode == "channel" }
+    private var noun: String { isChannel ? "канал" : "группу" }
+    private var nounOf: String { isChannel ? "канала" : "группы" }
+    private var cleanName: String { username.replacingOccurrences(of: "@", with: "").trimmingCharacters(in: .whitespaces) }
+    private var link: String { "https://volshebny-mir.ru/page322172009.html#+" + invite }
+    private var linkShown: String { "volshebny-mir.ru/…#+" + invite }
 
     var body: some View {
-        NavigationStack {
+        ZStack {
+            Theme.bg.ignoresSafeArea()
+            switch step {
+            case .menu: menu.transition(.opacity)
+            case .intro: intro.transition(.move(edge: .trailing))
+            case .details: details.transition(.move(edge: .trailing))
+            case .type: typeScreen.transition(.move(edge: .trailing))
+            case .members: membersScreen.transition(.move(edge: .trailing))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: step)
+        .sheet(isPresented: $pickMembers) {
+            PeoplePicker(title: isChannel ? "Подписчики" : "Участники", buttonTitle: "Готово") { members = $0 }.environmentObject(model)
+        }
+        .onChange(of: avatarPick) { item in
+            guard let item = item else { return }
+            Task {
+                if let d = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: d) { avatar = img }
+                avatarPick = nil
+            }
+        }
+    }
+
+    // MARK: шапка мастера
+
+    private func header(_ title: String, next: String? = nil, nextEnabled: Bool = true, back: @escaping () -> Void, onNext: @escaping () -> Void = {}) -> some View {
+        ZStack {
+            Text(title).font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text)
+            HStack {
+                Button(action: back) {
+                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text)
+                        .frame(width: 46, height: 46).lumoGlass(Circle(), interactive: true)
+                }
+                Spacer()
+                if let n = next {
+                    Button(action: onNext) {
+                        Text(n).font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(nextEnabled ? Theme.a1 : Theme.muted)
+                            .padding(.horizontal, 18).frame(height: 46).lumoGlass(Capsule(), interactive: true)
+                    }
+                    .disabled(!nextEnabled)
+                }
+            }
+        }
+        .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 6)
+    }
+
+    // MARK: 0. выбор
+
+    private var menu: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Новый чат").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text)
+            }
+            .frame(maxWidth: .infinity).overlay(alignment: .leading) {
+                Button("Закрыть") { dismiss() }.foregroundColor(Theme.a1)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 16)
             ScrollView {
                 VStack(spacing: 12) {
-                    if mode == nil {
-                        SettingsGroup {
-                            Button { mode = "group" } label: { SettingsRow(icon: "person.2.fill", color: Color(hex: 0x2bd67b), title: "Новая группа", subtitle: "Общение с несколькими людьми") }
-                            Divider().overlay(Theme.line)
-                            Button { mode = "channel" } label: { SettingsRow(icon: "megaphone.fill", color: Color(hex: 0xff8a3d), title: "Новый канал", subtitle: "Публикации для подписчиков") }
-                            Divider().overlay(Theme.line)
-                            Button { dismiss(); Task { await model.openBotFather() } } label: { SettingsRow(icon: "cpu", color: Color(hex: 0x7c5cff), title: "Создать бота", subtitle: "Конструктор ботов и мини-приложений") }
-                            Divider().overlay(Theme.line)
-                            Button { Task { await model.openSaved(); dismiss() } } label: { SettingsRow(icon: "bookmark.fill", color: Color(hex: 0x3a7bff), title: "Избранное", subtitle: "Заметки для себя") }
+                    SettingsGroup {
+                        Button { mode = "group"; step = .details } label: { SettingsRow(icon: "person.2.fill", color: Color(hex: 0x2bd67b), title: "Новая группа", subtitle: "Общение с несколькими людьми") }
+                        Divider().overlay(Theme.line)
+                        Button { mode = "channel"; step = .intro } label: { SettingsRow(icon: "megaphone.fill", color: Color(hex: 0xff8a3d), title: "Новый канал", subtitle: "Публикации для подписчиков") }
+                        Divider().overlay(Theme.line)
+                        Button { dismiss(); Task { await model.openBotFather() } } label: { SettingsRow(icon: "cpu", color: Color(hex: 0x7c5cff), title: "Создать бота", subtitle: "Конструктор ботов и мини-приложений") }
+                        Divider().overlay(Theme.line)
+                        Button { Task { await model.openSaved(); dismiss() } } label: { SettingsRow(icon: "bookmark.fill", color: Color(hex: 0x3a7bff), title: "Избранное", subtitle: "Заметки для себя") }
+                    }
+                    SectionTitle(text: "Контакты")
+                    SettingsGroup {
+                        if model.contacts.isEmpty {
+                            Text("Контактов пока нет — найдите людей через поиск на вкладке «Чаты»")
+                                .font(.subheadline).foregroundColor(Theme.muted).padding(12)
                         }
-                        SectionTitle(text: "Контакты")
-                        SettingsGroup {
-                            if model.contacts.isEmpty {
-                                Text("Контактов пока нет — найдите людей через поиск на вкладке «Чаты»")
-                                    .font(.subheadline).foregroundColor(Theme.muted).padding(12)
-                            }
-                            ForEach(model.contacts, id: \.self) { id in
-                                Button { dismiss(); Task { await model.openDM(id) } } label: {
-                                    HStack(spacing: 12) {
-                                        AvatarView(name: model.displayName(id), url: model.profiles[id]?.avatarURL, color: model.profiles[id]?.color ?? 0, size: 42, online: model.isOnline(id))
-                                        VStack(alignment: .leading, spacing: 1) {
-                                            Text(model.displayName(id)).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
-                                            Text(model.lastSeenText(id)).font(.caption).foregroundColor(Theme.muted)
-                                        }
-                                        Spacer()
+                        ForEach(model.contacts, id: \.self) { id in
+                            Button { dismiss(); Task { await model.openDM(id) } } label: {
+                                HStack(spacing: 12) {
+                                    AvatarView(name: model.displayName(id), url: model.profiles[id]?.avatarURL, color: model.profiles[id]?.color ?? 0, size: 42, online: model.isOnline(id))
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(model.displayName(id)).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
+                                        Text(model.lastSeenText(id)).font(.caption).foregroundColor(Theme.muted)
                                     }
-                                    .padding(.vertical, 6)
+                                    Spacer()
                                 }
+                                .padding(.vertical, 6)
                             }
                         }
-                    } else {
-                        TextField(mode == "channel" ? "Название канала" : "Название группы", text: $title).lumoField()
-                        TextField("Описание (необязательно)", text: $about, axis: .vertical).lineLimit(2...5).padding(14)
-                            .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 16))
-                        if mode == "channel" {
-                            TextField("Публичная ссылка @… (необязательно)", text: $username)
-                                .textInputAutocapitalization(.never).autocorrectionDisabled().lumoField()
-                        }
-                        Button { pickMembers = true } label: {
-                            SettingsRow(icon: "person.badge.plus", color: Color(hex: 0x2bd67b),
-                                        title: members.isEmpty ? (mode == "channel" ? "Добавить подписчиков" : "Добавить участников") : "Выбрано: \(members.count)")
-                        }
-                        .padding(.horizontal, 10)
-                        .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 16))
-                        GradientButton(title: mode == "channel" ? "Создать канал" : "Создать группу", loading: busy) { create() }
-                            .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 }
-                .padding(.horizontal, mode == nil ? 0 : 16)
-                .padding(.top, 10)
+                .padding(.top, 4)
             }
-            .background(Theme.bg.ignoresSafeArea())
-            .navigationTitle(mode == "group" ? "Новая группа" : mode == "channel" ? "Новый канал" : "Новый чат")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(mode == nil ? "Закрыть" : "Назад") { if mode == nil { dismiss() } else { mode = nil } }
+        }
+    }
+
+    // MARK: 1. «Что такое канал?»
+
+    private var intro: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button { step = .menu } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text)
+                        .frame(width: 46, height: 46).lumoGlass(Circle(), interactive: true)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 14).padding(.top, 12)
+            Spacer()
+            ChannelIntroArt().frame(height: 250)
+            Spacer()
+            Text("Что такое канал?").font(.system(size: 28, weight: .bold)).foregroundColor(Theme.text)
+            Text("Каналы — инструмент, который позволяет транслировать сообщения на большую аудиторию.")
+                .font(.system(size: 19)).foregroundColor(Theme.text).multilineTextAlignment(.center)
+                .padding(.horizontal, 30).padding(.top, 14)
+            Spacer()
+            GradientButton(title: "Создать канал") { step = .details }
+                .padding(.horizontal, 18).padding(.bottom, 26)
+        }
+        .background(Theme.bg.ignoresSafeArea())
+    }
+
+    // MARK: 2. название, фото, описание
+
+    private var details: some View {
+        VStack(spacing: 0) {
+            header("Создать " + noun, next: "Далее", nextEnabled: !title.trimmingCharacters(in: .whitespaces).isEmpty,
+                   back: { step = isChannel ? .intro : .menu }, onNext: { titleFocus = false; step = .type })
+            ScrollView {
+                VStack(spacing: 18) {
+                    HStack(spacing: 16) {
+                        PhotosPicker(selection: $avatarPick, matching: .images) {
+                            ZStack {
+                                Circle().fill(Theme.a1.opacity(0.12))
+                                if let a = avatar {
+                                    Image(uiImage: a).resizable().scaledToFill().clipShape(Circle())
+                                } else {
+                                    Image(systemName: "camera.fill").font(.system(size: 26)).foregroundColor(Theme.a1)
+                                }
+                            }
+                            .frame(width: 76, height: 76)
+                        }
+                        TextField(isChannel ? "Название канала" : "Название группы", text: $title)
+                            .font(.system(size: 20)).focused($titleFocus)
+                    }
+                    .padding(18)
+                    .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 28))
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Описание", text: $about, axis: .vertical).lineLimit(1...5)
+                            .font(.system(size: 19))
+                            .padding(.horizontal, 18).padding(.vertical, 16)
+                            .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 26))
+                        Text("Можете указать дополнительное описание " + nounOf + ".")
+                            .font(.system(size: 15)).foregroundColor(Theme.muted).padding(.horizontal, 10)
+                    }
+                }
+                .padding(.horizontal, 14).padding(.top, 12)
+            }
+        }
+        .onAppear { titleFocus = true }
+    }
+
+    // MARK: 3. тип, ссылка, заявки, копирование
+
+    private var typeScreen: some View {
+        VStack(spacing: 0) {
+            header("Тип " + nounOf, next: "Далее", nextEnabled: !isPublic || cleanName.count >= 5,
+                   back: { step = .details }, onNext: { step = .members })
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    SectionTitle(text: "Ссылка")
+                    card {
+                        typeRow("Публичная", on: isPublic) { withAnimation { isPublic = true } }
+                        Divider().overlay(Theme.line).padding(.leading, 56)
+                        typeRow("Частная", on: !isPublic) { withAnimation { isPublic = false } }
+                    }
+                    footnote(isPublic ? "Публичные \(isChannel ? "каналы" : "группы") можно найти через поиск, вступить в них может любой пользователь."
+                                      : "На частные \(isChannel ? "каналы" : "группы") можно вступить только по ссылке-приглашению.")
+
+                    if isPublic {
+                        HStack(spacing: 0) {
+                            Text("@").font(.system(size: 19)).foregroundColor(Theme.text)
+                            TextField("ссылка", text: $username)
+                                .font(.system(size: 19))
+                                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        }
+                        .padding(.horizontal, 18).frame(height: 56)
+                        .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 28))
+                        .padding(.horizontal, 14).padding(.top, 14)
+                        footnote("Если у \(nounOf) будет постоянная публичная ссылка, другие пользователи смогут найти \(isChannel ? "его" : "её") и вступить.")
+                        footnote("Можно использовать латиницу (a-z), цифры (0-9) и подчёркивание. Минимальная длина — 5 символов.")
+                    } else {
+                        SectionTitle(text: "Ссылка-приглашение").padding(.top, 14)
+                        card {
+                            VStack(spacing: 10) {
+                                HStack {
+                                    Text(linkShown).font(.system(size: 18)).foregroundColor(Theme.text).lineLimit(1).truncationMode(.middle)
+                                        .frame(maxWidth: .infinity)
+                                    Menu {
+                                        Button { UIPasteboard.general.string = link; model.say("Ссылка скопирована") } label: { Label("Копировать", systemImage: "doc.on.doc") }
+                                        Button { invite = NewChatView.makeCode() } label: { Label("Создать новую", systemImage: "arrow.triangle.2.circlepath") }
+                                    } label: {
+                                        Image(systemName: "ellipsis").font(.system(size: 14, weight: .bold)).foregroundColor(.white)
+                                            .frame(width: 34, height: 34).background(Circle().fill(Theme.muted.opacity(0.7)))
+                                    }
+                                }
+                                .padding(.horizontal, 14).frame(height: 52)
+                                .background(Theme.bg, in: Capsule())
+                                ShareLink(item: link) {
+                                    Text("Поделиться").font(.headline).foregroundColor(.white)
+                                        .frame(maxWidth: .infinity, minHeight: 52).background(Theme.accent, in: Capsule())
+                                }
+                            }
+                            .padding(10)
+                        }
+                        footnote("По этой ссылке можно вступить в \(isChannel ? "канал" : "группу"). Вы можете сбросить её в любой момент.")
+                        card {
+                            Toggle("Заявки на вступление", isOn: $requests).tint(Theme.a1)
+                                .font(.system(size: 18)).padding(.horizontal, 18).padding(.vertical, 12)
+                        }
+                        .padding(.top, 14)
+                        footnote("Новые участники смогут вступить в \(isChannel ? "канал" : "группу") только после одобрения заявки администратором.")
+                    }
+
+                    SectionTitle(text: "Сохранение и копирование материалов").padding(.top, 14)
+                    card {
+                        Toggle("Запретить копирование", isOn: $noCopy).tint(Theme.a1)
+                            .font(.system(size: 18)).padding(.horizontal, 18).padding(.vertical, 12)
+                    }
+                    footnote(isChannel ? "Подписчики смогут копировать, сохранять или пересылать материалы из канала." : "Участники смогут копировать, сохранять или пересылать материалы из группы.")
+                    Color.clear.frame(height: 30)
                 }
             }
-            .sheet(isPresented: $pickMembers) {
-                PeoplePicker(title: "Участники", buttonTitle: "Готово") { members = $0 }.environmentObject(model)
+            .scrollDismissesKeyboard(.interactively)
+        }
+    }
+
+    private func card<C: View>(@ViewBuilder _ c: () -> C) -> some View {
+        VStack(spacing: 0) { c() }
+            .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 26))
+            .padding(.horizontal, 14)
+    }
+
+    private func footnote(_ t: String) -> some View {
+        Text(t).font(.system(size: 14.5)).foregroundColor(Theme.muted)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 28).padding(.top, 4)
+    }
+
+    private func typeRow(_ t: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.a1)
+                    .opacity(on ? 1 : 0).frame(width: 28)
+                Text(t).font(.system(size: 19)).foregroundColor(Theme.text)
+                Spacer()
             }
+            .padding(.horizontal, 18).frame(height: 58).contentShape(Rectangle())
+        }
+    }
+
+    // MARK: 4. участники и создание
+
+    private var membersScreen: some View {
+        VStack(spacing: 0) {
+            header(isChannel ? "Подписчики" : "Участники", back: { step = .type })
+            VStack(spacing: 14) {
+                Button { pickMembers = true } label: {
+                    SettingsRow(icon: "person.badge.plus", color: Color(hex: 0x2bd67b),
+                                title: members.isEmpty ? (isChannel ? "Добавить подписчиков" : "Добавить участников") : "Выбрано: \(members.count)")
+                }
+                .padding(.horizontal, 14).padding(.vertical, 6)
+                .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 26))
+                footnote("Это необязательно — людей можно позвать позже по ссылке или из списка контактов.")
+                Spacer()
+                GradientButton(title: isChannel ? "Создать канал" : "Создать группу", loading: busy) { create() }
+                    .padding(.bottom, 20)
+            }
+            .padding(.horizontal, 14).padding(.top, 12)
         }
     }
 
     private func create() {
         busy = true
         Task {
-            let id = await model.createChat(type: mode ?? "group", title: title.trimmingCharacters(in: .whitespaces), description: about,
-                                            members: members, username: mode == "channel" ? username.replacingOccurrences(of: "@", with: "") : nil)
+            let id = await model.createChat(type: mode, title: title.trimmingCharacters(in: .whitespaces), description: about, members: members,
+                                            username: isPublic ? cleanName : nil, protected: noCopy, requests: isPublic ? false : requests,
+                                            invite: invite, avatar: avatar)
             busy = false
             if id != nil { dismiss() }
+        }
+    }
+}
+
+/// Иллюстрация «Что такое канал?»: телефон, шапка канала и просмотры
+struct ChannelIntroArt: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 30).fill(Color(hex: 0xb9d8f6)).frame(width: 150, height: 230)
+                .overlay(RoundedRectangle(cornerRadius: 30).stroke(Color(hex: 0x3b4a5c), lineWidth: 5))
+                .overlay(alignment: .top) { Capsule().fill(Color(hex: 0x3b4a5c)).frame(width: 52, height: 9).padding(.top, 6) }
+            Text("🦆").font(.system(size: 86)).offset(y: 34)
+            RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.9)).frame(width: 96, height: 34).offset(x: -4, y: -36)
+            VStack(spacing: 2) {
+                Text("Канал").font(.system(size: 18, weight: .bold)).foregroundColor(Color(hex: 0x1d2733))
+                Text("57k подписчиков").font(.system(size: 11)).foregroundColor(Color(hex: 0x5b6b7d))
+            }
+            .frame(width: 98, height: 98).background(Circle().fill(Color(hex: 0xcfe4f8)).overlay(Circle().stroke(Color.white, lineWidth: 3)))
+            .offset(x: -82, y: -78)
+            VStack(spacing: 2) {
+                Text("просмотры").font(.system(size: 12)).foregroundColor(Color(hex: 0x5b6b7d))
+                HStack(spacing: 4) { Image(systemName: "eye.fill"); Text("1K").font(.system(size: 16)) }.foregroundColor(Color(hex: 0x5b6b7d))
+            }
+            .frame(width: 96, height: 96).background(Circle().fill(Color(hex: 0xcfe4f8)).overlay(Circle().stroke(Color.white, lineWidth: 3)))
+            .offset(x: 82, y: 6)
         }
     }
 }
@@ -1187,5 +1458,64 @@ struct SharedMediaSection: View {
         links = ls
         loaded = true
         if let first = available.first, !available.contains(tab) { tab = first }
+    }
+}
+
+
+/// Заявки на вступление (для администраторов): принять или отклонить
+struct JoinRequestsSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    let chatId: String
+    @State private var ids: [String] = []
+    @State private var loaded = false
+    @State private var joinOn = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 10) {
+                    SettingsGroup {
+                        Toggle("Заявки на вступление", isOn: Binding(get: { joinOn }, set: { v in
+                            joinOn = v
+                            Task { _ = try? await API.shared.rpc("lm_set_join_requests", ["p_chat": chatId, "p_on": v]) }
+                        })).tint(Theme.a1).padding(.vertical, 8)
+                    }
+                    Text("Если включено, новые участники вступают только после вашего одобрения.")
+                        .font(.footnote).foregroundColor(Theme.muted).padding(.horizontal, 24).frame(maxWidth: .infinity, alignment: .leading)
+                    if loaded && ids.isEmpty {
+                        Text("Заявок пока нет").foregroundColor(Theme.muted).padding(30)
+                    }
+                    ForEach(ids, id: \.self) { id in
+                        HStack(spacing: 12) {
+                            AvatarView(name: model.displayName(id), url: model.profiles[id]?.avatarURL, color: model.profiles[id]?.color ?? 0, size: 44)
+                            Text(model.displayName(id)).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
+                            Spacer()
+                            Button { decide(id, false) } label: { Image(systemName: "xmark").foregroundColor(Theme.danger).frame(width: 38, height: 38).background(Circle().fill(Theme.panel2)) }
+                            Button { decide(id, true) } label: { Image(systemName: "checkmark").foregroundColor(.white).frame(width: 38, height: 38).background(Circle().fill(Theme.accent)) }
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 6)
+                    }
+                }
+                .padding(.top, 10)
+            }
+            .background(Theme.bg.ignoresSafeArea())
+            .navigationTitle("Заявки").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Закрыть") { dismiss() } } }
+            .task { await load() }
+        }
+    }
+
+    private func load() async {
+        let rows = (try? await API.shared.rpc("lm_requests_list", ["p_chat": chatId])) as? [JSON] ?? []
+        ids = rows.compactMap { $0.str("user_id") }
+        await model.loadProfiles(ids)
+        if let c = (try? await API.shared.select("lm_chats", ["select": "join_requests", "id": "eq." + chatId]))?.first { joinOn = c.bool("join_requests") }
+        loaded = true
+    }
+
+    private func decide(_ id: String, _ ok: Bool) {
+        ids.removeAll { $0 == id }
+        Task { _ = try? await API.shared.rpc("lm_request_decide", ["p_chat": chatId, "p_user": id, "p_ok": ok]) }
     }
 }

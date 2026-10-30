@@ -65,6 +65,8 @@ struct MessageRow: View {
     let chat: ChatItem?
     let first: Bool
     let last: Bool
+    /// Альбом: все фото/видео одного отправления (если больше одного)
+    var album: [Message] = []
     var onReply: (Message) -> Void
     var onEdit: (Message) -> Void
     var onForward: (Message) -> Void
@@ -420,6 +422,14 @@ struct MessageRow: View {
     }
 
     @ViewBuilder private var media: some View {
+        if album.count > 1 {
+            AlbumGrid(items: album, onImage: onImage, onVideo: onVideo)
+        } else {
+            singleMedia
+        }
+    }
+
+    @ViewBuilder private var singleMedia: some View {
         switch m.kind {
         case "image":
             if let u = m.mediaURL.flatMap(URL.init(string:)) {

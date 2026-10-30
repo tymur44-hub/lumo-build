@@ -801,11 +801,90 @@ final class AppModel: ObservableObject {
         } catch { say(error.localizedDescription) }
     }
 
-    func createChat(type: String, title: String, description: String, members: [String], username: String?) async -> String? {
+    /// Удалить чат. «У себя» — выйти (в личных ещё и очистить историю), «у всех» — стереть чат целиком
+    /// (в группе и канале — только владелец, в личном — у обоих собеседников).
+    func deleteChat(_ chatId: String, everyone: Bool) async {
+        guard let id = myId else { return }
         do {
-            var p: JSON = ["p_type": type, "p_title": title, "p_members": members, "p_description": description]
+            if everyone {
+                _ = try await API.shared.rpc("lm_delete_chat", ["p_chat": chatId, "p_all": true])
+            } else {
+                if chat(chatId)?.isPrivate == true { _ = try? await API.shared.rpc("lm_clear_chat", ["p_chat": chatId]) }
+                try await API.shared.raw("DELETE", "/rest/v1/lm_members", query: [URLQueryItem(name: "chat_id", value: "eq." + chatId),
+                                                                                URLQueryItem(name: "user_id", value: "eq." + id)])
+            }
+            messages[chatId] = nil
+            path = []
+            await loadChats()
+        } catch { say(error.localizedDescription) }
+    }
+
+    /// Вступить по ссылке-приглашению
+    func joinByCode(_ code: String) async {
+        do {
+            guard let r = try await API.shared.rpc("lm_join_code", ["p_code": code]) as? JSON else { return }
+            if r.str("status") == "requested" { say("Заявка отправлена — дождитесь одобрения администратора"); return }
+            await loadChats()
+            if let c = r.str("chat") { open(c) }
+        } catch { say(error.localizedDescription) }
+    }
+
+    func inviteCode(_ chatId: String, reset: Bool = false) async -> String? {
+        (try? await API.shared.rpc("lm_chat_invite", ["p_chat": chatId, "p_reset": reset])) as? String
+    }
+
+    struct AlbumPart {
+        let kind: String
+        let data: Data
+        let ext: String
+        let mime: String
+        let meta: JSON
+    }
+
+    /// Несколько фото/видео одним альбомом: у всех частей общий `album` в meta, подпись — у последней
+    func sendAlbum(chatId: String, parts: [AlbumPart], caption: String?, replyTo: Int?) {
+        guard let me = myId, !parts.isEmpty else { return }
+        let album: String? = parts.count > 1 ? UUID().uuidString : nil
+        let base = -Int(Date().timeIntervalSince1970 * 1000) - 5000
+        var temps: [Message] = []
+        for (i, p) in parts.enumerated() {
+            var meta = p.meta
+            if let a = album { meta["album"] = a }
+            let last = i == parts.count - 1
+            var t = Message(pendingIn: chatId, sender: me, kind: p.kind, body: last ? caption : nil, meta: meta, replyTo: i == 0 ? replyTo : nil)
+            t.id = base + i
+            temps.append(t)
+        }
+        messages[chatId, default: []].append(contentsOf: temps)
+        Task {
+            var urls = [String?](repeating: nil, count: parts.count)
+            await withTaskGroup(of: (Int, String?).self) { g in
+                for (i, p) in parts.enumerated() {
+                    let d = p.data, e = p.ext, m = p.mime
+                    g.addTask { (i, try? await API.shared.upload(d, ext: e, contentType: m)) }
+                }
+                for await (i, u) in g { urls[i] = u }
+            }
+            for (i, t) in temps.enumerated() {
+                guard let u = urls[i] else {
+                    messages[chatId]?.removeAll { $0.id == t.id }
+                    say("Ошибка загрузки")
+                    continue
+                }
+                await send(chatId: chatId, kind: t.kind, body: t.body, media: u, meta: t.meta, replyTo: t.replyTo, pendingId: t.id)
+            }
+        }
+    }
+
+    func createChat(type: String, title: String, description: String, members: [String], username: String?,
+                    protected: Bool = false, requests: Bool = false, invite: String? = nil, avatar: UIImage? = nil) async -> String? {
+        do {
+            var p: JSON = ["p_type": type, "p_title": title, "p_members": members, "p_description": description,
+                           "p_protected": protected, "p_requests": requests]
             if let u = username, !u.isEmpty { p["p_username"] = u.lowercased() }
-            guard let cid = try await API.shared.rpc("lm_create_chat", p) as? String else { return nil }
+            if let i = invite, !i.isEmpty { p["p_invite"] = i }
+            guard let cid = try await API.shared.rpc("lm_create_chat_v3", p) as? String else { return nil }
+            if let img = avatar { await setChatAvatar(cid, img) }
             await loadChats()
             open(cid)
             return cid
@@ -1150,8 +1229,13 @@ final class AppModel: ObservableObject {
 
     /// Удалить сообщения: у всех (исчезают у всех) или только у себя
     func delete(_ list: [Message], everyone: Bool) async {
-        let ids = Set(list.map { $0.id }.filter { $0 > 0 })
+        var ids = Set(list.map { $0.id }.filter { $0 > 0 })
         guard !ids.isEmpty, let chatId = list.first?.chatId else { return }
+        // удаляем альбом целиком, а не одну картинку из него
+        let albums = Set(list.compactMap { $0.meta["album"] as? String })
+        if !albums.isEmpty {
+            for m in messages[chatId] ?? [] where m.id > 0 && albums.contains((m.meta["album"] as? String) ?? "") { ids.insert(m.id) }
+        }
         withAnimation(.easeOut(duration: 0.25)) {
             messages[chatId] = (messages[chatId] ?? []).filter { !ids.contains($0.id) }
         }
