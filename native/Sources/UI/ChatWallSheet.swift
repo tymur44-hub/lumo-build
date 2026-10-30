@@ -46,9 +46,10 @@ struct ChatWallSheet: View {
         ScrollView {
             VStack(spacing: 14) {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                    ForEach(0..<10, id: \.self) { i in
+                    ForEach(wallAll, id: \.self) { i in
                         ChatWallpaper(index: i)
                             .frame(height: 140).clipShape(RoundedRectangle(cornerRadius: 16))
+                            .overlay(alignment: .topTrailing) { if wallIsPremium(i) { Image(systemName: "star.fill").font(.system(size: 13)).foregroundColor(Color(hex: 0xffc247)).padding(8) } }
                             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.line))
                             .onTapGesture { preset = i; image = nil; withAnimation(.easeInOut(duration: 0.3)) { preview = true } }
                     }

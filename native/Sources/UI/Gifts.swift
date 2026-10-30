@@ -3,7 +3,7 @@ import WebKit
 
 struct Gift: Identifiable { let id: String; let name: String; let rarity: String; let price: Int; let supply: Int; let sold: Int
     var left: Int { max(0, supply - sold) } }
-struct OwnedGift: Identifiable { let id: Int; let giftId: String; let name: String; let rarity: String; let serial: Int; let supply: Int; let from: String?; var at: String? = nil }
+struct OwnedGift: Identifiable { let id: Int; let giftId: String; let name: String; let rarity: String; let serial: Int; let supply: Int; let from: String?; var at: String? = nil; var to: String? = nil }
 struct GiftTarget: Identifiable { let id: String }
 
 func rarityName(_ r: String) -> String {
@@ -20,9 +20,9 @@ final class GiftStore: ObservableObject {
     @Published var mine: [OwnedGift] = []
     @Published var of: [String: [OwnedGift]] = [:]
 
-    private func parse(_ a: [JSON]) -> [OwnedGift] {
+    private func parse(_ a: [JSON], owner: String?) -> [OwnedGift] {
         a.map { OwnedGift(id: $0.int("id") ?? 0, giftId: $0.str("gift_id") ?? "", name: $0.str("name") ?? "", rarity: $0.str("rarity") ?? "",
-                          serial: $0.int("serial") ?? 0, supply: $0.int("supply") ?? 0, from: $0.str("from_user"), at: $0.str("at")) }
+                          serial: $0.int("serial") ?? 0, supply: $0.int("supply") ?? 0, from: $0.str("from_user"), at: $0.str("at"), to: owner) }
     }
 
     func load() async {
@@ -34,7 +34,7 @@ final class GiftStore: ObservableObject {
     func loadUser(_ user: String?) async {
         let params: JSON = user.map { ["p_user": $0] } ?? [:]
         guard let a = (try? await API.shared.rpc("lm_gift_mine", params)) as? [JSON] else { return }
-        let l = parse(a)
+        let l = parse(a, owner: user ?? AppModel.shared.myId)
         if user == nil { mine = l }
         of[user ?? ""] = l
     }
@@ -184,7 +184,12 @@ struct OwnedGiftSheet: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let o: OwnedGift
-    private var price: Int? { GiftStore.shared.catalog.first { $0.id == o.giftId }?.price }
+    @ObservedObject private var store = GiftStore.shared
+    private var price: Int? { store.catalog.first { $0.id == o.giftId }?.price }
+    private var toId: String? { o.to ?? model.myId }
+    private var fromId: String? { o.from ?? toId }
+    private var isMine: Bool { toId == model.myId }
+    private var titleText: String { isMine ? (fromId == model.myId ? "Ваш подарок" : "Подарок Вам") : "Подарок для " + model.displayName(toId) }
     private var dateText: String {
         guard let s = o.at else { return "—" }
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "UTC"); f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
@@ -202,6 +207,7 @@ struct OwnedGiftSheet: View {
     }
     var body: some View {
         VStack(spacing: 8) {
+            Color.clear.frame(height: 0).task { if store.catalog.isEmpty { await store.load() } }
             HStack {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
@@ -210,13 +216,13 @@ struct OwnedGiftSheet: View {
                 Spacer()
             }
             GiftAnimated(id: o.giftId).frame(width: 220, height: 220)
-            Text(o.from != nil ? "Подарок Вам" : "Ваш подарок").font(.system(size: 24, weight: .black)).foregroundColor(Theme.text)
+            Text(titleText).font(.system(size: 24, weight: .black)).foregroundColor(Theme.text)
             Text("\(o.name) №\(o.serial) из \(o.supply) · \(rarityName(o.rarity))").font(.system(size: 15, weight: .semibold))
                 .foregroundColor(rarityColor(o.rarity)).multilineTextAlignment(.center)
-            Text("Подарок хранится в вашем профиле.").font(.system(size: 14)).foregroundColor(Theme.muted)
+            Text(isMine ? "Подарок хранится в вашем профиле." : "Подарок хранится в профиле получателя.").font(.system(size: 14)).foregroundColor(Theme.muted)
             VStack(spacing: 0) {
                 row("От") {
-                    if let f = o.from {
+                    if let f = fromId, f != model.myId {
                         let pr = model.profiles[f]
                         AvatarView(name: pr?.name ?? model.displayName(f), url: pr?.avatarURL, color: pr?.color ?? 0, size: 30)
                         Text(model.displayName(f)).font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.a1).lineLimit(1)
@@ -391,7 +397,7 @@ struct GiftMessageCard: View {
                 Text("\(name) №\(serial) из \(supply)").font(.system(size: 14, weight: .bold)).foregroundColor(c).multilineTextAlignment(.center)
                 Text(mine ? "Подарок появится в профиле получателя." : "Подарок добавлен в ваш профиль.")
                     .font(.system(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
-                Button { open = OwnedGift(id: 0, giftId: gid, name: name, rarity: rarity, serial: serial, supply: supply, from: mine ? nil : m.senderId) } label: {
+                Button { open = OwnedGift(id: 0, giftId: gid, name: name, rarity: rarity, serial: serial, supply: supply, from: m.senderId, to: mine ? chat?.peerId : model.myId) } label: {
                     Text("Посмотреть").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
                         .padding(.horizontal, 26).padding(.vertical, 10).background(Capsule().fill(c.opacity(0.3)))
                 }.padding(.top, 6)

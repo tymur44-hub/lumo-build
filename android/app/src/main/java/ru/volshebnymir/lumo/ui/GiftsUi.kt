@@ -39,7 +39,7 @@ import ru.volshebnymir.lumo.core.*
 data class Gift(val id: String, val name: String, val rarity: String, val price: Int, val supply: Int, val sold: Int) {
     val left get() = (supply - sold).coerceAtLeast(0)
 }
-data class OwnedGift(val id: Long, val giftId: String, val name: String, val rarity: String, val serial: Int, val supply: Int, val from: String?, val at: String? = null)
+data class OwnedGift(val id: Long, val giftId: String, val name: String, val rarity: String, val serial: Int, val supply: Int, val from: String?, val at: String? = null, val to: String? = null)
 
 fun rarityName(r: String) = when (r) { "rare" -> "Редкий"; "epic" -> "Эпический"; "legendary" -> "Легендарный"; "mythic" -> "Мифический"; else -> r }
 fun rarityColor(r: String) = when (r) { "rare" -> Color(0xFF22C7E0); "epic" -> Color(0xFFFF8A3D); "legendary" -> Color(0xFFB069FF); "mythic" -> Color(0xFFFFC247); else -> Color.Gray }
@@ -49,8 +49,8 @@ object Gifts {
     val mine = mutableStateListOf<OwnedGift>()
     val of = mutableStateMapOf<String, List<OwnedGift>>()
 
-    private fun parse(a: JSONArray?) = a.objects().map {
-        OwnedGift(it.optLong("id"), it.optString("gift_id"), it.optString("name"), it.optString("rarity"), it.optInt("serial"), it.optInt("supply"), it.str("from_user"), it.str("at"))
+    private fun parse(a: JSONArray?, owner: String?) = a.objects().map {
+        OwnedGift(it.optLong("id"), it.optString("gift_id"), it.optString("name"), it.optString("rarity"), it.optInt("serial"), it.optInt("supply"), it.str("from_user"), it.str("at"), owner)
     }
 
     suspend fun load() {
@@ -62,7 +62,7 @@ object Gifts {
 
     suspend fun loadUser(user: String?) {
         val a = runCatching { Api.rpc("lm_gift_mine", if (user == null) jsonOf() else jsonOf("p_user" to user)) as? JSONArray }.getOrNull() ?: return
-        val l = parse(a)
+        val l = parse(a, user ?: AppModel.myId)
         if (user == null || user == AppModel.myId) { mine.clear(); mine.addAll(l) }
         of[user ?: AppModel.myId ?: ""] = l
     }
@@ -83,25 +83,20 @@ fun GiftThumb(id: String, modifier: Modifier = Modifier) {
     else Box(modifier.clip(RoundedCornerShape(20.dp)).background(Color.Gray.copy(alpha = 0.3f)))
 }
 
-@SuppressLint("SetJavaScriptEnabled")
+/** Анимированный подарок: заранее отрисованная зацикленная WebP-анимация (на Android 9+), иначе статичная картинка */
 @Composable
 fun GiftAnimated(id: String, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    val html = remember(id) {
-        val svg = runCatching { ctx.assets.open("gifts/$id.svg").bufferedReader().use { it.readText() } }.getOrDefault("")
-        "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}svg{width:100%;height:100%;display:block}</style></head><body>$svg</body></html>"
-    }
+    if (android.os.Build.VERSION.SDK_INT < 28) { GiftThumb(id, modifier); return }
     Box(modifier.clip(RoundedCornerShape(26.dp))) {
-    GiftThumb(id, Modifier.fillMaxSize())
-    AndroidView(factory = { c ->
-        WebView(c).apply {
-            setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
-            setBackgroundColor(android.graphics.Color.TRANSPARENT)
-            isVerticalScrollBarEnabled = false; isHorizontalScrollBarEnabled = false
-            isClickable = false; isLongClickable = false
-            loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
-        }
-    }, modifier = Modifier.fillMaxSize())
+        GiftThumb(id, Modifier.fillMaxSize())
+        AndroidView(factory = { c ->
+            android.widget.ImageView(c).apply {
+                scaleType = android.widget.ImageView.ScaleType.FIT_XY
+                val d = runCatching { android.graphics.ImageDecoder.decodeDrawable(android.graphics.ImageDecoder.createSource(c.assets, "gifts/$id.webp")) }.getOrNull()
+                if (d is android.graphics.drawable.AnimatedImageDrawable) { d.repeatCount = android.graphics.drawable.AnimatedImageDrawable.REPEAT_INFINITE; d.start() }
+                setImageDrawable(d)
+            }
+        }, modifier = Modifier.fillMaxSize())
     }
 }
 
@@ -185,7 +180,13 @@ fun GiftDetailDialog(g: Gift, to: String?, onClose: () -> Unit) {
 @Composable
 fun OwnedGiftDialog(o: OwnedGift, onClose: () -> Unit) {
     val p = P
+    LaunchedEffect(Unit) { if (Gifts.catalog.isEmpty()) Gifts.load() }
     val price = Gifts.catalog.firstOrNull { it.id == o.giftId }?.price
+    val me = AppModel.myId
+    val toId = o.to ?: me
+    val fromId = o.from ?: toId
+    val title = if (toId == me) (if (fromId == me) "Ваш подарок" else "Подарок Вам") else "Подарок для " + AppModel.displayName(toId)
+    val sub = if (toId == me) "Подарок хранится в вашем профиле." else "Подарок хранится в профиле получателя."
     val date = remember(o.at) {
         runCatching {
             val d = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.parse(o.at!!.take(19))!!
@@ -204,18 +205,18 @@ fun OwnedGiftDialog(o: OwnedGift, onClose: () -> Unit) {
                 }
                 GiftAnimated(o.giftId, Modifier.size(230.dp))
                 Spacer(Modifier.height(8.dp))
-                Text(if (o.from != null) "Подарок Вам" else "Ваш подарок", color = p.text, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                Text(title, color = p.text, fontSize = 24.sp, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(6.dp))
                 Text("${o.name} №${o.serial} из ${o.supply} · ${rarityName(o.rarity)}", color = rarityColor(o.rarity), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-                Text("Подарок хранится в вашем профиле.", color = p.muted, fontSize = 14.sp)
+                Text(sub, color = p.muted, fontSize = 14.sp)
                 Spacer(Modifier.height(14.dp))
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).border(1.dp, p.line, RoundedCornerShape(18.dp))) {
                     SheetRow("От") {
-                        if (o.from != null) {
-                            val pr = AppModel.profiles[o.from]
-                            Avatar(pr?.name ?: AppModel.displayName(o.from), pr?.avatarUrl, pr?.color ?: 0, 30.dp)
+                        if (fromId != me) {
+                            val pr = AppModel.profiles[fromId]
+                            Avatar(pr?.name ?: AppModel.displayName(fromId), pr?.avatarUrl, pr?.color ?: 0, 30.dp)
                             Spacer(Modifier.width(8.dp))
-                            Text(AppModel.displayName(o.from), color = p.a1, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1)
+                            Text(AppModel.displayName(fromId), color = p.a1, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1)
                         } else Text("Вы", color = p.text, fontSize = 16.sp)
                     }
                     Divider()
@@ -338,7 +339,7 @@ fun GiftMessageCard(m: Message, chat: ChatItem?) {
     val price = m.meta.optInt("price")
     val c = rarityColor(rarity)
     val who = if (mine) "Вы отправили подарок: ${AppModel.displayName(chat?.peerId)}" else "${AppModel.displayName(m.senderId)} отправил(а) Вам подарок"
-    if (open) OwnedGiftDialog(OwnedGift(0, gid, name, rarity, serial, supply, if (mine) null else m.senderId)) { open = false }
+    if (open) OwnedGiftDialog(OwnedGift(0, gid, name, rarity, serial, supply, m.senderId, null, if (mine) chat?.peerId else AppModel.myId)) { open = false }
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("$who стоимостью $price ${lumenWord(price.toLong())}", color = p.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 24.dp).clip(RoundedCornerShape(16.dp)).background(p.panel.copy(alpha = 0.85f)).padding(horizontal = 14.dp, vertical = 6.dp))

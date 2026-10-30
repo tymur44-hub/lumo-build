@@ -76,6 +76,7 @@ object Extra {
         ctx = c.applicationContext
         val p = prefs()
         wall = p.getInt("wall", 0)
+        if (!p.getBoolean("wall_v2", false)) { if (wall in 1..4) wall += 5; p.edit().putInt("wall", wall).putBoolean("wall_v2", true).apply() }
         hasLock = !p.getString("lock", null).isNullOrEmpty()
         locked = hasLock
         bio = hasLock && p.getBoolean("bio", false)

@@ -21,7 +21,9 @@ struct ChatWallpaper: View {
                 }
                 Color.black.opacity(Double(c.dim) / 100)
             }
-            switch custom?.url != nil ? -1 : ((idx >= 6 && custom == nil && !AppModel.shared.isPremium) ? 0 : idx) {
+            switch custom?.url != nil ? -1 : ((wallIsPremium(idx) && custom == nil && !AppModel.shared.isPremium) ? 0 : idx) {
+            case 10...17, 20...27:
+                WallArtView(index: idx)
             case 6...9:
                 LinearGradient(colors: [Color(hex: ChatWallpaper.premWalls[idx - 6].0), Color(hex: ChatWallpaper.premWalls[idx - 6].1)], startPoint: .top, endPoint: .bottom)
             case 1:
@@ -140,13 +142,14 @@ struct AppearanceView: View {
 
                 SectionTitle(text: "Фон чата")
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                    ForEach(0..<10, id: \.self) { i in
+                    ForEach(wallAll, id: \.self) { i in
                         ChatWallpaper(index: i)
                             .frame(height: 110)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                             .overlay(RoundedRectangle(cornerRadius: 16).stroke(look.wall == i ? Theme.a1 : Theme.line, lineWidth: look.wall == i ? 3 : 1))
                             .overlay { if i == 0 { Text("Без фона").font(.caption.weight(.bold)).foregroundColor(Theme.muted) } }
-                            .onTapGesture { if i >= 6 && !model.isPremium { model.say(premiumSoon) } else { look.wall = i } }
+                            .overlay(alignment: .topTrailing) { if wallIsPremium(i) { Image(systemName: "star.fill").font(.system(size: 13)).foregroundColor(Color(hex: 0xffc247)).padding(8) } }
+                            .onTapGesture { if wallIsPremium(i) && !model.isPremium { model.say(premiumSoon) } else { look.wall = i } }
                     }
                 }
                 .padding(.horizontal, 14)

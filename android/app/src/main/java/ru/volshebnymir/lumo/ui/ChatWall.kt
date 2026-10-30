@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
@@ -69,9 +70,9 @@ fun ChatWallBackground(chatId: String) {
         AsyncImage(cw.url, null, Modifier.fillMaxSize().then(if (cw.blur) Modifier.blur(14.dp) else Modifier), contentScale = ContentScale.Crop)
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = cw.dim / 100f)))
     } else if (cw?.preset != null) {
-        wallPresetBrush(cw.preset, p)?.let { Box(Modifier.fillMaxSize().background(it)) }
+        WallLayer(cw.preset, p)
         if (cw.dim > 0) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = cw.dim / 100f)))
-    } else Extra.wallBrush()?.let { wb -> Box(Modifier.fillMaxSize().background(wb)) }
+    } else if (Extra.wall != 0 && (!wallIsPremium(Extra.wall) || AppModel.isPremium)) WallLayer(Extra.wall, p)
 }
 
 /** Обои для этого чата: только для себя или для себя и собеседника (как в Telegram) */
@@ -115,10 +116,11 @@ fun ChatWallDialog(chatId: String, peerName: String?, isPrivate: Boolean, onClos
                     }
                     Spacer(Modifier.height(12.dp))
                     LazyVerticalGrid(GridCells.Fixed(3), Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items((0..9).toList()) { i ->
+                        items(WALL_ALL) { i ->
                             Box(Modifier.height(140.dp).clip(RoundedCornerShape(16.dp)).background(p.chatBg).border(1.dp, p.line, RoundedCornerShape(16.dp))
                                 .clickable { preset = i; uri = null; preview = true }) {
-                                wallPresetBrush(i, p)?.let { Box(Modifier.fillMaxSize().background(it)) }
+                                WallLayer(i, p)
+                                if (wallIsPremium(i)) Icon(Icons.Filled.Star, null, tint = Color(0xFFFFC247), modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(16.dp))
                             }
                         }
                     }
@@ -138,7 +140,7 @@ fun ChatWallDialog(chatId: String, peerName: String?, isPrivate: Boolean, onClos
                 val bmp = remember(uri) { uri?.let { u -> runCatching { ctx.contentResolver.openInputStream(u)?.use { BitmapFactory.decodeStream(it) } }.getOrNull() } }
                 Box(Modifier.fillMaxSize()) {
                     if (bmp != null) Image(bmp.asImageBitmap(), null, Modifier.fillMaxSize().then(if (blur) Modifier.blur(14.dp) else Modifier), contentScale = ContentScale.Crop)
-                    else wallPresetBrush(preset ?: 0, p)?.let { Box(Modifier.fillMaxSize().background(p.chatBg)); Box(Modifier.fillMaxSize().background(it)) } ?: Box(Modifier.fillMaxSize().background(p.chatBg))
+                    else { Box(Modifier.fillMaxSize().background(p.chatBg)); WallLayer(preset ?: 0, p) }
                     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim / 100f)))
                 }
                 Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(12.dp)) {
