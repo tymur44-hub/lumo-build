@@ -535,7 +535,7 @@ private fun PaidBar(chat: ChatItem?, chatId: String) {
     val paidIn = AppModel.messages[chatId]?.filter { it.senderId == peer && it.meta.optInt("paid") > 0 }.orEmpty()
     val show = AppModel.isContact(peer).not() && paidIn.isNotEmpty()
     AnimatedVisibility(price > 0 && !show) {
-        Row(Modifier.fillMaxWidth().background(p.accent.copy(alpha = 0.12f)).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().background(p.a1.copy(alpha = 0.12f)).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             LumenIcon(18.dp); Spacer(Modifier.width(8.dp))
             Text("Каждое сообщение этому пользователю стоит $price ${lumenWord(price.toLong())}", color = p.text, fontSize = 13.sp)
         }
@@ -545,13 +545,13 @@ private fun PaidBar(chat: ChatItem?, chatId: String) {
         Column(Modifier.fillMaxWidth().background(p.panel.copy(alpha = 0.96f)).padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("${AppModel.displayName(peer)} заплатил(а) за сообщения: $total ${lumenWord(total.toLong())}", color = p.text, fontSize = 14.sp, textAlign = TextAlign.Center)
             Spacer(Modifier.height(8.dp))
-            Box(Modifier.clip(RoundedCornerShape(16.dp)).background(p.accent.copy(alpha = 0.16f)).bouncy {
+            Box(Modifier.clip(RoundedCornerShape(16.dp)).background(p.a1.copy(alpha = 0.16f)).bouncy {
                 scope.launch {
                     runCatching { Api.rpc("lm_paid_trust", jsonOf("p_user" to peer)); AppModel.loadContacts() }
                         .onSuccess { AppModel.say("Платные сообщения отключены для этого пользователя") }.onFailure { AppModel.say(it.message ?: "Ошибка") }
                 }
             }.padding(horizontal = 18.dp, vertical = 10.dp)) {
-                Text("Отключить платные сообщения для этого пользователя", color = p.accent, fontWeight = FontWeight.Bold, fontSize = 13.5.sp, textAlign = TextAlign.Center)
+                Text("Отключить платные сообщения для этого пользователя", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 13.5.sp, textAlign = TextAlign.Center)
             }
             Text("Он будет добавлен в контакты.", color = p.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         }

@@ -328,8 +328,8 @@ fun GiftShopDialog(to: String, onClose: () -> Unit) {
                                 Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(tint.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) { Text(e, fontSize = 36.sp) }
                                 Text(t, color = p.text, fontWeight = FontWeight.Black, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
                                 Text("Premium", color = p.muted, fontSize = 13.sp)
-                                Box(Modifier.padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(p.accent.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 5.dp)) {
-                                    Text("Скоро", color = p.accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Box(Modifier.padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(p.a1.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 5.dp)) {
+                                    Text("Скоро", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                 }
                             }
                             if (badge != null) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(8.dp)).background(Brush.horizontalGradient(listOf(p.a1, Color(0xFFB069FF)))).padding(horizontal = 6.dp, vertical = 2.dp)) {
@@ -342,7 +342,7 @@ fun GiftShopDialog(to: String, onClose: () -> Unit) {
                 Spacer(Modifier.height(26.dp))
                 Text("Отправить подарок", color = p.text, fontWeight = FontWeight.Black, fontSize = 26.sp)
                 Text("Дарите $name подарки, которые можно хранить в профиле.", color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp))
-                Text("Подробнее о люменах ›", color = p.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy { info = true }.padding(6.dp))
+                Text("Подробнее о люменах ›", color = p.a1, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy { info = true }.padding(6.dp))
                 Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Pill("Все", !rare) { rare = false }
                     Pill("Коллекционные", rare) { rare = true }
@@ -395,7 +395,7 @@ fun LumenInfoDialog(onClose: () -> Unit) {
                 Triple(androidx.compose.material.icons.Icons.Filled.Star, "Ежедневный бонус", "Заходите каждый день и получайте люмены, серия увеличивает награду."),
             ).forEach { (ic, t, d) ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
-                    androidx.compose.material3.Icon(ic, null, tint = p.accent, modifier = Modifier.size(28.dp).padding(top = 2.dp))
+                    androidx.compose.material3.Icon(ic, null, tint = p.a1, modifier = Modifier.size(28.dp).padding(top = 2.dp))
                     Column(Modifier.padding(start = 14.dp)) {
                         Text(t, color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Text(d, color = p.muted, fontSize = 14.sp)
