@@ -113,30 +113,31 @@ fun SettingsScreen() {
         }
         if (emojiDlg) EmojiPickerDialog { emojiDlg = false }
         Card {
-            SettingsRow(Icons.Filled.Star, Color(0xFF2A1B5E), "Lumo Premium", "Дополнительные возможности и боты", lead = { PremiumStar(34.dp) }) { AppModel.push(Screen.Premium) }
+            SettingsRow(Icons.Filled.Person, p.a1, "Мой профиль", "Имя, юзернейм, о себе, номер телефона") { AppModel.push(Screen.MyProfile) }
         }
         Card {
-            SettingsRow(Icons.Filled.Person, p.a1, "Мой профиль", "Имя, юзернейм, о себе, пароль") { AppModel.push(Screen.MyProfile) }
-            Divider()
             SettingsRow(Icons.Filled.Bookmark, Color(0xFF3A7BFF), "Избранное", "Заметки и сохранённые сообщения") { scope.launch { AppModel.myId?.let { AppModel.openDM(it) } } }
             Divider()
-            SettingsRow(Icons.Filled.Star, Color(0xFFFF9A3D), "Люмены", "${Lumens.balance} ${lumenWord(Lumens.balance)}", lead = { LumenIcon(26.dp) }) { AppModel.push(Screen.Wallet) }
+            SettingsRow(Icons.Filled.Call, Color(0xFF2BD67B), "Недавние звонки", "Недавние и пропущенные") { AppModel.push(Screen.CallsHistory) }
             Divider()
-            SettingsRow(Icons.Filled.CardGiftcard, Color(0xFFFF5E8A), "Подарки", "NFT-подарки за люмены") { AppModel.push(Screen.Gifts) }
-            Divider()
-            SettingsRow(Icons.Filled.Call, Color(0xFF2BD67B), "Звонки", "Недавние и пропущенные") { AppModel.push(Screen.CallsHistory) }
+            SettingsRow(Icons.Filled.Devices, Color(0xFFFF9F1A), "Устройства", "Активные сеансы") { AppModel.push(Screen.Devices) }
         }
         Card {
             SettingsRow(Icons.Filled.Notifications, Color(0xFFFF5B5B), "Уведомления и звуки", if (AppModel.tgLinked) "Telegram подключён" else "Telegram не подключён") { AppModel.push(Screen.Notifications) }
             Divider()
-            SettingsRow(Icons.Filled.Lock, Color(0xFF5B6CFF), "Конфиденциальность", "Время захода, звонки, блокировки") { AppModel.push(Screen.Privacy) }
+            SettingsRow(Icons.Filled.Lock, Color(0xFF8E8EA8), "Конфиденциальность", "Время захода, звонки, блокировки") { AppModel.push(Screen.Privacy) }
             Divider()
             SettingsRow(Icons.Filled.Palette, Color(0xFF22A6FF), "Оформление",
                 (when (Look.theme) { "light" -> "Светлая тема"; "dark" -> "Тёмная тема"; else -> "Как в системе" }) + " · цвет, текст") { AppModel.push(Screen.Appearance) }
             Divider()
-            SettingsRow(Icons.Filled.Devices, Color(0xFF2BD67B), "Устройства", "Активные сеансы") { AppModel.push(Screen.Devices) }
+            SettingsRow(Icons.Filled.Language, Color(0xFFA35BFF), "Язык", Lang.all.first { it.first == Lang.code }.second) { AppModel.push(Screen.Language) }
+        }
+        Card {
+            SettingsRow(Icons.Filled.Star, Color(0xFF2A1B5E), "Lumo Premium", "Дополнительные возможности и боты", lead = { PremiumStar(34.dp) }) { AppModel.push(Screen.Premium) }
             Divider()
-            SettingsRow(Icons.Filled.Language, Color(0xFF3A7BFF), "Язык", Lang.all.first { it.first == Lang.code }.second) { AppModel.push(Screen.Language) }
+            SettingsRow(Icons.Filled.Star, Color(0xFFFF9A3D), "Мои люмены", "${Lumens.balance} ${lumenWord(Lumens.balance)}", lead = { LumenIcon(26.dp) }) { AppModel.push(Screen.Wallet) }
+            Divider()
+            SettingsRow(Icons.Filled.CardGiftcard, Color(0xFF2BC4A8), "Подарки", "Коллекционные подарки за люмены") { AppModel.push(Screen.Gifts) }
         }
         Card {
             SettingsRow(Icons.Filled.PersonAdd, Color(0xFFFF5B8A), "Пригласить друзей", "Поделиться ссылкой на ваш профиль") { share(ctx, "Я в Lumo — напиши мне: " + AppModel.profileLink) }
@@ -304,8 +305,6 @@ fun PrivacyScreen() {
         }
         Spacer(Modifier.height(6.dp))
         Card {
-            SettingsRow(Icons.Filled.Phone, Color(0xFF2BD67B), "Номер телефона", PhoneStore.phone?.let { PhoneStore.pretty(it) } ?: "Не привязан") { AppModel.push(Screen.Phone) }
-            Divider()
             SettingsRow(Icons.Filled.Lock, Color(0xFFFF8A3D), "Двухэтапная аутентификация", if (PhoneStore.tfa) "Включена" else "Выключена") { AppModel.push(Screen.TwoFa) }
         }
         Spacer(Modifier.height(6.dp))
@@ -317,17 +316,11 @@ fun PrivacyScreen() {
         Spacer(Modifier.height(6.dp))
         SectionTitle("Конфиденциальность")
         Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(p.panel)) {
-            Row(Modifier.fillMaxWidth().bouncy { AppModel.push(Screen.MsgPrivacy) }.padding(horizontal = 20.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Сообщения", color = p.text, fontSize = 17.sp, modifier = Modifier.weight(1f))
-                Text(if (me?.privacy?.optString("msg_prem") == "premium") "Контакты и Premium" else "Все", color = p.muted, fontSize = 16.sp)
-                Icon(Icons.Filled.ChevronRight, null, tint = p.muted.copy(alpha = 0.6f), modifier = Modifier.size(22.dp))
-            }
-            Box(Modifier.padding(start = 20.dp).fillMaxWidth().height(1.dp).background(p.line))
             PRIVACY_ITEMS.forEachIndexed { i, it ->
-                Row(Modifier.fillMaxWidth().bouncy { AppModel.push(Screen.PrivacyKey(it.key)) }.padding(horizontal = 20.dp, vertical = 17.dp),
+                Row(Modifier.fillMaxWidth().bouncy { AppModel.push(if (it.key == "messages") Screen.MsgPrivacy else Screen.PrivacyKey(it.key)) }.padding(horizontal = 20.dp, vertical = 17.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(it.title, color = p.text, fontSize = 17.sp, modifier = Modifier.weight(1f))
-                    Text(privLabel(me?.priv(it.key) ?: "all"), color = p.muted, fontSize = 16.sp)
+                    Text(if (it.key == "messages") (if (me?.privacy?.optString("msg_prem") == "premium") "Контакты и Premium" else "Все") else privLabel(me?.priv(it.key) ?: "all"), color = p.muted, fontSize = 16.sp)
                     Icon(Icons.Filled.ChevronRight, null, tint = p.muted.copy(alpha = 0.6f), modifier = Modifier.size(22.dp))
                 }
                 if (i < PRIVACY_ITEMS.size - 1) Box(Modifier.padding(start = 20.dp).fillMaxWidth().height(1.dp).background(p.line))

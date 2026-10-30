@@ -9,26 +9,22 @@ struct PhoneSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                TGCard {
-                    HStack {
-                        Text("Номер").font(.system(size: 17)).foregroundColor(Theme.text)
-                        Spacer()
-                        Text(store.phone.map { PhoneStore.pretty($0) } ?? "Не привязан").font(.system(size: 17)).foregroundColor(Theme.muted)
-                    }
-                    .padding(.horizontal, 20).frame(height: 58)
-                }
-                .padding(.top, 12)
+                PhoneChangeArt().frame(width: 150, height: 150).padding(.top, 28)
+                Text(store.phone.map { PhoneStore.pretty($0) } ?? "Номер не привязан")
+                    .font(.system(size: 26, weight: .bold)).foregroundColor(Theme.text).padding(.top, 14)
+                Text(store.phone == nil
+                     ? "Привяжите номер для входа и защиты аккаунта. Ваши данные останутся на месте."
+                     : "Здесь Вы можете сменить номер телефона. Ваш аккаунт и все данные (сообщения, медиа, контакты и т. д.) будут перенесены на новый номер.")
+                    .font(.system(size: 15)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+                    .padding(.horizontal, 36).padding(.top, 10)
                 TGCard {
                     Button { bind = true } label: {
-                        HStack {
-                            Text(store.phone == nil ? "Привязать номер" : "Изменить номер").font(.system(size: 17)).foregroundColor(Theme.a1)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20).frame(height: 56).contentShape(Rectangle())
+                        Text(store.phone == nil ? "Привязать номер" : "Изменить номер").font(.system(size: 17, weight: .medium)).foregroundColor(Theme.a1)
+                            .frame(maxWidth: .infinity).frame(height: 56).contentShape(Rectangle())
                     }
                     .buttonStyle(RowButtonStyle())
                 }
-                .padding(.top, 12)
+                .padding(.top, 26)
                 TGCard {
                     NavigationLink(value: SettingsPage.privacyKey("phone")) {
                         HStack {
@@ -42,13 +38,33 @@ struct PhoneSettingsView: View {
                     .buttonStyle(RowButtonStyle())
                 }
                 .padding(.top, 12)
-                TGHint(text: "Номер нужен для входа и сверки контактов. Если выбрать «Никто», друзья не найдут вас по номеру в записной книжке.")
+                TGHint(text: "Если выбрать «Никто», друзья не найдут вас по номеру в записной книжке.")
             }
         }
         .background(Theme.bg.ignoresSafeArea())
-        .navigationTitle("Номер телефона").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Смена номера").navigationBarTitleDisplayMode(.inline)
         .task { await store.load() }
         .fullScreenCover(isPresented: $bind) { PhoneAuthView(mode: .bind) { bind = false } }
+    }
+}
+
+/// Иллюстрация «смена номера»: телефон, SIM-карта и стрелка
+struct PhoneChangeArt: View {
+    @State private var on = false
+    var body: some View {
+        ZStack {
+            Circle().fill(Theme.a1.opacity(0.14)).scaleEffect(on ? 1.04 : 0.96)
+            RoundedRectangle(cornerRadius: 18).fill(LinearGradient(colors: [Color(hex: 0x3a7bff), Color(hex: 0x7a5cff)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 66, height: 112).rotationEffect(.degrees(-8)).offset(x: -14)
+                .overlay(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.2)).frame(width: 52, height: 86).rotationEffect(.degrees(-8)).offset(x: -14))
+            RoundedRectangle(cornerRadius: 8).fill(Color.white)
+                .frame(width: 44, height: 56)
+                .overlay(RoundedRectangle(cornerRadius: 3).fill(Color(hex: 0xf5c542)).frame(width: 22, height: 18))
+                .rotationEffect(.degrees(10)).offset(x: 34, y: 22).shadow(color: .black.opacity(0.2), radius: 6, y: 3)
+            Image(systemName: "arrow.left.arrow.right.circle.fill").font(.system(size: 30)).foregroundColor(Theme.a2)
+                .background(Circle().fill(Theme.bg)).offset(x: 40, y: -40).rotationEffect(.degrees(on ? 8 : -8))
+        }
+        .onAppear { withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { on = true } }
     }
 }
 

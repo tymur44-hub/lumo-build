@@ -317,15 +317,33 @@ fun PhoneSettingsScreen() {
     val p = P
     LaunchedEffect(Unit) { PhoneStore.load() }
     Column(Modifier.fillMaxSize().background(p.bg).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        TopBar("Номер телефона")
+        TopBar("Смена номера")
+        val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "ph")
+        val rot by inf.animateFloat(-6f, 6f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1800, easing = androidx.compose.animation.core.FastOutSlowInEasing), androidx.compose.animation.core.RepeatMode.Reverse), label = "r")
+        Box(Modifier.fillMaxWidth().padding(top = 18.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(150.dp).clip(CircleShape).background(p.a1.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                Box(Modifier.offset(x = (-14).dp).graphicsLayer { rotationZ = -8f + rot }.size(66.dp, 112.dp).clip(RoundedCornerShape(18.dp))
+                    .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF3A7BFF), Color(0xFF7A5CFF)))))
+                Box(Modifier.offset(x = 34.dp, y = 22.dp).graphicsLayer { rotationZ = 10f - rot }.size(44.dp, 56.dp).clip(RoundedCornerShape(8.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(22.dp, 18.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFFF5C542)))
+                }
+            }
+        }
+        Text(PhoneStore.phone?.let { PhoneStore.pretty(it) } ?: "Номер не привязан", color = p.text, fontSize = 26.sp, fontWeight = FontWeight.Bold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text(if (PhoneStore.phone == null) "Привяжите номер для входа и защиты аккаунта. Ваши данные останутся на месте."
+            else "Здесь Вы можете сменить номер телефона. Ваш аккаунт и все данные (сообщения, медиа, контакты и т. д.) будут перенесены на новый номер.",
+            color = p.muted, fontSize = 15.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 34.dp))
+        Spacer(Modifier.height(10.dp))
         Card {
-            SettingsRow(Icons.Filled.Phone, Color(0xFF2BD67B), "Номер", PhoneStore.phone?.let { PhoneStore.pretty(it) } ?: "Не привязан") {}
-            Divider()
-            SettingsRow(Icons.Filled.Edit, p.a1, if (PhoneStore.phone == null) "Привязать номер" else "Изменить номер") { PhoneUi.bind = true }
-            Divider()
+            Box(Modifier.fillMaxWidth().bouncy { PhoneUi.bind = true }.padding(vertical = 17.dp), contentAlignment = Alignment.Center) {
+                Text(if (PhoneStore.phone == null) "Привязать номер" else "Изменить номер", color = p.a1, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+        Card {
             SettingsRow(Icons.Filled.Visibility, Color(0xFF5B6CFF), "Кто видит мой номер", privLabel(AppModel.me?.priv("phone") ?: "contacts")) { AppModel.push(Screen.PrivacyKey("phone")) }
         }
-        Text("Номер нужен для входа и сверки контактов. Если выбрать «Никто», друзья не найдут вас по номеру в записной книжке.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 30.dp))
+        Text("Если выбрать «Никто», друзья не найдут вас по номеру в записной книжке.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 30.dp))
     }
 }
 

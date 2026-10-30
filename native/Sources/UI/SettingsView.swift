@@ -35,6 +35,43 @@ struct SettingsView: View {
                         }
                     }
                     SettingsGroup {
+                        NavigationLink(value: SettingsPage.profile) {
+                            SettingsRow(icon: "person.fill", color: Theme.a1, title: "Мой профиль", subtitle: "Имя, юзернейм, о себе, номер телефона")
+                        }
+                    }
+                    SettingsGroup {
+                        Button { Task { await model.openSaved() } } label: {
+                            SettingsRow(icon: "bookmark.fill", color: Color(hex: 0x3a7bff), title: "Избранное", subtitle: "Заметки и сохранённые сообщения")
+                        }
+                        divider
+                        NavigationLink(value: SettingsPage.calls) {
+                            SettingsRow(icon: "phone.fill", color: Color(hex: 0x2bd67b), title: "Недавние звонки", subtitle: "Недавние и пропущенные")
+                        }
+                        divider
+                        NavigationLink(value: SettingsPage.devices) {
+                            SettingsRow(icon: "laptopcomputer.and.iphone", color: Color(hex: 0xff9f1a), title: "Устройства", subtitle: "Активные сеансы")
+                        }
+                    }
+                    SettingsGroup {
+                        NavigationLink(value: SettingsPage.notifications) {
+                            SettingsRow(icon: "bell.fill", color: Color(hex: 0xff5b5b), title: "Уведомления и звуки",
+                                        subtitle: model.tgLinked ? "Telegram подключён" : "Telegram не подключён")
+                        }
+                        divider
+                        NavigationLink(value: SettingsPage.privacy) {
+                            SettingsRow(icon: "lock.fill", color: Color(hex: 0x8e8ea8), title: "Конфиденциальность", subtitle: "Время захода, звонки, блокировки")
+                        }
+                        divider
+                        NavigationLink(value: SettingsPage.look) {
+                            SettingsRow(icon: "paintpalette.fill", color: Color(hex: 0x22a6ff), title: "Оформление",
+                                        subtitle: lookSubtitle)
+                        }
+                        divider
+                        NavigationLink(value: SettingsPage.language) {
+                            SettingsRow(icon: "globe", color: Color(hex: 0xa35bff), title: "Язык", subtitle: Lang.all.first { $0.code == Lang.current }?.title ?? "Русский")
+                        }
+                    }
+                    SettingsGroup {
                         NavigationLink(value: SettingsPage.premium) {
                             HStack(spacing: 14) {
                                 PremiumStarView(size: 34).frame(width: 34, height: 34)
@@ -48,21 +85,12 @@ struct SettingsView: View {
                             }
                             .padding(.vertical, 9).padding(.horizontal, 4).contentShape(Rectangle())
                         }
-                    }
-                    SettingsGroup {
-                        NavigationLink(value: SettingsPage.profile) {
-                            SettingsRow(icon: "person.fill", color: Theme.a1, title: "Мой профиль", subtitle: "Имя, юзернейм, о себе, пароль")
-                        }
-                        divider
-                        Button { Task { await model.openSaved() } } label: {
-                            SettingsRow(icon: "bookmark.fill", color: Color(hex: 0x3a7bff), title: "Избранное", subtitle: "Заметки и сохранённые сообщения")
-                        }
                         divider
                         NavigationLink(value: SettingsPage.wallet) {
                             HStack(spacing: 14) {
                                 LumenGem(size: 30).frame(width: 34, height: 34)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Люмены").font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                                    Text("Мои люмены").font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
                                     Text("\(Lumens.shared.balance) \(lumenWord(Lumens.shared.balance))").font(.system(size: 12.5)).foregroundColor(Theme.muted)
                                 }
                                 Spacer(minLength: 6)
@@ -72,34 +100,7 @@ struct SettingsView: View {
                         }
                         divider
                         NavigationLink(value: SettingsPage.gifts) {
-                            SettingsRow(icon: "gift.fill", color: Color(hex: 0xff5e8a), title: "Подарки", subtitle: "NFT-подарки за люмены")
-                        }
-                        divider
-                        NavigationLink(value: SettingsPage.calls) {
-                            SettingsRow(icon: "phone.fill", color: Color(hex: 0x2bd67b), title: "Звонки", subtitle: "Недавние и пропущенные")
-                        }
-                    }
-                    SettingsGroup {
-                        NavigationLink(value: SettingsPage.notifications) {
-                            SettingsRow(icon: "bell.fill", color: Color(hex: 0xff5b5b), title: "Уведомления и звуки",
-                                        subtitle: model.tgLinked ? "Telegram подключён" : "Telegram не подключён")
-                        }
-                        divider
-                        NavigationLink(value: SettingsPage.privacy) {
-                            SettingsRow(icon: "lock.fill", color: Color(hex: 0x5b6cff), title: "Конфиденциальность", subtitle: "Время захода, звонки, блокировки")
-                        }
-                        divider
-                        NavigationLink(value: SettingsPage.look) {
-                            SettingsRow(icon: "paintpalette.fill", color: Color(hex: 0x22a6ff), title: "Оформление",
-                                        subtitle: lookSubtitle)
-                        }
-                        divider
-                        NavigationLink(value: SettingsPage.devices) {
-                            SettingsRow(icon: "laptopcomputer.and.iphone", color: Color(hex: 0x2bd67b), title: "Устройства", subtitle: "Активные сеансы")
-                        }
-                        divider
-                        NavigationLink(value: SettingsPage.language) {
-                            SettingsRow(icon: "globe", color: Color(hex: 0xa35bff), title: "Язык", subtitle: Lang.all.first { $0.code == Lang.current }?.title ?? "Русский")
+                            SettingsRow(icon: "gift.fill", color: Color(hex: 0x2bc4a8), title: "Подарки", subtitle: "Коллекционные подарки за люмены")
                         }
                     }
                     SettingsGroup {
@@ -279,15 +280,19 @@ struct MyProfileView: View {
                         .buttonStyle(BouncyButtonStyle())
                     }
                     .padding(.vertical, 10)
-                    if let ph = Self.fmtPhone(phoneStore.phone) {
-                        Divider().overlay(Theme.line)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("телефон").font(.system(size: 14)).foregroundColor(Theme.text)
-                            Text(ph).font(.system(size: 17)).foregroundColor(Theme.text)
+                    Divider().overlay(Theme.line)
+                    NavigationLink(value: SettingsPage.phone) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("номер телефона").font(.system(size: 14)).foregroundColor(Theme.text)
+                                Text(Self.fmtPhone(phoneStore.phone) ?? "Привязать номер").font(.system(size: 17)).foregroundColor(Self.fmtPhone(phoneStore.phone) == nil ? Theme.a1 : Theme.text)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.muted.opacity(0.6))
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 10).contentShape(Rectangle())
                     }
+                    .buttonStyle(BouncyButtonStyle())
                     if let bio = me?.bio, !bio.isEmpty {
                         Divider().overlay(Theme.line)
                         VStack(alignment: .leading, spacing: 3) {
@@ -928,11 +933,6 @@ struct PrivacyView: View {
                 }
                 .padding(.top, 12)
                 TGCard {
-                    NavigationLink(value: SettingsPage.phone) {
-                        TGIconRow(icon: "phone.fill", color: Color(hex: 0x2bd67b), title: "Номер телефона", value: store.phone.map { PhoneStore.pretty($0) } ?? "Не привязан")
-                    }
-                    .buttonStyle(RowButtonStyle())
-                    Divider().overlay(Theme.line).padding(.leading, 66)
                     NavigationLink(value: SettingsPage.twofa) {
                         TGIconRow(icon: "lock.shield.fill", color: Color(hex: 0xff8a3d), title: "Двухэтапная защита", value: store.tfa ? "Включена" : "Выключена")
                     }
@@ -949,23 +949,12 @@ struct PrivacyView: View {
                 Text("КОНФИДЕНЦИАЛЬНОСТЬ").font(.system(size: 13)).foregroundColor(Theme.muted)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 32).padding(.top, 26).padding(.bottom, 8)
                 TGCard {
-                    NavigationLink(value: SettingsPage.msgPrivacy) {
-                        HStack {
-                            Text("Сообщения").font(.system(size: 17)).foregroundColor(Theme.text)
-                            Spacer()
-                            Text(model.me?.privacy["msg_prem"] == "premium" ? "Контакты и Premium" : "Все").font(.system(size: 17)).foregroundColor(Theme.muted)
-                            Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.muted.opacity(0.6))
-                        }
-                        .padding(.horizontal, 20).frame(height: 58).contentShape(Rectangle())
-                    }
-                    .buttonStyle(RowButtonStyle())
-                    Divider().overlay(Theme.line).padding(.leading, 20)
                     ForEach(Array(privacyItems.enumerated()), id: \.offset) { i, it in
-                        NavigationLink(value: SettingsPage.privacyKey(it.key)) {
+                        NavigationLink(value: it.key == "messages" ? SettingsPage.msgPrivacy : SettingsPage.privacyKey(it.key)) {
                             HStack {
                                 Text(it.title).font(.system(size: 17)).foregroundColor(Theme.text)
                                 Spacer()
-                                Text(privLabel(it.key == "phone" ? (model.me?.privacy["phone"] ?? "contacts") : (model.me?.priv(it.key) ?? "all"))).font(.system(size: 17)).foregroundColor(Theme.muted)
+                                Text(it.key == "messages" ? (model.me?.privacy["msg_prem"] == "premium" ? "Контакты и Premium" : "Все") : privLabel(it.key == "phone" ? (model.me?.privacy["phone"] ?? "contacts") : (model.me?.priv(it.key) ?? "all"))).font(.system(size: 17)).foregroundColor(Theme.muted)
                                 Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.muted.opacity(0.6))
                             }
                             .padding(.horizontal, 20).frame(height: 58).contentShape(Rectangle())

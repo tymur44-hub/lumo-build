@@ -553,7 +553,8 @@ fun MyProfileScreen() {
             Spacer(Modifier.height(14.dp))
             LaunchedEffect(Unit) { if (!ru.volshebnymir.lumo.core.PhoneStore.loaded) ru.volshebnymir.lumo.core.PhoneStore.load() }
             Card {
-                fmtPhone(ru.volshebnymir.lumo.core.PhoneStore.phone)?.let { InfoLine(it, "Телефон") { copy(ctx, it) }; Divider() }
+                InfoLine(fmtPhone(ru.volshebnymir.lumo.core.PhoneStore.phone) ?: "Привязать номер", "Номер телефона") { AppModel.push(Screen.Phone) }
+                Divider()
                 InfoLine("@" + (me?.username ?: ""), "Юзернейм") { copy(ctx, "@" + (me?.username ?: "")) }
                 if (!me?.bio.isNullOrEmpty()) { Divider(); InfoLine(me!!.bio, "О себе") }
                 ru.volshebnymir.lumo.core.Birthday.text(me?.birthday, withAge = true)?.let { Divider(); InfoLine(it, "День рождения") }
