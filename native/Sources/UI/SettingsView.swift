@@ -285,7 +285,6 @@ struct AccountLimitSheet: View {
         .padding(18)
         .background(Theme.bg.ignoresSafeArea())
         .presentationDetents([.fraction(0.52)])
-        .presentationCornerRadius(34)
     }
 }
 

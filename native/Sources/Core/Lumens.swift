@@ -573,7 +573,6 @@ struct LumenReactSheet: View {
         .padding(18)
         .background(Theme.bg.ignoresSafeArea())
         .presentationDetents([.fraction(0.6)])
-        .presentationCornerRadius(34)
         .task { await lumens.load(); if !owner && Double(lumens.balance) < amount { amount = max(1, Double(lumens.balance)) } }
     }
 
