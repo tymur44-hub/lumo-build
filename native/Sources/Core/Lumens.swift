@@ -505,3 +505,159 @@ struct CommentsView: View {
         }
     }
 }
+
+
+/// Люмены как реакция на пост канала (без имени получателя)
+struct LumenReactSheet: View {
+    @EnvironmentObject var model: AppModel
+    @ObservedObject private var lumens = Lumens.shared
+    @Environment(\.dismiss) private var dismiss
+    let message: Message
+    let channelName: String
+    @State private var amount: Double = 10
+    @State private var busy = false
+    @State private var done = false
+
+    private var owner: Bool { model.staffRole == "owner" }
+    private var maxV: Double { owner ? 1000 : Double(min(1000, lumens.balance)) }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text)
+                        .frame(width: 42, height: 42).background(Circle().fill(Theme.panel2))
+                }.buttonStyle(BouncyButtonStyle())
+                Spacer()
+                VStack(spacing: 1) {
+                    Text("Реакция люменами").font(.system(size: 18, weight: .bold)).foregroundColor(Theme.text)
+                    Text("на публикацию").font(.system(size: 13)).foregroundColor(Theme.muted)
+                }
+                Spacer()
+                HStack(spacing: 4) { LumenGem(size: 16); Text("\(lumens.balance)").font(.system(size: 14, weight: .bold)).foregroundColor(Theme.text) }
+                    .padding(.horizontal, 10).frame(height: 42).background(Capsule().fill(Theme.panel2))
+            }
+            if done {
+                LumenLive(size: 90).padding(.top, 20)
+                Text("Отправлено").font(.system(size: 24, weight: .heavy)).foregroundColor(Theme.text)
+                Spacer()
+            } else if maxV < 1 {
+                LumenLive(size: 80).padding(.top, 14)
+                Text("У вас пока нет люменов").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text)
+                Text("Люмены можно получить в разделе «Мои люмены» в настройках.").font(.system(size: 14)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+                Spacer()
+            } else {
+                HStack {
+                    HStack(spacing: 6) { LumenGem(size: 22); Text("\(Int(amount))").font(.system(size: 26, weight: .black)).foregroundColor(.white) }
+                        .padding(.horizontal, 16).padding(.vertical, 9)
+                        .background(Capsule().fill(LinearGradient(colors: [Color(hex: 0xffb347), Color(hex: 0xf2994a)], startPoint: .top, endPoint: .bottom)))
+                        .shadow(color: Color(hex: 0xf2994a).opacity(0.4), radius: 8, y: 3)
+                    Spacer()
+                }.padding(.top, 8)
+                if maxV > 1 {
+                    Slider(value: $amount, in: 1...maxV, step: 1).tint(Color(hex: 0xf2b24a))
+                }
+                Text("Выберите количество люменов для отправки \(channelName) в поддержку этой публикации.")
+                    .font(.system(size: 16)).foregroundColor(Theme.text).multilineTextAlignment(.center).padding(.top, 8)
+                Spacer(minLength: 6)
+                Button { send() } label: {
+                    HStack(spacing: 6) {
+                        if busy { ProgressView().tint(.white) } else { Text("Отправить").font(.system(size: 18, weight: .bold)); LumenGem(size: 20); Text("\(Int(amount))").font(.system(size: 18, weight: .bold)) }
+                    }
+                    .foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 56)
+                    .background(Capsule().fill(Color(hex: 0x3390ec)))
+                }
+                .buttonStyle(BouncyButtonStyle()).disabled(busy)
+            }
+        }
+        .padding(18)
+        .background(Theme.bg.ignoresSafeArea())
+        .presentationDetents([.fraction(0.6)])
+        .presentationCornerRadius(34)
+        .task { await lumens.load(); if !owner && Double(lumens.balance) < amount { amount = max(1, Double(lumens.balance)) } }
+    }
+
+    private func send() {
+        let n = Int(amount)
+        guard n > 0, !busy else { return }
+        busy = true
+        Task {
+            defer { busy = false }
+            do {
+                try await lumens.tip(message.id, n)
+                withAnimation(.spring()) { done = true }
+                try? await Task.sleep(nanoseconds: 1_300_000_000)
+                dismiss()
+            } catch { model.say(error.localizedDescription) }
+        }
+    }
+}
+
+/// Кнопка-реакция «люмены» под постом канала
+struct LumenReactChip: View {
+    let count: Int
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                LumenGem(size: 17)
+                if count > 0 { Text("\(count)").font(.system(size: 12.5, weight: .bold)).foregroundColor(Theme.text) }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Capsule().fill(Color(hex: 0xf5b04a).opacity(0.22)))
+            .overlay(Capsule().stroke(Color(hex: 0xf5b04a).opacity(0.5)))
+        }
+        .buttonStyle(BouncyButtonStyle())
+    }
+}
+
+/// Кто прочитал сообщение в группе и кто поставил реакцию
+struct ReadersSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    let message: Message
+    struct Row: Identifiable { let id: String; let at: Date?; let emoji: String? }
+    @State private var rows: [Row] = []
+    @State private var loaded = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 0) {
+                    if loaded && rows.isEmpty {
+                        Text("Пока никто не прочитал").foregroundColor(Theme.muted).padding(40)
+                    }
+                    ForEach(rows) { r in
+                        HStack(spacing: 14) {
+                            AvatarView(name: model.displayName(r.id), url: model.profiles[r.id]?.avatarURL, color: model.profiles[r.id]?.color ?? 0, size: 46)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(model.displayName(r.id)).font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text)
+                                if let d = r.at {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "checkmark").font(.system(size: 11, weight: .bold))
+                                        Text(Fmt.day(d).lowercased() + " в " + Fmt.clock(d)).font(.system(size: 14))
+                                    }.foregroundColor(Theme.muted)
+                                }
+                            }
+                            Spacer()
+                            if let e = r.emoji { Text(e).font(.system(size: 26)) }
+                        }
+                        .padding(.horizontal, 18).padding(.vertical, 8)
+                    }
+                }
+                .padding(.top, 6)
+            }
+            .background(Theme.bg.ignoresSafeArea())
+            .navigationTitle("Просмотры").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("Готово") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+        .task {
+            let r = (try? await API.shared.rpc("lm_msg_readers", ["p_msg": message.id]) as? [[String: Any]]) ?? []
+            var seen = Set<String>(); var out: [Row] = []
+            for j in r { if let u = j.str("user_id"), !seen.contains(u) { seen.insert(u); out.append(Row(id: u, at: j.date("read_at"), emoji: j.str("emoji"))) } }
+            await model.loadProfiles(out.map { $0.id })
+            rows = out; loaded = true
+        }
+    }
+}

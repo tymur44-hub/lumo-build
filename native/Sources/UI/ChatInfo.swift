@@ -30,6 +30,10 @@ struct ChatInfoView: View {
     @State private var avatarPick: PhotosPickerItem?
     @State private var avatarFull: IdentifiedURL?
     @State private var showQR = false
+    @State private var showBub = false
+    @State private var showWall = false
+    @ObservedObject private var prot = ProtStore.shared
+    @EnvironmentObject var look: Appearance
 
     private var chat: ChatItem? { model.chat(chatId) }
     private var peer: Profile? { chat?.peerId.flatMap { model.profiles[$0] } }
@@ -75,6 +79,10 @@ struct ChatInfoView: View {
             if let pid = chat?.peerId { ContactEditView(peerId: pid).environmentObject(model) }
         }
         .sheet(item: $report) { t in ReportView(target: t).environmentObject(model) }
+        .sheet(isPresented: $showBub) { BubbleColorSheet(chatId: chatId) }
+        .sheet(isPresented: $showWall) {
+            ChatWallSheet(chatId: chatId, peerName: chat?.peerName, isPrivate: chat?.isPrivate == true).environmentObject(model).environmentObject(look)
+        }
         .sheet(item: $lumenTarget) { t in SendLumensSheet(userId: t.id).environmentObject(model) }
         .sheet(item: $giftTarget) { t in GiftShopSheet(user: t.id).environmentObject(model) }
         .task(id: chat?.peerId) { await loadPeerPhone(chat?.peerId) }
@@ -194,6 +202,19 @@ struct ChatInfoView: View {
                 model.say("Юзернейм скопирован")
             } label: { Label("Скопировать @" + u, systemImage: "doc.on.doc") }
         }
+        Button { Task { await model.setPinned(c.id, !c.pinned) } } label: {
+            Label(c.pinned ? "Открепить чат" : "Закрепить чат", systemImage: c.pinned ? "pin.slash" : "pin")
+        }
+        Button { model.premium { showBub = true } } label: { Label("Цвет сообщений ★", systemImage: "paintpalette") }
+        if !c.isChannel {
+            Button { model.premium { showWall = true } } label: { Label("Изменить обои ★", systemImage: "photo.artframe") }
+        }
+        if !c.isChannel, c.isPrivate || c.isAdmin {
+            let on = prot.map[c.id] == true
+            Button {
+                if on { Task { await prot.set(c.id, false) } } else { model.premium { Task { await prot.set(c.id, true) } } }
+            } label: { Label(on ? "Разрешить пересылку и скриншоты" : "Запретить пересылку и скриншоты ★", systemImage: "shield.lefthalf.filled") }
+        }
         Button { confirmClear = true } label: { Label("Очистить историю", systemImage: "eraser") }
         if c.isPrivate, let p = c.peerId, p != model.myId {
             let blocked = model.blockedByMe.contains(p)
@@ -205,6 +226,7 @@ struct ChatInfoView: View {
             }
         }
         if !c.isPrivate {
+            Button { report = ReportTarget(user: nil, chat: c.id, message: nil) } label: { Label("Пожаловаться", systemImage: "exclamationmark.bubble") }
             Button(role: .destructive) { confirmLeave = true } label: {
                 Label(c.isChannel ? "Отписаться" : "Покинуть группу", systemImage: "rectangle.portrait.and.arrow.right")
             }

@@ -18,12 +18,37 @@ struct SettingsView: View {
     @State private var showScan = false
     @State private var showEmoji = false
     @State private var share = false
+    @State private var limitSheet = false
+    @ObservedObject private var accounts = Accounts.shared
 
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 12) {
                     hero
+                    SettingsGroup {
+                        ForEach(accounts.list.filter { $0.id != model.myId }) { a in
+                            Button { Task { await model.switchAccount(a.id) } } label: {
+                                HStack(spacing: 14) {
+                                    AvatarView(name: a.name.isEmpty ? a.username : a.name, url: a.avatar, color: 0, size: 40)
+                                    Text(a.name.isEmpty ? "Аккаунт" : a.name).font(.system(size: 17)).foregroundColor(Theme.text)
+                                    Spacer()
+                                }
+                                .padding(.vertical, 6).padding(.horizontal, 4).contentShape(Rectangle())
+                            }
+                            .buttonStyle(BouncyButtonStyle())
+                            divider
+                        }
+                        Button { if !model.addAccount() { limitSheet = true } } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: "plus").font(.system(size: 22, weight: .regular)).foregroundColor(Theme.a1).frame(width: 40)
+                                Text("Добавить аккаунт").font(.system(size: 17)).foregroundColor(Theme.a1)
+                                Spacer()
+                            }
+                            .padding(.vertical, 10).padding(.horizontal, 4).contentShape(Rectangle())
+                        }
+                        .buttonStyle(BouncyButtonStyle())
+                    }
                     if let r = model.staffRole {
                         SettingsGroup {
                             Button {
@@ -161,6 +186,7 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showQR) { MyQRView().environmentObject(model) }
             .sheet(isPresented: $showEmoji) { EmojiStatusSheet().environmentObject(model) }
+            .sheet(isPresented: $limitSheet) { AccountLimitSheet(onPremium: { path.append(.premium) }).environmentObject(model) }
             .fullScreenCover(isPresented: $showScan) { QRScanScreen().environmentObject(model) }
             .sheet(isPresented: $share) { ShareSheet(items: ["Я в Lumo — напиши мне: " + model.profileLink]) }
         }
@@ -218,6 +244,50 @@ struct SettingsView: View {
 }
 
 // MARK: - Мой профиль (просмотр, как в Telegram): «+» и «Изм.» сверху, большая аватарка, юзернейм с QR-кодом
+
+struct AccountLimitSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    var onPremium: () -> Void = {}
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text)
+                        .frame(width: 42, height: 42).background(Circle().fill(Theme.panel2))
+                }.buttonStyle(BouncyButtonStyle())
+                Spacer()
+            }
+            Text("Достигнут лимит").font(.system(size: 20, weight: .bold)).foregroundColor(Theme.text).padding(.top, -42)
+            HStack(spacing: 6) {
+                Image(systemName: "person.fill").font(.system(size: 18)); Text("\(Accounts.shared.limit())").font(.system(size: 28, weight: .heavy))
+            }
+            .foregroundColor(.white).padding(.horizontal, 20).padding(.vertical, 10)
+            .background(Capsule().fill(Theme.accent))
+            HStack(spacing: 0) {
+                Text("Бесплатно").font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 16)
+                HStack { Text("С Premium").font(.system(size: 16, weight: .semibold)); Spacer(); Text("3").font(.system(size: 16, weight: .bold)) }
+                    .foregroundColor(.white).padding(.horizontal, 16).frame(maxWidth: .infinity).frame(height: 44)
+                    .background(Theme.accent)
+            }
+            .frame(height: 44).background(Theme.panel2).clipShape(Capsule())
+            Text(model.isPremium ? "Можно подключить не больше 3 аккаунтов." : "Можно подключить не больше 1 аккаунта. Чтобы увеличить лимит до 3, оформите подписку Lumo Premium.")
+                .font(.system(size: 16)).foregroundColor(Theme.text).multilineTextAlignment(.center)
+            Spacer(minLength: 4)
+            if !model.isPremium {
+                Button { dismiss(); onPremium() } label: {
+                    Text("Увеличить лимит").font(.system(size: 18, weight: .bold)).foregroundColor(.white)
+                        .frame(maxWidth: .infinity).frame(height: 54).background(Capsule().fill(Theme.accent))
+                }.buttonStyle(BouncyButtonStyle())
+            }
+        }
+        .padding(18)
+        .background(Theme.bg.ignoresSafeArea())
+        .presentationDetents([.fraction(0.52)])
+        .presentationCornerRadius(34)
+    }
+}
 
 struct MyProfileView: View {
     @EnvironmentObject var model: AppModel
@@ -534,7 +604,7 @@ struct ProfileEditView: View {
                         .buttonStyle(RowButtonStyle())
                         Divider().overlay(Theme.line).padding(.leading, 72)
                     }
-                    Button { model.addAccount() } label: {
+                    Button { if !model.addAccount() { model.say(model.isPremium ? "Можно добавить не больше 3 аккаунтов" : "Несколько аккаунтов доступны в Premium") } } label: {
                         TGIconRow(icon: "person.badge.plus", color: Theme.a1, title: "Добавить аккаунт", value: nil)
                     }
                     .buttonStyle(RowButtonStyle())

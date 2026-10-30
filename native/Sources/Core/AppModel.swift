@@ -261,6 +261,17 @@ final class AppModel: ObservableObject {
         return false
     }
 
+    @Published var msgViews: [Int: Int] = [:]
+
+    /// Просмотры постов канала (по числу подписчиков, прочитавших пост)
+    func loadViews(_ chatId: String) async {
+        guard let c = chat(chatId), c.isChannel else { return }
+        let ids = (messages[chatId] ?? []).suffix(80).filter { $0.id > 0 }.map { $0.id }
+        guard !ids.isEmpty else { return }
+        guard let r = try? await API.shared.rpc("lm_msg_views", ["p_chat": chatId, "p_ids": ids]) as? [[String: Any]] else { return }
+        for j in r { if let i = j.int("id"), let n = j.int("n") { msgViews[i] = n } }
+    }
+
     func logout() async {
         presence(false)
         if let u = API.shared.userId { Accounts.shared.remove(u) }
@@ -271,13 +282,13 @@ final class AppModel: ObservableObject {
     }
 
     /// Добавить аккаунт: текущий остаётся сохранённым, открывается экран входа
-    func addAccount() {
-        if Accounts.shared.list.count >= Accounts.shared.limit() {
-            say(isPremium ? "Можно добавить не больше 3 аккаунтов" : "Несколько аккаунтов доступны в Premium"); return
-        }
+    @discardableResult
+    func addAccount() -> Bool {
+        if Accounts.shared.list.count >= Accounts.shared.limit() { return false }
         presence(false)
         resetAfterLogout()
         API.shared.forgetSession()
+        return true
     }
 
     /// Переключиться на сохранённый аккаунт

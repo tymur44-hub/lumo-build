@@ -32,6 +32,7 @@ struct ChatView: View {
     @State private var selected: Set<Int> = []
     @State private var reporting: ReportTarget?
     @State private var tipping: Message?
+    @State private var readersFor: Message?
     @State private var commentsFor: Message?
     @ObservedObject private var lumens = Lumens.shared
     @State private var transcript: String?
@@ -179,7 +180,6 @@ struct ChatView: View {
                     Button { calls.startCall(chat: c, video: false) } label: { Image(systemName: "phone.fill") }
                     Button { calls.startCall(chat: c, video: true) } label: { Image(systemName: "video.fill") }
                 }
-                if !selecting { menu }
             }
         }
         .navigationBarBackButtonHidden(selecting)
@@ -200,9 +200,10 @@ struct ChatView: View {
             if model.demo != nil { return }
             await model.loadMessages(chatId)
             model.markRead(chatId)
+            await model.loadViews(chatId)
             if let p = chat?.peerId { await model.refreshProfile(p) }
         }
-        .onChange(of: model.messages[chatId]?.last?.id) { _ in model.markRead(chatId) }
+        .onChange(of: model.messages[chatId]?.last?.id) { _ in model.markRead(chatId); Task { await model.loadViews(chatId) } }
         .environment(\.openURL, OpenURLAction { url in
             if url.scheme == "lumo", url.host == "user" {
                 Task { await model.openByUsername(url.lastPathComponent) }
@@ -224,7 +225,11 @@ struct ChatView: View {
         }
         .sheet(item: $forwarding) { b in ForwardView(messages: b.messages).environmentObject(model) }
         .sheet(item: $reporting) { t in ReportView(target: t).environmentObject(model) }
-        .sheet(item: $tipping) { m in TipSheet(message: m).environmentObject(model) }
+        .sheet(item: $tipping) { m in
+            if chat?.isChannel == true { LumenReactSheet(message: m, channelName: chat?.displayName ?? "канала").environmentObject(model) }
+            else { TipSheet(message: m).environmentObject(model) }
+        }
+        .sheet(item: $readersFor) { m in ReadersSheet(message: m).environmentObject(model) }
         .sheet(item: $commentsFor) { m in CommentsView(chatId: chatId, postId: m.id).environmentObject(model) }
         .task(id: chatId) { await prot.load(chatId) }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
@@ -433,6 +438,9 @@ struct ChatView: View {
         if !isProt { a.append(MsgAction(title: "Переслать", icon: "arrowshape.turn.up.right") { forwarding = ForwardBatch(messages: [m]) }) }
         if !isProt, let u = m.mediaURL.flatMap(URL.init(string:)), m.kind == "image" || m.kind == "video" {
             a.append(MsgAction(title: "Сохранить в галерею", icon: "arrow.down.to.line") { Task { if m.kind == "image" { await Gallery.saveImage(u) } else { await Gallery.saveVideo(u) } } })
+        }
+        if let c = chat, !c.isPrivate, !c.isChannel, mine {
+            a.append(MsgAction(title: "Кто прочитал и отреагировал", icon: "eye") { readersFor = m })
         }
         if !mine && m.senderId != nil {
             a.append(MsgAction(title: "Отправить люмены", icon: "sparkle") { tipping = m })
@@ -777,7 +785,6 @@ struct ChatView: View {
     private var blockedText: String? {
         guard let c = chat else { return nil }
         if c.isPrivate { return model.peerBlockText(c.peerId) }
-        if !c.canPost { return "Писать в канал могут только администраторы" }
         return nil
     }
 }
@@ -825,7 +832,18 @@ struct ComposerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let b = blockedText {
+            if let c = model.chat(chatId), c.isChannel, !c.canPost {
+                Button { Task { await model.setMuted(c.id, !c.muted) } } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: c.muted ? "bell.fill" : "bell.slash.fill")
+                        Text(c.muted ? "Включить звук" : "Убрать звук")
+                    }
+                    .font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.a1)
+                    .frame(maxWidth: .infinity).frame(height: 50).contentShape(Rectangle())
+                }
+                .buttonStyle(BouncyButtonStyle())
+                .background(Theme.panel)
+            } else if let b = blockedText {
                 Text(b).font(.subheadline.weight(.semibold)).foregroundColor(Theme.muted)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity).padding(14)

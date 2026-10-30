@@ -82,6 +82,7 @@ struct MessageRow: View {
     var onToggle: (Message) -> Void = { _ in }
     var onComments: (Message) -> Void = { _ in }
     @ObservedObject private var lumens = Lumens.shared
+    @State private var lumenSheet = false
     @State private var swipe: CGFloat = 0
     @State private var pressing = false
     @State private var swipeHit = false
@@ -141,7 +142,11 @@ struct MessageRow: View {
                             onMenu(m)
                         })
                     reactionsRow
-                    TipPill(id: m.id)
+                    if chat?.isChannel == true, m.id > 0, !m.deleted {
+                        LumenReactChip(count: lumens.tips[m.id] ?? 0) { lumenSheet = true }
+                    } else {
+                        TipPill(id: m.id)
+                    }
                     commentsButton
                     botButtons
                 }
@@ -161,6 +166,7 @@ struct MessageRow: View {
                 }
             }
             .simultaneousGesture(swipeGesture)
+            .sheet(isPresented: $lumenSheet) { LumenReactSheet(message: m, channelName: chat?.displayName ?? "канала").environmentObject(model) }
             .overlay {
                 // в режиме выбора нажатие по строке отмечает сообщение
                 if selecting {
@@ -380,6 +386,10 @@ struct MessageRow: View {
     private func timeLine(onMedia: Bool) -> some View {
         HStack(spacing: 3) {
             if m.editedAt != nil { Text("изм.").font(.system(size: 11)) }
+            if chat?.isChannel == true, let v = model.msgViews[m.id], v > 0 {
+                Image(systemName: "eye").font(.system(size: 11))
+                Text(viewsText(v)).font(.system(size: 11.5)).padding(.trailing, 4)
+            }
             Text(Fmt.clock(m.createdAt)).font(.system(size: 11.5))
             if mine {
                 if m.pending { Image(systemName: "clock").font(.system(size: 10)) }
@@ -476,4 +486,10 @@ struct MessageRow: View {
         if mine { return (st == "ended" ? "Исходящий" : st == "rejected" ? "Отклонённый" : "Отменённый") + v }
         return (st == "ended" ? "Входящий" : st == "rejected" ? "Отклонённый" : "Пропущенный") + v
     }
+}
+
+
+func viewsText(_ n: Int) -> String {
+    if n >= 1000 { return String(format: "%.1fK", Double(n) / 1000).replacingOccurrences(of: ".0K", with: "K") }
+    return "\(n)"
 }
