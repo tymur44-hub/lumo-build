@@ -249,6 +249,7 @@ struct VideoScreen: View {
 }
 
 /// Сохранение фото и видео прямо в галерею
+@MainActor
 enum Gallery {
     static func saveImage(_ url: URL) async {
         let m = AppModel.shared

@@ -697,9 +697,9 @@ struct ChatView: View {
         HStack(spacing: 9) {
             let saved = chat?.isPrivate == true && chat?.peerId == model.myId
             AvatarView(name: chat?.displayName ?? "", url: chat?.displayAvatar, color: chat?.displayColor ?? 0, size: 36,
-                       storyUid: chat?.isPrivate == true && !saved ? chat?.peerId : nil,
                        online: chat?.isPrivate == true && !saved && model.isOnline(chat?.peerId),
-                       icon: saved ? "bookmark.fill" : nil)
+                       icon: saved ? "bookmark.fill" : nil,
+                       storyUid: chat?.isPrivate == true && !saved ? chat?.peerId : nil)
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 4) {
                     Text(saved ? "Избранное" : (chat?.displayName ?? "")).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)

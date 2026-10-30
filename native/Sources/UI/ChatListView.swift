@@ -284,9 +284,9 @@ struct ChatRow: View {
     var body: some View {
         HStack(spacing: 12) {
             AvatarView(name: chat.displayName, url: chat.displayAvatar, color: chat.displayColor, size: 54,
-                       storyUid: chat.isPrivate && chat.peerId != model.myId ? chat.peerId : nil,
                        online: chat.isPrivate && chat.peerId != model.myId && model.isOnline(chat.peerId),
-                       icon: chat.isPrivate && chat.peerId == model.myId ? "bookmark.fill" : nil)
+                       icon: chat.isPrivate && chat.peerId == model.myId ? "bookmark.fill" : nil,
+                       storyUid: chat.isPrivate && chat.peerId != model.myId ? chat.peerId : nil)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     if chat.isChannel { Image(systemName: "megaphone.fill").font(.caption).foregroundColor(Theme.muted) }
