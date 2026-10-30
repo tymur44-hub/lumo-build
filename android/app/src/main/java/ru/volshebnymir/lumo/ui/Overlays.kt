@@ -583,7 +583,7 @@ fun StoryAudiencePicker(aud: String, allow: List<String>, onAud: (String) -> Uni
                     }
                 }
             },
-            confirmButton = { TextButton({ onAllow(sel.toList()); dlg = false }) { Text("Готово", color = p.accent) } },
+            confirmButton = { TextButton({ onAllow(sel.toList()); dlg = false }) { Text("Готово", color = p.a1) } },
             dismissButton = { TextButton({ dlg = false }) { Text("Отмена", color = p.muted) } },
         )
     }

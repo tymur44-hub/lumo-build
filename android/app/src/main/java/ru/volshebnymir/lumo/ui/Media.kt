@@ -118,7 +118,7 @@ object MediaUtil {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
             val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 runCatching {
-                    val req = okhttp3.Request.Builder().url(ru.volshebnymir.lumo.core.Net.px(url)).build()
+                    val req = okhttp3.Request.Builder().url(ru.volshebnymir.lumo.core.Net.px(url) ?: url).build()
                     ru.volshebnymir.lumo.core.Api.http.newCall(req).execute().use { r ->
                         if (!r.isSuccessful) error("http " + r.code)
                         var mime = r.header("Content-Type")?.substringBefore(';')?.trim().orEmpty()
