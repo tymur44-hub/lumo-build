@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.animation.core.animateFloat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -371,7 +372,7 @@ private fun StarSparkles(modifier: Modifier) {
         repeat(34) { i ->
             val x = rnd.nextFloat() * size.width; val y = rnd.nextFloat() * size.height
             val s = (3f + rnd.nextFloat() * 7f) * density
-            val a = ((kotlin.math.sin((ph + i * 0.13f) * 6.283f) + 1f) / 2f) * 0.8f + 0.1f
+            val a = ((kotlin.math.sin(((ph + i * 0.13f) * 6.283f).toDouble()).toFloat() + 1f) / 2f) * 0.8f + 0.1f
             val col = Color(0xFFFFB020).copy(alpha = a)
             drawLine(col, androidx.compose.ui.geometry.Offset(x - s, y), androidx.compose.ui.geometry.Offset(x + s, y), 2f)
             drawLine(col, androidx.compose.ui.geometry.Offset(x, y - s), androidx.compose.ui.geometry.Offset(x, y + s), 2f)
