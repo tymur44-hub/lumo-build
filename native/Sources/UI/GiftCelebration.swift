@@ -35,6 +35,7 @@ struct GiftCelebration: View {
                 let w = geo.size.width, h = geo.size.height
                 let c = CGPoint(x: w / 2, y: h * 0.40)
                 ZStack {
+                    Color(hex: 0x05060f).ignoresSafeArea()
                     RadialGradient(colors: [glow.opacity(0.28), Color(hex: 0x05060f).opacity(0.96)], center: .center, startRadius: 0, endRadius: max(w, h) * 0.8).ignoresSafeArea()
                     Canvas { g, size in draw(g, size, c, t) }.allowsHitTesting(false)
                     if t >= reveal * 0.7 { giftView(t, w) .position(x: c.x, y: 150 + 130) }

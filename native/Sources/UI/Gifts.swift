@@ -155,6 +155,7 @@ struct GiftDetailSheet: View {
                 }
                 .padding(20)
             }
+            .opacity(done == nil ? 1 : 0)
         }
         .overlay {
             if let n = done {
