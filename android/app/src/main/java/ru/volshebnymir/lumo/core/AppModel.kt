@@ -8,6 +8,8 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -667,9 +669,12 @@ object AppModel {
 
     /** Удалить сообщения: у всех (исчезают полностью) или только у себя */
     suspend fun delete(list: List<Message>, everyone: Boolean) {
-        val ids = list.map { it.id }.filter { it > 0 }.toSet()
+        var ids = list.map { it.id }.filter { it > 0 }.toSet()
         val chatId = list.firstOrNull()?.chatId ?: return
         if (ids.isEmpty()) return
+        // альбом удаляется целиком
+        val albums = list.mapNotNull { it.meta.optString("album").takeIf { a -> a.isNotEmpty() } }.toSet()
+        if (albums.isNotEmpty()) ids = ids + (messages[chatId] ?: emptyList()).filter { it.id > 0 && it.meta.optString("album") in albums }.map { it.id }
         messages[chatId] = (messages[chatId] ?: emptyList()).filter { it.id !in ids }
         try {
             for (id in ids) {
@@ -1111,10 +1116,61 @@ object AppModel {
         } catch (e: Exception) { say(e.message ?: "Ошибка") }
     }
 
-    suspend fun createChat(type: String, title: String, description: String, members: List<String>): String? = try {
-        val cid = Api.rpc("lm_create_chat", jsonOf("p_type" to type, "p_title" to title, "p_members" to JSONArray(members), "p_description" to description)) as? String
+    suspend fun createChat(type: String, title: String, description: String, members: List<String>,
+                           username: String? = null, protectedChat: Boolean = false, requests: Boolean = false, invite: String? = null,
+                           avatar: ByteArray? = null): String? = try {
+        val p = jsonOf("p_type" to type, "p_title" to title, "p_members" to JSONArray(members), "p_description" to description,
+            "p_protected" to protectedChat, "p_requests" to requests)
+        if (!username.isNullOrBlank()) p.put("p_username", username.lowercase())
+        if (!invite.isNullOrBlank()) p.put("p_invite", invite)
+        val cid = Api.rpc("lm_create_chat_v3", p) as? String
+        if (cid != null && avatar != null) runCatching {
+            val url = Api.upload(avatar, "jpg", "image/jpeg")
+            Api.update("lm_chats", mapOf("id" to cid), jsonOf("avatar_url" to url))
+        }
         loadChats(); cid?.let { open(it) }; cid
     } catch (e: Exception) { say(e.message ?: "Ошибка"); null }
+
+    /** Удалить чат: «у себя» (выйти; в личных ещё очистить историю) или «у всех» (владелец; в личном — у обоих) */
+    suspend fun deleteChat(chatId: String, everyone: Boolean) {
+        val id = myId ?: return
+        try {
+            if (everyone) Api.rpc("lm_delete_chat", jsonOf("p_chat" to chatId, "p_all" to true))
+            else {
+                if (chat(chatId)?.isPrivate == true) runCatching { Api.rpc("lm_clear_chat", jsonOf("p_chat" to chatId)) }
+                Api.delete("lm_members", mapOf("chat_id" to chatId, "user_id" to id))
+            }
+            messages[chatId] = emptyList()
+            stack.clear(); loadChats()
+        } catch (e: Exception) { say(e.message ?: "Ошибка") }
+    }
+
+    suspend fun inviteCode(chatId: String, reset: Boolean = false): String? =
+        runCatching { Api.rpc("lm_chat_invite", jsonOf("p_chat" to chatId, "p_reset" to reset)) as? String }.getOrNull()
+
+    class AlbumPart(val kind: String, val data: ByteArray, val ext: String, val mime: String, val meta: JSONObject)
+
+    /** Несколько фото/видео одним альбомом: у всех частей общий meta.album, подпись — у последней */
+    fun sendAlbum(chatId: String, parts: List<AlbumPart>, caption: String?, replyTo: Int?) {
+        val me = myId ?: return
+        if (parts.isEmpty()) return
+        val album = if (parts.size > 1) UUID.randomUUID().toString() else null
+        val base = -(System.currentTimeMillis() % 1_000_000_000).toInt() - 5000
+        val temps = parts.mapIndexed { i, pt ->
+            val meta = JSONObject(pt.meta.toString())
+            if (album != null) meta.put("album", album)
+            Message.pending(chatId, me, pt.kind, if (i == parts.size - 1) caption else null, meta, if (i == 0) replyTo else null).copy(id = base + i)
+        }
+        messages[chatId] = (messages[chatId] ?: emptyList()) + temps
+        scope.launch {
+            val urls = parts.map { pt -> async { runCatching { Api.upload(pt.data, pt.ext, pt.mime) }.getOrNull() } }.map { it.await() }
+            temps.forEachIndexed { i, t ->
+                val u = urls[i]
+                if (u == null) { messages[chatId] = (messages[chatId] ?: emptyList()).filter { it.id != t.id }; say("Ошибка загрузки"); return@forEachIndexed }
+                send(chatId, t.kind, t.body, u, t.meta, t.replyTo, pendingId = t.id)
+            }
+        }
+    }
 
     suspend fun members(chatId: String): List<Pair<String, String>> {
         val rows = runCatching { Api.select("lm_members", mapOf("select" to "user_id,role", "chat_id" to "eq.$chatId")) }.getOrNull() ?: emptyList()

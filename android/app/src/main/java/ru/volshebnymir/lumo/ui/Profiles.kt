@@ -410,7 +410,7 @@ fun InfoScreen(chatId: String) {
                 }
                 ActionTile(Icons.Filled.Search, "Поиск", Modifier.weight(1f)) { AppModel.push(Screen.ChatSearch(chatId)) }
                 ActionTile(Icons.Filled.CleaningServices, "Очистить", Modifier.weight(1f)) { confirmClear = true }
-                ActionTile(Icons.AutoMirrored.Filled.ExitToApp, "Выйти", Modifier.weight(1f), danger = true) { confirmLeave = true }
+                ActionTile(Icons.AutoMirrored.Filled.ExitToApp, c?.let { chatDeleteTitle(it) } ?: "Выйти", Modifier.weight(1f), danger = true) { confirmLeave = true }
             }
             Spacer(Modifier.height(14.dp))
             if (!c?.description.isNullOrEmpty() || !c?.username.isNullOrEmpty()) {
@@ -465,9 +465,7 @@ fun InfoScreen(chatId: String) {
         }
         viewer?.let { MediaViewer(it) { viewer = null } }
     }
-    if (confirmLeave) AlertDialog(onDismissRequest = { confirmLeave = false }, title = { Text("Выйти из чата?") },
-        confirmButton = { TextButton({ confirmLeave = false; scope.launch { AppModel.leave(chatId) } }) { Text("Выйти", color = p.danger) } },
-        dismissButton = { TextButton({ confirmLeave = false }) { Text("Отмена") } })
+    if (confirmLeave && c != null) ChatDeleteFlow(c) { confirmLeave = false }
     if (confirmClear) AlertDialog(onDismissRequest = { confirmClear = false }, title = { Text("Очистить историю?") }, text = { Text("Сообщения исчезнут только у вас") },
         confirmButton = { TextButton({ confirmClear = false; scope.launch { AppModel.clearChat(chatId) } }) { Text("Очистить", color = p.danger) } },
         dismissButton = { TextButton({ confirmClear = false }) { Text("Отмена") } })
@@ -937,6 +935,7 @@ fun NewChatScreen() {
     var results by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
     var creating by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(q) { results = if (q.trim().length >= 2) { kotlinx.coroutines.delay(250); AppModel.search(q.trim().removePrefix("@")).filter { it.kind == "user" } } else emptyList() }
+    creating?.let { type -> CreateChatWizard(type) { creating = null }; return }
     Column(Modifier.fillMaxSize().background(p.bg).imePadding()) {
         TopBar("Новый чат")
         SearchBox(q, { q = it }, Modifier.padding(horizontal = 14.dp).fillMaxWidth())
@@ -972,35 +971,6 @@ fun NewChatScreen() {
                 }
             }
         }
-    }
-    creating?.let { type ->
-        var title by remember { mutableStateOf("") }
-        val picked = remember { mutableStateListOf<String>() }
-        AlertDialog(onDismissRequest = { creating = null },
-            title = { Text(if (type == "group") "Новая группа" else "Новый канал") },
-            text = {
-                Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
-                    LumoField(title, { title = it }, "Название")
-                    if (type == "group") {
-                        Spacer(Modifier.height(10.dp))
-                        Text("Участники из контактов", color = p.muted, fontSize = 13.sp)
-                        AppModel.contacts.forEach { id ->
-                            val on = id in picked
-                            Row(Modifier.fillMaxWidth().bouncy { if (on) picked.remove(id) else picked.add(id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(if (on) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, tint = if (on) p.a1 else p.muted)
-                                Spacer(Modifier.width(8.dp))
-                                Text(AppModel.displayName(id), color = p.text)
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton({
-                val t = title.trim(); if (t.isEmpty()) return@TextButton
-                creating = null
-                scope.launch { AppModel.createChat(type, t, "", picked.toList()) }
-            }) { Text("Создать") } },
-            dismissButton = { TextButton({ creating = null }) { Text("Отмена") } })
     }
 }
 

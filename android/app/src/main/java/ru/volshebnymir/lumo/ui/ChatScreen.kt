@@ -108,7 +108,7 @@ import kotlin.math.roundToInt
 
 private sealed class Row2 {
     abstract val key: String
-    data class Msg(val m: Message, val first: Boolean, val last: Boolean) : Row2() { override val key get() = "m" + m.id }
+    data class Msg(val m: Message, val first: Boolean, val last: Boolean, val album: List<Message> = emptyList()) : Row2() { override val key get() = "m" + m.id }
     data class Day(val d: Date) : Row2() { override val key get() = "d" + d.time }
 }
 
@@ -161,14 +161,30 @@ fun ChatScreen(chatId: String) {
     DisposableEffect(chatId) { onDispose { if (AppModel.openChatId == chatId) AppModel.openChatId = null; Voice.stop() } }
 
     val rows = remember(msgs) {
-        val msgs = msgs.distinctBy { it.id }.filter { !it.deleted }
+        val raw = msgs.distinctBy { it.id }.filter { !it.deleted }
+        // альбомы: подряд идущие фото/видео с общим meta.album сворачиваем в одно сообщение (по последнему)
+        val albums = HashMap<Int, List<Message>>()
+        val msgs = ArrayList<Message>(raw.size)
+        var k = 0
+        while (k < raw.size) {
+            val m0 = raw[k]
+            val a = m0.meta.optString("album")
+            if (a.isNotEmpty() && (m0.kind == "image" || m0.kind == "video")) {
+                var j = k + 1
+                while (j < raw.size && raw[j].meta.optString("album") == a && raw[j].senderId == m0.senderId) j++
+                val grp = raw.subList(k, j).toList()
+                msgs.add(grp.last())
+                if (grp.size > 1) albums[grp.last().id] = grp
+                k = j
+            } else { msgs.add(m0); k++ }
+        }
         val out = mutableListOf<Row2>()
         for (i in msgs.indices.reversed()) {
             val m = msgs[i]
             val prev = msgs.getOrNull(i - 1); val next = msgs.getOrNull(i + 1)
             val first = prev == null || prev.senderId != m.senderId || prev.kind == "system" || !Fmt.isSameDay(prev.createdAt, m.createdAt)
             val last = next == null || next.senderId != m.senderId || next.kind == "system" || !Fmt.isSameDay(next.createdAt, m.createdAt)
-            out.add(Row2.Msg(m, first, last))
+            out.add(Row2.Msg(m, first, last, albums[m.id] ?: emptyList()))
             if (prev == null || !Fmt.isSameDay(prev.createdAt, m.createdAt)) out.add(Row2.Day(m.createdAt))
         }
         out
@@ -228,7 +244,7 @@ fun ChatScreen(chatId: String) {
                         when (r) {
                             is Row2.Day -> Box(Modifier.animateItem()) { DayChip(r.d) }
                             is Row2.Msg -> MessageRow(modifier = Modifier.animateItem(fadeInSpec = null),
-                                m = r.m, chat = chat, first = r.first, last = r.last, selecting = selecting, isSelected = r.m.id in selected, flash = flash == r.m.id,
+                                m = r.m, chat = chat, first = r.first, last = r.last, album = r.album, onOpen = { if (!selecting) viewer = it }, selecting = selecting, isSelected = r.m.id in selected, flash = flash == r.m.id,
                                 onTap = { m ->
                                     if (selecting) { if (m.id in selected) selected.remove(m.id) else if (m.id > 0) selected.add(m.id) }
                                     else if (m.kind == "image" || m.kind == "video") viewer = m
@@ -479,18 +495,14 @@ fun ChatMenu(c: ChatItem) {
                 item(Icons.Filled.Block, if (blocked) "Разблокировать" else "Заблокировать", danger = !blocked) { scope.launch { AppModel.setBlocked(peer, !blocked) } }
                 item(Icons.Filled.Flag, "Пожаловаться", danger = true) { report = true }
             }
-            if (!c.isPrivate) {
-                item(Icons.Filled.Flag, "Пожаловаться", danger = true) { report = true }
-                item(Icons.AutoMirrored.Filled.ExitToApp, if (c.isChannel) "Отписаться" else "Покинуть группу", danger = true) { confirmLeave = true }
-            }
+            if (!c.isPrivate) item(Icons.Filled.Flag, "Пожаловаться", danger = true) { report = true }
+            item(if (c.isPrivate || c.role == "owner") Icons.Filled.Delete else Icons.AutoMirrored.Filled.ExitToApp, chatDeleteTitle(c), danger = true) { confirmLeave = true }
         }
     }
     if (confirmClear) AlertDialog(onDismissRequest = { confirmClear = false }, title = { Text("Очистить историю?") }, text = { Text("Сообщения исчезнут только у вас") },
         confirmButton = { TextButton({ confirmClear = false; scope.launch { AppModel.clearChat(c.id) } }) { Text("Очистить", color = p.danger) } },
         dismissButton = { TextButton({ confirmClear = false }) { Text("Отмена") } })
-    if (confirmLeave) AlertDialog(onDismissRequest = { confirmLeave = false }, title = { Text(if (c.isChannel) "Отписаться от канала?" else "Покинуть группу?") },
-        confirmButton = { TextButton({ confirmLeave = false; scope.launch { AppModel.leave(c.id) } }) { Text("Да", color = p.danger) } },
-        dismissButton = { TextButton({ confirmLeave = false }) { Text("Отмена") } })
+    if (confirmLeave) ChatDeleteFlow(c) { confirmLeave = false }
     if (report) ReportDialog(if (c.isPrivate) c.peerId else null, c.id, null) { report = false }
 }
 
@@ -594,6 +606,7 @@ private fun DayChip(d: Date) {
 @Composable
 private fun MessageRow(
     m: Message, chat: ChatItem?, first: Boolean, last: Boolean, selecting: Boolean, isSelected: Boolean, flash: Boolean,
+    album: List<Message> = emptyList(), onOpen: (Message) -> Unit = {},
     onTap: (Message) -> Unit, onLong: (Message) -> Unit, onReply: (Message) -> Unit, onReplyTap: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -661,7 +674,7 @@ private fun MessageRow(
         }
         Box(Modifier.offset { IntOffset(dx.value.roundToInt(), 0) }.widthIn(max = 310.dp)) {
             Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
-                Bubble(m, chat, mine, group && !mine && first, last, onReplyTap)
+                Bubble(m, chat, mine, group && !mine && first, last, onReplyTap, album, onOpen)
                 Reactions(m, mine)
                 if (chat?.isChannel == true && m.id > 0 && !m.deleted) LumenReactChip(m) { lumenDlg = true } else TipPill(m, mine)
             }
@@ -674,7 +687,7 @@ private fun MessageRow(
 }
 
 @Composable
-private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean, tail: Boolean, onReplyTap: (Int) -> Unit) {
+private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean, tail: Boolean, onReplyTap: (Int) -> Unit, album: List<Message> = emptyList(), onOpen: (Message) -> Unit = {}) {
     val p = P
     val bare = (m.kind == "video_note" || m.kind == "sticker") && !m.deleted
     val r = 18.dp; val small = 5.dp
@@ -701,6 +714,8 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
         }
         if (m.deleted) {
             Text("Сообщение удалено", color = sub, fontStyle = FontStyle.Italic, fontSize = Look.fontSize.sp)
+        } else if (album.size > 1) {
+            AlbumGrid(album, onOpen)
         } else when (m.kind) {
             "image" -> {
                 val ratio = ((m.width ?: 1.0) / (m.height ?: 1.0)).toFloat().coerceIn(0.5f, 2f)
@@ -956,21 +971,7 @@ private fun Composer(
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         val caption = takeCaption(); val r = takeReply()
-        scope.launch {
-            uris.forEachIndexed { i, u ->
-                val type = ctx.contentResolver.getType(u) ?: ""
-                val data = withContext(Dispatchers.IO) { MediaUtil.read(ctx, u) } ?: run { AppModel.say("Не удалось открыть файл"); return@forEachIndexed }
-                if (data.size > 50 * 1024 * 1024) { AppModel.say("Файл больше 50 МБ"); return@forEachIndexed }
-                val body = if (i == 0) caption else null
-                if (type.startsWith("video")) {
-                    val ext = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(type) ?: "mp4"
-                    AppModel.sendMedia(chatId, "video", data, ext, type, jsonOf("name" to "video.$ext", "size" to data.size), body, r)
-                } else {
-                    val j = withContext(Dispatchers.Default) { MediaUtil.jpeg(data) } ?: return@forEachIndexed
-                    AppModel.sendMedia(chatId, "image", j.first, "jpg", "image/jpeg", jsonOf("w" to j.second, "h" to j.third), body, r)
-                }
-            }
-        }
+        scope.launch { AppModel.sendAlbum(chatId, buildAlbumParts(ctx, uris), caption, r) }
     }
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         if (u == null) return@rememberLauncherForActivityResult
@@ -1058,25 +1059,20 @@ private fun Composer(
                 Box {
                     RoundIcon(Icons.Filled.AttachFile, 48.dp, tint = p.muted) { attach = true }
                     sendLumensTo?.let { u -> LumenSendDialog(u) { sendLumensTo = null } }
-                    androidx.compose.material3.DropdownMenu(attach, { attach = false }) {
-                        androidx.compose.material3.DropdownMenuItem(text = { Text("Фото или видео") }, leadingIcon = { Icon(Icons.Filled.Photo, null) }, onClick = {
-                            attach = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                        })
-                        androidx.compose.material3.DropdownMenuItem(text = { Text("Камера") }, leadingIcon = { Icon(Icons.Filled.CameraAlt, null) }, onClick = {
-                            attach = false
+                    if (attach) AttachSheet(
+                        canLumens = chat?.isPrivate == true && chat.peerId != AppModel.myId && !peerBadges(chat).first,
+                        onDismiss = { attach = false },
+                        onSend = { uris, cap -> val r = takeReply(); scope.launch { AppModel.sendAlbum(chatId, buildAlbumParts(ctx, uris), cap, r) } },
+                        onSystemPicker = { pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+                        onFile = { pickFile.launch(arrayOf("*/*")) },
+                        onAudio = { pickFile.launch(arrayOf("audio/*")) },
+                        onCamera = {
                             if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) takePhoto.launch(photoUri)
                             else camPerm.launch(Manifest.permission.CAMERA)
-                        })
-                        androidx.compose.material3.DropdownMenuItem(text = { Text("Файл") }, leadingIcon = { Icon(Icons.Filled.Description, null) }, onClick = {
-                            attach = false; pickFile.launch(arrayOf("*/*"))
-                        })
-                        if (chat?.isPrivate == true && chat.peerId != AppModel.myId && !peerBadges(chat).first) androidx.compose.material3.DropdownMenuItem(text = { Text("Отправить люмены") }, leadingIcon = { Icon(Icons.Filled.Diamond, null) }, onClick = {
-                            attach = false; sendLumensTo = chat.peerId
-                        })
-                        androidx.compose.material3.DropdownMenuItem(text = { Text("Видеосообщение") }, leadingIcon = { Icon(Icons.Filled.SlowMotionVideo, null) }, onClick = {
-                            attach = false; onVideoNote(true)
-                        })
-                    }
+                        },
+                        onNote = { onVideoNote(true) },
+                        onLumens = { sendLumensTo = chat?.peerId },
+                    )
                 }
                 Row(Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).background(p.panel2), verticalAlignment = Alignment.Bottom) {
                     Box(Modifier.weight(1f).padding(start = 16.dp, top = 12.dp, bottom = 12.dp)) {

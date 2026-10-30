@@ -409,6 +409,8 @@ fun ChatPreviewMenu(c: ChatItem, onClose: () -> Unit) {
     val p = P
     val scope = rememberCoroutineScope()
     LaunchedEffect(c.id) { AppModel.loadMessages(c.id) }
+    var deleteTarget by remember { mutableStateOf<ChatItem?>(null) }
+    deleteTarget?.let { t -> ChatDeleteFlow(t) { deleteTarget = null; onClose() } }
     val msgs = (AppModel.messages[c.id] ?: emptyList()).filter { !it.deleted && it.kind != "system" }.takeLast(6)
     androidx.compose.ui.window.Dialog(onDismissRequest = onClose, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         val w = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
@@ -440,8 +442,8 @@ fun ChatPreviewMenu(c: ChatItem, onClose: () -> Unit) {
                     }
                 }
                 Column(Modifier.width(270.dp).align(Alignment.End).clip(RoundedCornerShape(26.dp)).background(p.panel2.copy(alpha = 0.97f)).padding(6.dp)) {
-                    @Composable fun row(icon: ImageVector, t: String, danger: Boolean = false, f: () -> Unit) {
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).bouncy { onClose(); f() }.padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                    @Composable fun row(icon: ImageVector, t: String, danger: Boolean = false, close: Boolean = true, f: () -> Unit) {
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).bouncy { if (close) onClose(); f() }.padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(icon, null, tint = if (danger) p.danger else p.text, modifier = Modifier.size(22.dp))
                             Spacer(Modifier.width(14.dp))
                             Text(t, color = if (danger) p.danger else p.text, fontSize = 16.sp)
@@ -450,8 +452,8 @@ fun ChatPreviewMenu(c: ChatItem, onClose: () -> Unit) {
                     if (c.unread > 0) row(Icons.Filled.MarkChatRead, "Прочитано") { scope.launch { AppModel.loadMessages(c.id); AppModel.markRead(c.id) } }
                     row(Icons.Filled.PushPin, if (c.pinned) "Открепить" else "Закрепить") { scope.launch { AppModel.setPinned(c.id, !c.pinned) } }
                     row(if (c.muted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff, if (c.muted) "Включить уведомления" else "Выключить уведомления") { scope.launch { AppModel.setMuted(c.id, !c.muted) } }
-                    if (!c.isPrivate) row(Icons.AutoMirrored.Filled.ExitToApp, if (c.isChannel) "Отписаться" else "Покинуть группу", danger = true) { scope.launch { AppModel.leave(c.id) } }
-                    else row(Icons.Filled.Delete, "Очистить историю", danger = true) { scope.launch { AppModel.clearChat(c.id) } }
+                    if (c.isPrivate) row(Icons.Filled.CleaningServices, "Очистить историю") { scope.launch { AppModel.clearChat(c.id) } }
+                    row(if (c.isPrivate || c.role == "owner") Icons.Filled.Delete else Icons.AutoMirrored.Filled.ExitToApp, chatDeleteTitle(c), danger = true, close = false) { deleteTarget = c }
                 }
             }
         }
