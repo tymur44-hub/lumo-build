@@ -161,10 +161,6 @@ struct ChatInfoView: View {
                     actionButton("phone.fill", "звонок") { calls.startCall(chat: c, video: false) }
                     actionButton("video.fill", "видео") { calls.startCall(chat: c, video: true) }
                 }
-                if c.isPrivate, !saved, let pid = c.peerId, pid != model.myId, !(c.peerBot || (model.profiles[pid]?.isBot ?? false)) {
-                    actionButton("sparkle", "люмены") { lumenTarget = LumenTarget(id: pid) }
-                    actionButton("gift.fill", "подарок") { giftTarget = GiftTarget(id: pid) }
-                }
                 if !saved {
                     actionButton(c.muted ? "bell.slash.fill" : "bell.fill", c.muted ? "без звука" : "звук") {
                         Task { await model.setMuted(c.id, !c.muted) }
@@ -178,6 +174,10 @@ struct ChatInfoView: View {
     }
 
     @ViewBuilder private func moreMenu(_ c: ChatItem) -> some View {
+        if c.isPrivate, !saved, let pid = c.peerId, pid != model.myId, !(c.peerBot || (model.profiles[pid]?.isBot ?? false)) {
+            Button { lumenTarget = LumenTarget(id: pid) } label: { Label("Отправить люмены", systemImage: "sparkle") }
+            Button { giftTarget = GiftTarget(id: pid) } label: { Label("Подарить подарок", systemImage: "gift") }
+        }
         if c.isPrivate, let p = c.peerId, p != model.myId {
             Button {
                 Task { if model.isContact(p) { await model.removeContact(p) } else { await model.addContact(p) } }
