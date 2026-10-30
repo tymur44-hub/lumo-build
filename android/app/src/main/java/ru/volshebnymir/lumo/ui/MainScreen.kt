@@ -364,13 +364,14 @@ fun ChatRow(c: ChatItem, modifier: Modifier = Modifier) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                  Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                     if (c.type == "group") Icon(Icons.Filled.Groups, null, tint = p.muted, modifier = Modifier.size(16.dp).padding(end = 3.dp))
                     if (c.isChannel) Icon(Icons.Filled.Campaign, null, tint = p.muted, modifier = Modifier.size(16.dp).padding(end = 3.dp))
                     Text(if (saved) "Избранное" else c.displayName, color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.5.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (c.isPrivate && !saved) PeerBadges(c)
                     if (c.muted) Icon(Icons.Filled.NotificationsOff, null, tint = p.muted, modifier = Modifier.size(15.dp).padding(start = 3.dp))
-                    Spacer(Modifier.weight(1f))
+                  }
                     val mine = c.lastSender == AppModel.myId && c.lastKind != "system" && !saved && !c.isChannel
                     if (mine) {
                         val read = c.othersReadAt != null && c.lastAt != null && !c.othersReadAt.before(c.lastAt)

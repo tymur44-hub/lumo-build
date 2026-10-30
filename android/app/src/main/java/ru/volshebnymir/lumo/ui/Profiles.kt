@@ -273,10 +273,12 @@ fun PersonScreen(userId: String) {
             ProfileHead(AppModel.displayName(userId), pr?.avatarUrl, pr?.color ?: 0, AppModel.lastSeenText(userId), AppModel.isOnline(userId)) {
                 pr?.avatarUrl?.let { viewer = avatarMsg(it) }
             }
+            var more by remember { mutableStateOf(false) }
+            var phone by remember(userId) { mutableStateOf<String?>(null) }
+            LaunchedEffect(userId) { phone = runCatching { ru.volshebnymir.lumo.core.Api.rpc("lm_phone_of", ru.volshebnymir.lumo.core.jsonOf("p_user" to userId))?.toString() }.getOrNull() }
+            val canPay = userId != AppModel.myId && pr?.isBot != true
             Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(Icons.Filled.ChatBubble, "Чат", Modifier.weight(1f)) { scope.launch { AppModel.openDM(userId) } }
-                if (userId != AppModel.myId && pr?.isBot != true) ActionTile(Icons.Filled.Diamond, "Люмены", Modifier.weight(1f)) { sendLumens = true }
-                if (userId != AppModel.myId && pr?.isBot != true) ActionTile(Icons.Filled.CardGiftcard, "Подарок", Modifier.weight(1f)) { giftShop = true }
+                if (dm == null) ActionTile(Icons.Filled.ChatBubble, "Чат", Modifier.weight(1f)) { scope.launch { AppModel.openDM(userId) } }
                 if (pr?.isBot != true && dm?.peerBot != true) {
                     ActionTile(Icons.Filled.Call, "Звонок", Modifier.weight(1f)) {
                         if (dm != null) call(dm, false) else scope.launch { AppModel.openDM(userId) }
@@ -288,16 +290,29 @@ fun PersonScreen(userId: String) {
                 if (dm != null) ActionTile(if (dm.muted) Icons.Filled.NotificationsActive else Icons.Filled.NotificationsOff, if (dm.muted) "Звук" else "Без звука", Modifier.weight(1f)) {
                     scope.launch { AppModel.setMuted(dm.id, !dm.muted) }
                 }
+                if (dm != null) ActionTile(Icons.Filled.Search, "Поиск", Modifier.weight(1f)) { AppModel.push(Screen.ChatSearch(dm.id)) }
+                Box(Modifier.weight(1f)) {
+                    ActionTile(Icons.Filled.MoreHoriz, "Ещё", Modifier.fillMaxWidth()) { more = true }
+                    androidx.compose.material3.DropdownMenu(more, { more = false }) {
+                        if (canPay) androidx.compose.material3.DropdownMenuItem(text = { Text("Отправить люмены") }, leadingIcon = { Icon(Icons.Filled.Diamond, null) },
+                            onClick = { more = false; sendLumens = true })
+                        if (canPay) androidx.compose.material3.DropdownMenuItem(text = { Text("Подарить подарок") }, leadingIcon = { Icon(Icons.Filled.CardGiftcard, null) },
+                            onClick = { more = false; giftShop = true })
+                        androidx.compose.material3.DropdownMenuItem(text = { Text("Скопировать @" + (pr?.username ?: "")) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
+                            onClick = { more = false; copy(ctx, "@" + (pr?.username ?: "")) })
+                    }
+                }
             }
             Spacer(Modifier.height(14.dp))
+            pr?.let { ChannelCard(it) }
             Card {
+                fmtPhone(phone)?.let { InfoLine(it, "Мобильный") { copy(ctx, it) }; Divider() }
                 InfoLine("@" + (pr?.username ?: ""), "Юзернейм") { copy(ctx, "@" + (pr?.username ?: "")) }
                 if (!pr?.bio.isNullOrEmpty()) { Divider(); InfoLine(pr!!.bio, "О себе") }
                 ru.volshebnymir.lumo.core.Birthday.text(pr?.birthday, withAge = true)?.let { Divider(); InfoLine(it, "День рождения") }
                 if (AppModel.isContact(userId)) { Divider(); InfoLine(AppModel.aliases[userId]?.takeIf { it.isNotEmpty() } ?: "Не задано", "Имя в контактах · видите только вы") { alias = AppModel.aliases[userId] ?: "" } }
             }
             Spacer(Modifier.height(14.dp))
-            if (pr?.isBot != true) ProfileGifts(userId)
             if (pr?.premium == true && pr.isBot != true) ProfileLinks(userId)
             Card {
                 SettingsRow(Icons.Filled.Lock, p.a1, "Код безопасности", "Проверить сквозное шифрование") { safety = true }
@@ -311,8 +326,7 @@ fun PersonScreen(userId: String) {
             }
             Spacer(Modifier.height(14.dp))
             if (dm != null && pr?.isBot != true) PremiumChatCard(dm)
-            pr?.let { ChannelCard(it) }
-            SharedMediaSection(dm?.id)
+            PersonTabs(userId, pr?.isBot != true, dm?.id)
             Spacer(Modifier.height(30.dp))
         }
         viewer?.let { MediaViewer(it) { viewer = null } }
@@ -330,6 +344,26 @@ fun PersonScreen(userId: String) {
         text = { Text("Человек не сможет писать и звонить вам") },
         confirmButton = { TextButton({ confirmBlock = false; scope.launch { AppModel.setBlocked(userId, true) } }) { Text("Заблокировать", color = p.danger) } },
         dismissButton = { TextButton({ confirmBlock = false }) { Text("Отмена") } })
+}
+
+/** Вкладки профиля собеседника: Подарки · Медиа */
+@Composable
+private fun PersonTabs(userId: String, gifts: Boolean, chatId: String?) {
+    val p = P
+    var tab by remember { mutableStateOf(if (gifts) 0 else 1) }
+    var gift by remember { mutableStateOf<OwnedGift?>(null) }
+    LaunchedEffect(userId) { if (gifts) Gifts.loadUser(userId) }
+    gift?.let { OwnedGiftDialog(it) { gift = null } }
+    Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (gifts) Pill("Подарки", tab == 0) { tab = 0 }
+        Pill("Медиа", tab == 1) { tab = 1 }
+    }
+    Spacer(Modifier.height(10.dp))
+    if (tab == 0 && gifts) {
+        val l = Gifts.of[userId].orEmpty()
+        if (l.isEmpty()) Text("Подарков пока нет", color = p.muted, modifier = Modifier.fillMaxWidth().padding(20.dp), textAlign = TextAlign.Center)
+        else OwnedGrid(l) { gift = it }
+    } else SharedMediaSection(chatId)
 }
 
 // ---------------- группа / канал ----------------
