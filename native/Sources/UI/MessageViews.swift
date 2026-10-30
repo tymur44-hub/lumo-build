@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import AVKit
 import AVFoundation
+import Photos
 
 struct VoiceView: View {
     let m: Message
@@ -79,7 +80,7 @@ struct TranscribeButton: View {
                 if !model.isPremium { Image(systemName: "lock.fill").font(.system(size: 9, weight: .bold)).foregroundColor(mine ? .white : Theme.a1).padding(.trailing, 4).padding(.bottom, 3) }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(BouncyButtonStyle())
     }
 }
 
@@ -247,6 +248,43 @@ struct VideoScreen: View {
     }
 }
 
+/// Сохранение фото и видео прямо в галерею
+enum Gallery {
+    static func saveImage(_ url: URL) async {
+        let m = AppModel.shared
+        var img = ImageCache.shared.get(url)
+        if img == nil, let (d, _) = try? await URLSession.shared.data(from: url.px) { img = UIImage(data: d) }
+        guard let image = img else { m.say("Не удалось сохранить"); return }
+        guard await ok() else { m.say("Нет доступа к галерее: разрешите в настройках"); return }
+        do {
+            try await PHPhotoLibrary.shared().performChanges { PHAssetChangeRequest.creationRequestForAsset(from: image) }
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            m.say("Сохранено в галерею")
+        } catch { m.say("Не удалось сохранить") }
+    }
+    static func saveVideo(_ url: URL) async {
+        let m = AppModel.shared
+        guard await ok() else { m.say("Нет доступа к галерее: разрешите в настройках"); return }
+        m.say("Сохраняю…")
+        do {
+            let (tmp, _) = try await URLSession.shared.download(from: url.px)
+            let dst = FileManager.default.temporaryDirectory.appendingPathComponent("lumo-\(UUID().uuidString).mp4")
+            try? FileManager.default.removeItem(at: dst)
+            try FileManager.default.moveItem(at: tmp, to: dst)
+            try await PHPhotoLibrary.shared().performChanges { PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: dst) }
+            try? FileManager.default.removeItem(at: dst)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            m.say("Сохранено в галерею")
+        } catch { m.say("Не удалось сохранить") }
+    }
+    private static func ok() async -> Bool {
+        let st = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        if st == .authorized || st == .limited { return true }
+        let n = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        return n == .authorized || n == .limited
+    }
+}
+
 struct ImageScreen: View {
     let url: URL
     @Environment(\.dismiss) private var dismiss
@@ -279,6 +317,10 @@ struct ImageScreen: View {
                         .frame(width: 42, height: 42).background(Circle().fill(Color.white.opacity(0.15)))
                 }
                 Spacer()
+                Button { Task { await Gallery.saveImage(url) } } label: {
+                    Image(systemName: "arrow.down.to.line").font(.headline).foregroundColor(.white)
+                        .frame(width: 42, height: 42).background(Circle().fill(Color.white.opacity(0.15)))
+                }
                 Button { share = true } label: {
                     Image(systemName: "square.and.arrow.up").font(.headline).foregroundColor(.white)
                         .frame(width: 42, height: 42).background(Circle().fill(Color.white.opacity(0.15)))

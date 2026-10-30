@@ -35,6 +35,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import ru.volshebnymir.lumo.core.*
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 
 data class Gift(val id: String, val name: String, val rarity: String, val price: Int, val supply: Int, val sold: Int) {
     val left get() = (supply - sold).coerceAtLeast(0)
@@ -262,8 +264,8 @@ fun OwnedGrid(list: List<OwnedGift>, onTap: (OwnedGift) -> Unit) {
 }
 
 @Composable
-private fun CatalogGrid(onPick: (Gift) -> Unit) {
-    Gifts.catalog.toList().chunked(2).forEach { row ->
+private fun CatalogGrid(onlyRare: Boolean = false, onPick: (Gift) -> Unit) {
+    Gifts.catalog.toList().filter { !onlyRare || it.rarity != "common" }.chunked(2).forEach { row ->
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             row.forEach { g -> GiftCard(g, Modifier.weight(1f)) { onPick(g) } }
             if (row.size == 1) Spacer(Modifier.weight(1f))
@@ -296,18 +298,114 @@ fun GiftsScreen() {
     }
 }
 
-/** Выбор подарка для человека */
+/** Выбор подарка для человека: Premium в подарок и каталог подарков */
 @Composable
 fun GiftShopDialog(to: String, onClose: () -> Unit) {
     val p = P
     var pick by remember { mutableStateOf<Gift?>(null) }
+    var info by remember { mutableStateOf(false) }
+    var rare by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { Gifts.load(); Lumens.load() }
     pick?.let { GiftDetailDialog(it, to) { pick = null; onClose() } }
+    if (info) LumenInfoDialog { info = false }
+    val name = AppModel.displayName(to)
+    val pr = AppModel.profiles[to]
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(Modifier.fillMaxSize().background(p.bg).verticalScroll(rememberScrollState())) {
-            TopBar("Подарок для ${AppModel.displayName(to)}")
-            CatalogGrid { pick = it }
-            Spacer(Modifier.height(30.dp))
+        Box(Modifier.fillMaxSize().background(p.bg)) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+                Spacer(Modifier.statusBarsPadding().height(64.dp))
+                Box(contentAlignment = Alignment.Center) {
+                    StarSparkles(Modifier.size(300.dp, 170.dp))
+                    Avatar(name, pr?.avatarUrl, pr?.color ?: 0, 104.dp)
+                }
+                Text("Подарить Premium", color = p.text, fontWeight = FontWeight.Black, fontSize = 28.sp, modifier = Modifier.padding(top = 8.dp))
+                Text("Подарите $name доступ к дополнительным функциям Lumo.", color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(Triple("3 месяца", "🎁", null as String?), Triple("6 месяцев", "🎁", "-35%"), Triple("1 год", "🎁", "-40%")).forEachIndexed { i, (t, e, badge) ->
+                        val tint = listOf(Color(0xFF4CAF50), Color(0xFF22A6FF), Color(0xFFFF5B5B))[i]
+                        Box(Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).background(p.panel).bouncy { AppModel.say("Подарок Premium в разработке") }) {
+                            Column(Modifier.fillMaxWidth().padding(vertical = 14.dp, horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(tint.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) { Text(e, fontSize = 36.sp) }
+                                Text(t, color = p.text, fontWeight = FontWeight.Black, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
+                                Text("Premium", color = p.muted, fontSize = 13.sp)
+                                Box(Modifier.padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(p.accent.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 5.dp)) {
+                                    Text("Скоро", color = p.accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                            }
+                            if (badge != null) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(8.dp)).background(Brush.horizontalGradient(listOf(p.a1, Color(0xFFB069FF)))).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                                Text(badge, color = Color.White, fontSize = 10.5.sp, fontWeight = FontWeight.Black)
+                            }
+                        }
+                    }
+                }
+                Text("Оплата Premium ещё в разработке: как только она заработает, подарок можно будет отправить прямо отсюда.", color = p.muted, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 24.dp))
+                Spacer(Modifier.height(26.dp))
+                Text("Отправить подарок", color = p.text, fontWeight = FontWeight.Black, fontSize = 26.sp)
+                Text("Дарите $name подарки, которые можно хранить в профиле.", color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp))
+                Text("Подробнее о люменах ›", color = p.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy { info = true }.padding(6.dp))
+                Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Pill("Все", !rare) { rare = false }
+                    Pill("Коллекционные", rare) { rare = true }
+                }
+                CatalogGrid(rare) { pick = it }
+                Spacer(Modifier.navigationBarsPadding().height(30.dp))
+            }
+            RoundIcon(androidx.compose.material.icons.Icons.Filled.Close, bg = p.panel, modifier = Modifier.statusBarsPadding().padding(10.dp)) { onClose() }
+            Row(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Баланс", color = p.muted, fontSize = 13.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) { LumenIcon(18.dp); Spacer(Modifier.width(4.dp)); Text("${Lumens.balance}", color = p.text, fontWeight = FontWeight.Black, fontSize = 16.sp) }
+                }
+            }
+        }
+    }
+}
+
+/** Мерцающие звёздочки за аватаром */
+@Composable
+private fun StarSparkles(modifier: Modifier) {
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "sp")
+    val ph by t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(2600, easing = androidx.compose.animation.core.LinearEasing)), label = "ph")
+    androidx.compose.foundation.Canvas(modifier) {
+        val rnd = java.util.Random(7)
+        repeat(34) { i ->
+            val x = rnd.nextFloat() * size.width; val y = rnd.nextFloat() * size.height
+            val s = (3f + rnd.nextFloat() * 7f) * density
+            val a = ((kotlin.math.sin((ph + i * 0.13f) * 6.283f) + 1f) / 2f) * 0.8f + 0.1f
+            val col = Color(0xFFFFB020).copy(alpha = a)
+            drawLine(col, androidx.compose.ui.geometry.Offset(x - s, y), androidx.compose.ui.geometry.Offset(x + s, y), 2f)
+            drawLine(col, androidx.compose.ui.geometry.Offset(x, y - s), androidx.compose.ui.geometry.Offset(x, y + s), 2f)
+        }
+    }
+}
+
+/** «Для чего нужны люмены?» */
+@Composable
+fun LumenInfoDialog(onClose: () -> Unit) {
+    val p = P
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.padding(14.dp).clip(RoundedCornerShape(30.dp)).background(p.panel).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(contentAlignment = Alignment.Center) { StarSparkles(Modifier.size(260.dp, 130.dp)); LumenIcon(84.dp) }
+            Text("Для чего нужны люмены?", color = p.text, fontWeight = FontWeight.Black, fontSize = 22.sp, modifier = Modifier.padding(top = 8.dp))
+            Text("Возможности люменов Lumo:", color = p.muted, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp, bottom = 10.dp))
+            listOf(
+                Triple(androidx.compose.material.icons.Icons.Filled.CardGiftcard, "Подарки друзьям", "Дарите друзьям подарки, которые они смогут добавить в профиль."),
+                Triple(androidx.compose.material.icons.Icons.AutoMirrored.Filled.Send, "Переводы в чате", "Отправляйте люмены другу прямо в переписке."),
+                Triple(androidx.compose.material.icons.Icons.Filled.Lock, "Платные сообщения", "Установите цену, и незнакомцы смогут написать вам только за люмены."),
+                Triple(androidx.compose.material.icons.Icons.Filled.Star, "Ежедневный бонус", "Заходите каждый день и получайте люмены, серия увеличивает награду."),
+            ).forEach { (ic, t, d) ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+                    androidx.compose.material3.Icon(ic, null, tint = p.accent, modifier = Modifier.size(28.dp).padding(top = 2.dp))
+                    Column(Modifier.padding(start = 14.dp)) {
+                        Text(t, color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(d, color = p.muted, fontSize = 14.sp)
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Brush.horizontalGradient(listOf(p.a1, p.a2))).bouncy { onClose() }.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                Text("OK", color = Color.White, fontWeight = FontWeight.Black, fontSize = 17.sp)
+            }
         }
     }
 }

@@ -94,6 +94,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import ru.volshebnymir.lumo.core.AppModel
+import ru.volshebnymir.lumo.core.Api
 import ru.volshebnymir.lumo.core.Lumens
 import ru.volshebnymir.lumo.core.ChatItem
 import ru.volshebnymir.lumo.core.Fmt
@@ -218,6 +219,7 @@ fun ChatScreen(chatId: String) {
             ) else ChatHeader(chatId, chat)
             NetStatusBar()
             PinnedBar(chat, chatId) { scrollTo(it) }
+            PaidBar(chat, chatId)
             Box(Modifier.weight(1f)) {
                 LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)) {
                     items(rows, key = { it.key }) { r ->
@@ -274,12 +276,12 @@ fun ChatScreen(chatId: String) {
                 Box(Modifier.fillMaxWidth().background(p.panel).navigationBarsPadding().padding(10.dp)) {
                     Text("НАЧАТЬ", color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp, textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(p.accent)
-                            .clickable { scope.launch { AppModel.send(chatId, "text", "/start") } }.padding(vertical = 14.dp))
+                            .bouncy { scope.launch { AppModel.send(chatId, "text", "/start") } }.padding(vertical = 14.dp))
                 }
             } else if (chat != null && !chat.canPost) {
                 Box(Modifier.fillMaxWidth().background(p.panel).navigationBarsPadding().padding(16.dp), contentAlignment = Alignment.Center) {
                     Text(if (chat.muted) "Включить уведомления" else "Выключить уведомления", color = p.a1, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable { scope.launch { AppModel.setMuted(chatId, !chat.muted) } })
+                        modifier = Modifier.bouncy { scope.launch { AppModel.setMuted(chatId, !chat.muted) } })
                 }
             } else Composer(chatId, text, { text = it; if (it.isNotEmpty()) AppModel.userTyping(chatId) }, reply, editing,
                 onCancel = { if (editing != null) text = ""; reply = null; editing = null },
@@ -338,7 +340,7 @@ fun ChatScreen(chatId: String) {
                 onPin = { menuFor = null; scope.launch { AppModel.pin(if (chat?.pinnedMessageId == m.id) null else m, chatId) } },
                 onSelect = { menuFor = null; if (m.id > 0) selected.add(m.id) },
                 onDelete = { menuFor = null; deleting = listOf(m) },
-                onOpen = { menuFor = null; MediaUtil.open(ctx, m.mediaUrl) },
+                onOpen = { menuFor = null; MediaUtil.save(ctx, m.mediaUrl, m.kind) },
                 onReport = { menuFor = null; reportMsg = m },
                 onTip = { menuFor = null; tipMsg = m },
             )
@@ -372,11 +374,11 @@ fun ChatScreen(chatId: String) {
                     Column(Modifier.width(290.dp).clip(RoundedCornerShape(28.dp)).background(p.panel).clickable(remember { MutableInteractionSource() }, null) {}) {
                         if (forAll) {
                             Text(if (chat?.isPrivate == true) "Удалить у меня и у ${chat.displayName}" else "Удалить у всех", color = p.danger, fontSize = 18.sp,
-                                modifier = Modifier.fillMaxWidth().clickable { go(true) }.padding(horizontal = 22.dp, vertical = 15.dp))
+                                modifier = Modifier.fillMaxWidth().bouncy { go(true) }.padding(horizontal = 22.dp, vertical = 15.dp))
                             Box(Modifier.fillMaxWidth().height(1.dp).background(p.line))
                         }
                         Text(if (saved) "Удалить" else "Удалить у меня", color = p.danger, fontSize = 18.sp,
-                            modifier = Modifier.fillMaxWidth().clickable { go(saved) }.padding(horizontal = 22.dp, vertical = 15.dp))
+                            modifier = Modifier.fillMaxWidth().bouncy { go(saved) }.padding(horizontal = 22.dp, vertical = 15.dp))
                     }
                 }
             }
@@ -396,11 +398,11 @@ private fun ChatHeader(chatId: String, chat: ChatItem?) {
     val saved = chat?.isPrivate == true && chat.peerId == AppModel.myId
     Row(Modifier.fillMaxWidth().background(p.panel.copy(alpha = 0.97f)).padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         RoundIcon(Icons.AutoMirrored.Filled.ArrowBack) { AppModel.pop() }
-        Row(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable {
+        Row(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).bouncy {
             if (chat != null && !saved) AppModel.push(if (chat.isPrivate && chat.peerId != null) Screen.Person(chat.peerId) else Screen.Info(chatId))
         }.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             if (saved) Box(Modifier.size(42.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Bookmark, null, tint = Color.White) }
-            else Avatar(chat?.displayName ?: "", chat?.displayAvatar, chat?.displayColor ?: 0, 42.dp, online = chat?.isPrivate == true && AppModel.isOnline(chat.peerId))
+            else Avatar(chat?.displayName ?: "", chat?.displayAvatar, chat?.displayColor ?: 0, 42.dp, online = chat?.isPrivate == true && AppModel.isOnline(chat.peerId), storyUid = if (chat?.isPrivate == true) chat.peerId else null)
             Spacer(Modifier.width(10.dp))
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -518,20 +520,58 @@ private fun SelectHeader(n: Int, onClose: () -> Unit, onCopy: () -> Unit, onForw
     }
 }
 
+/** Платные сообщения: цена для меня и кнопка «отключить для этого пользователя» у получателя */
+@Composable
+private fun PaidBar(chat: ChatItem?, chatId: String) {
+    val p = P
+    val peer = chat?.peerId
+    if (chat == null || !chat.isPrivate || peer == null || peer == AppModel.myId) return
+    val scope = rememberCoroutineScope()
+    var price by remember(peer) { mutableStateOf(0) }
+    LaunchedEffect(peer, AppModel.contacts.size) {
+        val r = runCatching { Api.rpc("lm_paid_info", jsonOf("p_peer" to peer)) }.getOrNull()
+        price = (r as? Number)?.toInt() ?: r?.toString()?.toIntOrNull() ?: 0
+    }
+    val paidIn = AppModel.messages[chatId]?.filter { it.senderId == peer && it.meta.optInt("paid") > 0 }.orEmpty()
+    val show = AppModel.isContact(peer).not() && paidIn.isNotEmpty()
+    AnimatedVisibility(price > 0 && !show) {
+        Row(Modifier.fillMaxWidth().background(p.accent.copy(alpha = 0.12f)).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            LumenIcon(18.dp); Spacer(Modifier.width(8.dp))
+            Text("Каждое сообщение этому пользователю стоит $price ${lumenWord(price.toLong())}", color = p.text, fontSize = 13.sp)
+        }
+    }
+    AnimatedVisibility(show) {
+        val total = paidIn.sumOf { it.meta.optInt("paid") }
+        Column(Modifier.fillMaxWidth().background(p.panel.copy(alpha = 0.96f)).padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("${AppModel.displayName(peer)} заплатил(а) за сообщения: $total ${lumenWord(total.toLong())}", color = p.text, fontSize = 14.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.clip(RoundedCornerShape(16.dp)).background(p.accent.copy(alpha = 0.16f)).bouncy {
+                scope.launch {
+                    runCatching { Api.rpc("lm_paid_trust", jsonOf("p_user" to peer)); AppModel.loadContacts() }
+                        .onSuccess { AppModel.say("Платные сообщения отключены для этого пользователя") }.onFailure { AppModel.say(it.message ?: "Ошибка") }
+                }
+            }.padding(horizontal = 18.dp, vertical = 10.dp)) {
+                Text("Отключить платные сообщения для этого пользователя", color = p.accent, fontWeight = FontWeight.Bold, fontSize = 13.5.sp, textAlign = TextAlign.Center)
+            }
+            Text("Он будет добавлен в контакты.", color = p.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
 @Composable
 private fun PinnedBar(chat: ChatItem?, chatId: String, onTap: (Int) -> Unit) {
     val p = P
     val scope = rememberCoroutineScope()
     val id = chat?.pinnedMessageId ?: return
     val m = AppModel.findMessage(id, chatId)
-    Row(Modifier.fillMaxWidth().background(p.panel.copy(alpha = 0.94f)).clickable { onTap(id) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(p.panel.copy(alpha = 0.94f)).bouncy { onTap(id) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(3.dp).height(34.dp).clip(RoundedCornerShape(2.dp)).background(p.accent))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text("Закреплённое сообщение", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             Text(m?.preview ?: "…", color = p.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (chat.isPrivate || chat.isAdmin) Icon(Icons.Filled.Close, null, tint = p.muted, modifier = Modifier.size(22.dp).clickable { scope.launch { AppModel.pin(null, chatId) } })
+        if (chat.isPrivate || chat.isAdmin) Icon(Icons.Filled.Close, null, tint = p.muted, modifier = Modifier.size(22.dp).bouncy { scope.launch { AppModel.pin(null, chatId) } })
     }
 }
 
@@ -643,7 +683,7 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
         m.replyTo?.let { rid ->
             val q = AppModel.findMessage(rid, m.chatId)
             Row(pad.padding(vertical = 3.dp).clip(RoundedCornerShape(8.dp)).background(if (mine) Color.White.copy(alpha = 0.16f) else p.a1.copy(alpha = 0.1f))
-                .clickable { onReplyTap(rid) }.padding(end = 8.dp).height(IntrinsicSize.Min)) {
+                .bouncy { onReplyTap(rid) }.padding(end = 8.dp).height(IntrinsicSize.Min)) {
                 Box(Modifier.width(3.dp).fillMaxHeight().background(if (mine) Color.White else p.a1))
                 Column(Modifier.padding(start = 7.dp, top = 3.dp, bottom = 3.dp)) {
                     Text(q?.let { AppModel.displayName(it.senderId) } ?: "Сообщение", color = if (mine) Color.White else p.a1, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
@@ -703,7 +743,7 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
         if (grp != null && m.id > 0 && !m.deleted && m.kind != "system") {
             val n = Lumens.comments[m.id] ?: 0
             Row(Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (mine) Color.White.copy(alpha = 0.16f) else p.a1.copy(alpha = 0.1f))
-                .clickable { AppModel.push(Screen.Comments(m.chatId, m.id)) }.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                .bouncy { AppModel.push(Screen.Comments(m.chatId, m.id)) }.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.ChatBubbleOutline, null, tint = if (mine) Color.White else p.a1, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(if (n == 0) "Оставить комментарий" else "$n ${lumenCommentWord(n)}", color = if (mine) Color.White else p.a1, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
@@ -769,7 +809,7 @@ private fun Reactions(m: Message, mine: Boolean) {
     Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         rs.groupBy { it.emoji }.forEach { (e, l) ->
             val my = l.any { it.userId == AppModel.myId }
-            Row(Modifier.popIn().clip(RoundedCornerShape(14.dp)).background(if (my) p.accent else SolidColor(p.panel)).clickable { scope.launch { AppModel.react(m, e) } }
+            Row(Modifier.popIn().clip(RoundedCornerShape(14.dp)).background(if (my) p.accent else SolidColor(p.panel)).bouncy { scope.launch { AppModel.react(m, e) } }
                 .padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(e, fontSize = 15.sp)
                 if (l.size > 1 || true) Text(" ${l.size}", color = if (my) Color.White else p.text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -865,7 +905,7 @@ private fun ForwardPicker(onClose: () -> Unit, onPick: (String) -> Unit) {
             LazyColumn(Modifier.fillMaxSize()) {
                 items(AppModel.chats.filter { it.canPost && (q.isBlank() || it.displayName.contains(q, true)) }, key = { it.id }) { c ->
                     val saved = c.isPrivate && c.peerId == AppModel.myId
-                    Row(Modifier.fillMaxWidth().clickable { onPick(c.id) }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().bouncy { onPick(c.id) }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(c.displayName, c.displayAvatar, c.displayColor, 44.dp)
                         Spacer(Modifier.width(12.dp))
                         Text(if (saved) "Избранное" else c.displayName, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
@@ -1126,7 +1166,7 @@ private fun StickerPanel(onEmoji: (String) -> Unit, onSticker: (String) -> Unit,
         ) {
             val list = if (tab == 0) emoji else if (tab == 1) STICKERS else ANIMATED_EMOJI
             items(list.size) { i ->
-                Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(10.dp)).clickable { if (tab == 0) onEmoji(list[i]) else if (tab == 1) onSticker(list[i]) else onAnim(list[i]) }, contentAlignment = Alignment.Center) {
+                Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(10.dp)).bouncy { if (tab == 0) onEmoji(list[i]) else if (tab == 1) onSticker(list[i]) else onAnim(list[i]) }, contentAlignment = Alignment.Center) {
                     if (tab == 2) AnimatedEmoji(list[i], 40.dp, tappable = false) else Text(list[i], fontSize = if (tab == 0) 26.sp else 46.sp)
                 }
             }

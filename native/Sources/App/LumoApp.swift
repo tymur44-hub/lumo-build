@@ -89,6 +89,7 @@ struct RootView: View {
         ZStack {
             Theme.bg.ignoresSafeArea()
             if model.loggedIn { MainView() } else { LoginView() }
+            Color.clear.frame(width: 0, height: 0).fullScreenCover(item: Binding(get: { model.storyOpen.map { IdentifiedString(value: $0) } }, set: { model.storyOpen = $0?.value })) { s in StoryViewer(startUser: s.value).environmentObject(model) }
             if model.loggedIn && phones.loaded && phones.status == "required" {
                 PhoneAuthView(mode: .bind, required: true).transition(.opacity)
             }

@@ -63,7 +63,7 @@ fun DevicesScreen() {
             }
             if (!isCurrent) {
                 Text("Завершить", color = p.danger, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
-                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { scope.launch { AppModel.endSession(d.id); items = AppModel.loadSessions() } }.padding(8.dp))
+                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).bouncy { scope.launch { AppModel.endSession(d.id); items = AppModel.loadSessions() } }.padding(8.dp))
             }
         }
     }
@@ -77,7 +77,7 @@ fun DevicesScreen() {
         }
         if (others.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
-            Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.panel2).clickable { confirmAll = true }.padding(vertical = 13.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.panel2).bouncy { confirmAll = true }.padding(vertical = 13.dp), contentAlignment = Alignment.Center) {
                 Text("Завершить все другие сеансы", color = p.danger, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
             }
             Spacer(Modifier.height(6.dp))
@@ -109,7 +109,7 @@ fun LanguageScreen() {
         Card {
             Lang.all.forEachIndexed { i, l ->
                 if (i > 0) Divider()
-                Row(Modifier.fillMaxWidth().clickable { Lang.set(ctx, l.first) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().bouncy { Lang.set(ctx, l.first) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         androidx.compose.material3.Text(l.second, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
                         androidx.compose.material3.Text(l.third, color = p.muted, fontSize = 12.5.sp)

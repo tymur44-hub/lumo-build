@@ -49,7 +49,7 @@ fun BotButtons(m: Message, mine: Boolean) {
                     Text(b.text, color = if (mine) Color.White else p.a1, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(p.muted.copy(alpha = 0.18f))
-                            .clickable { AppModel.botPress(m, b) }.padding(horizontal = 8.dp, vertical = 9.dp))
+                            .bouncy { AppModel.botPress(m, b) }.padding(horizontal = 8.dp, vertical = 9.dp))
                 }
             }
         }

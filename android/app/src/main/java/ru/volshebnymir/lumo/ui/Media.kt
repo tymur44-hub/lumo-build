@@ -67,6 +67,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import ru.volshebnymir.lumo.core.Fmt
 import ru.volshebnymir.lumo.core.Message
 import java.io.ByteArrayOutputStream
@@ -107,6 +108,43 @@ object MediaUtil {
         val b = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return bytes
         val r = Bitmap.createBitmap(b, 0, 0, b.width, b.height, android.graphics.Matrix().apply { postRotate(deg.toFloat()) }, true)
         val out = ByteArrayOutputStream(); r.compress(Bitmap.CompressFormat.JPEG, 92, out); return out.toByteArray()
+    }
+
+    /** Сохраняет фото, видео или файл прямо в галерею или «Загрузки», без перехода по ссылке */
+    fun save(ctx: Context, url: String?, kind: String) {
+        if (url.isNullOrEmpty()) return
+        if (android.os.Build.VERSION.SDK_INT < 29) { open(ctx, url); return }
+        ru.volshebnymir.lumo.core.AppModel.say("Сохраняю…")
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    val req = okhttp3.Request.Builder().url(ru.volshebnymir.lumo.core.Net.px(url)).build()
+                    ru.volshebnymir.lumo.core.Api.http.newCall(req).execute().use { r ->
+                        if (!r.isSuccessful) error("http " + r.code)
+                        var mime = r.header("Content-Type")?.substringBefore(';')?.trim().orEmpty()
+                        if (mime.isEmpty() || mime == "application/octet-stream") mime = when (kind) { "video" -> "video/mp4"; "image" -> "image/jpeg"; else -> "application/octet-stream" }
+                        val ext = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: url.substringAfterLast('.', "bin").take(5)
+                        val name = "Lumo_" + System.currentTimeMillis() + "." + ext
+                        val (coll, dir) = when {
+                            mime.startsWith("image/") -> android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI to "Pictures/Lumo"
+                            mime.startsWith("video/") -> android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI to "Movies/Lumo"
+                            else -> android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI to "Download/Lumo"
+                        }
+                        val cv = android.content.ContentValues().apply {
+                            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
+                            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
+                            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, dir)
+                            put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
+                        }
+                        val uri = ctx.contentResolver.insert(coll, cv) ?: error("insert")
+                        ctx.contentResolver.openOutputStream(uri)!!.use { out -> r.body!!.byteStream().copyTo(out) }
+                        cv.clear(); cv.put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0)
+                        ctx.contentResolver.update(uri, cv, null, null)
+                    }
+                }.isSuccess
+            }
+            ru.volshebnymir.lumo.core.AppModel.say(if (ok) "Сохранено в галерею" else "Не удалось сохранить")
+        }
     }
 
     fun open(ctx: Context, url: String?) {
@@ -231,7 +269,7 @@ fun VoiceBubble(m: Message, mine: Boolean) {
     val cur = Voice.current == m.id
     LaunchedEffect(cur, Voice.playing) { while (cur && Voice.playing) { Voice.tick(); delay(80) } }
     Row(Modifier.width(252.dp).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(42.dp).clip(CircleShape).background(if (mine) Color.White.copy(alpha = 0.22f) else p.a1).clickable { Voice.toggle(m) }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(42.dp).clip(CircleShape).background(if (mine) Color.White.copy(alpha = 0.22f) else p.a1).bouncy { Voice.toggle(m) }, contentAlignment = Alignment.Center) {
             Icon(if (cur && Voice.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(26.dp))
         }
         Spacer(Modifier.width(10.dp))
@@ -245,7 +283,7 @@ fun VoiceBubble(m: Message, mine: Boolean) {
                     Text(if (Voice.speed == 1f) "1×" else if (Voice.speed == 1.5f) "1.5×" else "2×", fontSize = 11.sp, fontWeight = FontWeight.Bold,
                         color = if (mine) Color.White else p.a1,
                         modifier = Modifier.popIn().clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                            .background(if (mine) Color.White.copy(alpha = 0.2f) else p.a1.copy(alpha = 0.15f)).clickable { Voice.cycleSpeed() }.padding(horizontal = 6.dp, vertical = 1.dp))
+                            .background(if (mine) Color.White.copy(alpha = 0.2f) else p.a1.copy(alpha = 0.15f)).bouncy { Voice.cycleSpeed() }.padding(horizontal = 6.dp, vertical = 1.dp))
                 }
             }
         }
@@ -262,7 +300,7 @@ fun TranscribeButton(mine: Boolean) {
     val fg = if (mine) Color.White else p.a1
     Box(Modifier.size(width = 38.dp, height = 32.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
         .background(if (mine) Color.White.copy(alpha = 0.2f) else p.a1.copy(alpha = 0.14f))
-        .clickable {
+        .bouncy {
             if (!prem) ru.volshebnymir.lumo.core.AppModel.say(ru.volshebnymir.lumo.core.PREMIUM_SOON)
             else ru.volshebnymir.lumo.core.AppModel.say("Расшифровка на Android пока в разработке")
         }, contentAlignment = Alignment.Center) {
@@ -292,7 +330,7 @@ private fun VideoNoteCircle(m: Message) {
     var prog by remember { mutableFloatStateOf(0f) }
     val size by animateDpAsState(if (playing) 270.dp else 210.dp, tween(280), label = "vn")
     val src = m.localPath ?: m.mediaUrl
-    Box(Modifier.size(size).clip(CircleShape).background(p.panel2).clickable { playing = !playing }, contentAlignment = Alignment.Center) {
+    Box(Modifier.size(size).clip(CircleShape).background(p.panel2).bouncy { playing = !playing }, contentAlignment = Alignment.Center) {
         if (playing && src != null) {
             val player = remember {
                 ExoPlayer.Builder(ctx).build().apply {
@@ -343,7 +381,7 @@ fun MediaViewer(m: Message, onClose: () -> Unit) {
         }
         Row(Modifier.statusBarsPadding().fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             RoundIcon(Icons.Filled.Close, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { onClose() }
-            RoundIcon(Icons.Filled.Download, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { MediaUtil.open(ctx, m.mediaUrl) }
+            RoundIcon(Icons.Filled.Download, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { MediaUtil.save(ctx, m.mediaUrl, m.kind) }
         }
         if (!m.body.isNullOrEmpty()) Text(m.body, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium,
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = 0.5f)).padding(18.dp).padding(bottom = 24.dp))

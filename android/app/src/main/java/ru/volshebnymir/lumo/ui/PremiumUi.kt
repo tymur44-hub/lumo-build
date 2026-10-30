@@ -96,7 +96,7 @@ fun PremiumChatCard(c: ChatItem?) {
                 Spacer(Modifier.height(8.dp))
                 listOf(0 to "Выключить", 3600 to "1 час", 86400 to "1 день", 604800 to "1 неделя", 2592000 to "1 месяц").forEach { (v, t) ->
                     Text(t, color = if (v == ttl) p.a1 else p.text, fontWeight = if (v == ttl) FontWeight.Bold else FontWeight.Normal, fontSize = 16.sp,
-                        modifier = Modifier.fillMaxWidth().clickable {
+                        modifier = Modifier.fillMaxWidth().bouncy {
                             if (v > 0 && !AppModel.isPremium) { AppModel.say(PREMIUM_SOON); return@clickable }
                             scope.launch { if (AppModel.setChatTtl(c.id, v)) { ttl = v; ttlDlg = false } }
                         }.padding(vertical = 10.dp))
@@ -151,7 +151,7 @@ fun ScheduledDialog(chatId: String, onClose: () -> Unit) {
                         Text(dtFmt.format(it.at), color = p.text, fontWeight = FontWeight.SemiBold)
                         Text(it.text, color = p.muted, fontSize = 14.sp, maxLines = 2)
                     }
-                    Text("Отменить", color = p.danger, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable {
+                    Text("Отменить", color = p.danger, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy {
                         scope.launch { AppModel.cancelScheduled(it.id); items.remove(it) }
                     }.padding(8.dp))
                 }
@@ -172,7 +172,7 @@ fun EmojiStatusDialog(onClose: () -> Unit) {
             Spacer(Modifier.height(10.dp))
             list.chunked(4).forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    row.forEach { e -> Text(e, fontSize = 30.sp, modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { scope.launch { AppModel.setEmojiStatus(e); onClose() } }.padding(10.dp)) }
+                    row.forEach { e -> Text(e, fontSize = 30.sp, modifier = Modifier.clip(RoundedCornerShape(12.dp)).bouncy { scope.launch { AppModel.setEmojiStatus(e); onClose() } }.padding(10.dp)) }
                 }
             }
         }

@@ -219,7 +219,7 @@ struct MessageRow: View {
                                     .foregroundColor(Theme.a1).frame(maxWidth: .infinity).padding(.vertical, 9).padding(.horizontal, 8)
                                     .background(Theme.muted.opacity(0.18), in: RoundedRectangle(cornerRadius: 10))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(BouncyButtonStyle())
                         }
                     }
                 }
@@ -241,7 +241,7 @@ struct MessageRow: View {
                 .foregroundColor(Theme.a1).padding(.horizontal, 12).padding(.vertical, 8)
                 .background(Theme.a1.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(BouncyButtonStyle())
         }
     }
 
@@ -261,7 +261,7 @@ struct MessageRow: View {
                         .background(Capsule().fill(meIn ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.panel2)))
                         .overlay(Capsule().stroke(Theme.line))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(BouncyButtonStyle())
                 }
             }
         }

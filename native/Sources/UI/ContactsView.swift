@@ -101,7 +101,7 @@ struct ContactsView: View {
                                         Text("Пригласить").font(.system(size: 14, weight: .bold)).foregroundColor(Theme.a1)
                                             .padding(.horizontal, 14).frame(height: 34).background(Capsule().fill(Theme.panel2))
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(BouncyButtonStyle())
                                 }
                                 .padding(.horizontal, 10).padding(.vertical, 6)
                             }
@@ -134,7 +134,7 @@ struct ContactsView: View {
 
     private func personRow(id: String, name: String, url: String?, color: Int, sub: String, contact: Bool) -> some View {
         HStack(spacing: 12) {
-            AvatarView(name: name, url: url, color: color, size: 50, online: model.isOnline(id))
+            AvatarView(name: name, url: url, color: color, size: 50, online: model.isOnline(id), storyUid: id)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
                 Text(sub).font(.subheadline).foregroundColor(model.isOnline(id) ? Theme.a2 : Theme.muted)
@@ -147,7 +147,7 @@ struct ContactsView: View {
                     .font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.a1)
                     .frame(width: 40, height: 40).background(Circle().fill(Theme.panel2))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(BouncyButtonStyle())
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .contentShape(Rectangle())
@@ -182,7 +182,7 @@ struct PersonSheet: View {
             ScrollView {
                 VStack(spacing: 14) {
                     VStack(spacing: 6) {
-                        AvatarView(name: model.displayName(userId), url: p?.avatarURL, color: p?.color ?? 0, size: 110, online: model.isOnline(userId))
+                        AvatarView(name: model.displayName(userId), url: p?.avatarURL, color: p?.color ?? 0, size: 110, online: model.isOnline(userId), storyUid: userId)
                         HStack(spacing: 6) {
                             Text(model.displayName(userId)).font(.system(size: 24, weight: .heavy))
                             if p?.verified == true { Image(systemName: "checkmark.seal.fill").foregroundColor(Theme.a2) }

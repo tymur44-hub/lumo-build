@@ -326,6 +326,9 @@ struct AddStoryView: View {
     @State private var isVideo = false
     @State private var caption = ""
     @State private var hours = 24
+    @State private var aud = "all"
+    @State private var allow: Set<String> = []
+    @State private var pickAud = false
     @State private var busy = false
     @State private var duration: Double = 0
     @StateObject private var cam = StoryCam()
@@ -476,8 +479,17 @@ struct AddStoryView: View {
                 }
                 .pickerStyle(.segmented)
                 .onChange(of: hours) { h in if h > 24 && !model.isPremium { hours = 24; model.say(premiumSoon) } }
-                Text("История видна вашим контактам и тем, с кем у вас есть переписка.")
-                    .font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+                VStack(spacing: 6) {
+                    Text("Кто увидит историю").font(.footnote).foregroundColor(Theme.muted)
+                    Picker("Кто увидит", selection: $aud) {
+                        Text("Все").tag("all"); Text("Контакты").tag("contacts"); Text("Выбранные").tag("only"); Text("Кроме…").tag("except")
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: aud) { a in if a == "only" || a == "except" { pickAud = true } }
+                    Text(audHint).font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+                        .onTapGesture { if aud == "only" || aud == "except" { pickAud = true } }
+                }
+                .sheet(isPresented: $pickAud) { AudiencePicker(title: aud == "only" ? "Кто увидит" : "Скрыть от", sel: $allow).environmentObject(model) }
                 GradientButton(title: "Опубликовать", loading: busy) { publish() }
                     .disabled(data == nil)
                     .opacity(data == nil ? 0.5 : 1)
@@ -510,13 +522,22 @@ struct AddStoryView: View {
         }
     }
 
+    private var audHint: String {
+        switch aud {
+        case "contacts": return "Только люди из ваших контактов"
+        case "only": return allow.isEmpty ? "Выберите, кто увидит историю" : "Увидят \(allow.count) чел. · нажмите, чтобы изменить"
+        case "except": return allow.isEmpty ? "Выберите, от кого скрыть" : "Скрыто от \(allow.count) чел. · нажмите, чтобы изменить"
+        default: return "Контакты и те, с кем у вас есть переписка"
+        }
+    }
+
     private func publish() {
         guard let d = data else { return }
         busy = true
         Task {
             let ok = await model.addStory(kind: isVideo ? "video" : "image", data: d, ext: isVideo ? "mov" : "jpg",
                                           contentType: isVideo ? "video/quicktime" : "image/jpeg",
-                                          caption: caption, meta: isVideo ? ["dur": duration] : [:], hours: hours)
+                                          caption: caption, meta: isVideo ? ["dur": duration] : [:], hours: hours, aud: aud, allow: Array(allow))
             busy = false
             if ok { dismiss() }
         }
@@ -614,6 +635,40 @@ final class StoryCam: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate,
             self.recording = false
             self.applyTorchOff()
             self.onVideo?(outputFileURL)
+        }
+    }
+}
+
+
+/// Выбор людей из контактов для аудитории истории
+struct AudiencePicker: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    @Binding var sel: Set<String>
+    var body: some View {
+        NavigationStack {
+            List {
+                if model.contacts.isEmpty { Text("В контактах пока никого").foregroundColor(Theme.muted) }
+                ForEach(model.contacts, id: \.self) { id in
+                    Button {
+                        if sel.contains(id) { sel.remove(id) } else { sel.insert(id) }
+                    } label: {
+                        HStack(spacing: 12) {
+                            AvatarView(name: model.displayName(id), url: model.profiles[id]?.avatarURL, color: model.profiles[id]?.color ?? 0, size: 40)
+                            Text(model.displayName(id)).foregroundColor(Theme.text)
+                            Spacer()
+                            Image(systemName: sel.contains(id) ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(sel.contains(id) ? Theme.a1 : Theme.muted)
+                                .scaleEffect(sel.contains(id) ? 1.15 : 1)
+                                .animation(.spring(response: 0.3, dampingFraction: 0.5), value: sel)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
         }
     }
 }

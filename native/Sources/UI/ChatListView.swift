@@ -129,7 +129,7 @@ struct ChatListView: View {
                         .background(RoundedRectangle(cornerRadius: 18).fill(folder == f ? Theme.panel : Color.clear))
                         .shadow(color: folder == f ? .black.opacity(0.12) : .clear, radius: 3, y: 1)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(BouncyButtonStyle())
                 }
             }
             .padding(4)
@@ -284,6 +284,7 @@ struct ChatRow: View {
     var body: some View {
         HStack(spacing: 12) {
             AvatarView(name: chat.displayName, url: chat.displayAvatar, color: chat.displayColor, size: 54,
+                       storyUid: chat.isPrivate && chat.peerId != model.myId ? chat.peerId : nil,
                        online: chat.isPrivate && chat.peerId != model.myId && model.isOnline(chat.peerId),
                        icon: chat.isPrivate && chat.peerId == model.myId ? "bookmark.fill" : nil)
             VStack(alignment: .leading, spacing: 3) {

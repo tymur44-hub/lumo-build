@@ -159,7 +159,7 @@ fun VideoNoteRecorder(chatId: String, session: NoteSession, replyTo: () -> Int?,
             Row(Modifier.clip(RoundedCornerShape(20.dp)).background(Color.Gray.copy(alpha = 0.35f)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 listOf(1f, 2f, 3f).filter { it <= maxOf(1f, maxZoom) }.forEach { z ->
                     val on = kotlin.math.abs(zoom - z) < 0.25f
-                    Box(Modifier.size(40.dp).clip(CircleShape).background(if (on) Color.White else Color.Transparent).clickable { setZoom(z) }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(40.dp).clip(CircleShape).background(if (on) Color.White else Color.Transparent).bouncy { setZoom(z) }, contentAlignment = Alignment.Center) {
                         Text(if (on || z == 1f) String.format(java.util.Locale.US, "%.1f×", if (on) zoom else z).replace(".0×", "×") else "${z.toInt()}×",
                             color = if (on) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }

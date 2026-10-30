@@ -17,6 +17,7 @@ struct ChatInfoView: View {
     var onSearch: () -> Void = {}
 
     @State private var members: [Member] = []
+    @State private var peerPhone: String?
     @State private var aliasEdit = false
     @State private var lumenTarget: LumenTarget?
     @State private var giftTarget: GiftTarget?
@@ -76,6 +77,7 @@ struct ChatInfoView: View {
         .sheet(item: $report) { t in ReportView(target: t).environmentObject(model) }
         .sheet(item: $lumenTarget) { t in SendLumensSheet(userId: t.id).environmentObject(model) }
         .sheet(item: $giftTarget) { t in GiftShopSheet(user: t.id).environmentObject(model) }
+        .task(id: chat?.peerId) { await loadPeerPhone(chat?.peerId) }
         .sheet(isPresented: $addMembers) {
             PeoplePicker(title: "Добавить участников", exclude: Set(members.map { $0.userId })) { ids in
                 Task { await model.addMembers(chatId, ids); members = await model.members(chatId) }
@@ -119,9 +121,9 @@ struct ChatInfoView: View {
                 if let u = avatar { avatarFull = IdentifiedURL(url: u) }
             } label: {
                 AvatarView(name: c?.displayName ?? "", url: c?.displayAvatar, color: c?.displayColor ?? 0, size: 120,
-                           icon: saved ? "bookmark.fill" : nil)
+                           icon: saved ? "bookmark.fill" : nil, storyUid: (c?.isPrivate == true && !saved) ? c?.peerId : nil)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(BouncyButtonStyle())
             .padding(.bottom, 6)
             HStack(spacing: 6) {
                 Text(saved ? "Избранное" : (c?.displayName ?? ""))
@@ -220,7 +222,7 @@ struct ChatInfoView: View {
     }
 
     private func actionButton(_ icon: String, _ title: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) { actionLabel(icon, title) }.buttonStyle(.plain)
+        Button(action: action) { actionLabel(icon, title) }.buttonStyle(BouncyButtonStyle())
     }
 
     private func infoRow(_ title: String, _ value: String, accent: Bool = false, trailing: String? = nil, tap: (() -> Void)? = nil) -> some View {
@@ -237,13 +239,20 @@ struct ChatInfoView: View {
             .padding(.vertical, 10).padding(.horizontal, 4)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(BouncyButtonStyle())
         .disabled(tap == nil)
     }
 
     @ViewBuilder private func privateSections(_ c: ChatItem) -> some View {
         if !saved {
             SettingsGroup {
+                if let ph = peerPhone {
+                    infoRow("мобильный", PhoneStore.pretty(ph), accent: true) {
+                        UIPasteboard.general.string = "+" + ph
+                        model.say("Номер скопирован")
+                    }
+                    Divider().overlay(Theme.line)
+                }
                 if let u = c.peerUsername, !u.isEmpty {
                     HStack(spacing: 0) {
                         infoRow("имя пользователя", "@" + u, accent: true) {
@@ -273,6 +282,11 @@ struct ChatInfoView: View {
             if let p = peer, p.premium, !p.isBot { ProfileLinksView(userId: p.id) }
             if let p = peer { ProfileChannelCard(p: p) }
         }
+    }
+
+    private func loadPeerPhone(_ id: String?) async {
+        guard let id = id, id != model.myId else { return }
+        peerPhone = (try? await API.shared.rpc("lm_phone_of", ["p_user": id])) as? String
     }
 
     @ViewBuilder private func groupSections(_ c: ChatItem) -> some View {
@@ -563,7 +577,7 @@ struct EditChatView: View {
                                 .foregroundColor(rxSet.contains(e) ? Theme.a1 : Theme.muted)
                         }
                         .padding(.horizontal, 20).padding(.vertical, 8).contentShape(Rectangle())
-                    }.buttonStyle(.plain)
+                    }.buttonStyle(BouncyButtonStyle())
                 }
             }
             TGHint(text: "Подписчики смогут ставить только отмеченные реакции. Если не отмечено ничего, реакции будут выключены.")
@@ -613,7 +627,7 @@ struct EditChatView: View {
                             Text(g.displayName).font(.system(size: 17)).foregroundColor(Theme.text)
                             Spacer()
                         }.padding(.horizontal, 20).padding(.vertical, 10).contentShape(Rectangle())
-                    }.buttonStyle(.plain)
+                    }.buttonStyle(BouncyButtonStyle())
                 }
             }
             .padding(.top, 8)
@@ -1009,7 +1023,7 @@ struct SharedMediaSection: View {
                                     .padding(.horizontal, 14).padding(.vertical, 8)
                                     .background(Capsule().fill(tab == t ? Theme.panel2 : Color.clear))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(BouncyButtonStyle())
                         }
                     }
                     .padding(.horizontal, 4)
@@ -1046,7 +1060,7 @@ struct SharedMediaSection: View {
                                 }
                                 .clipped()
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(BouncyButtonStyle())
                     }
                 }
             }
@@ -1067,7 +1081,7 @@ struct SharedMediaSection: View {
                         }
                         .padding(.vertical, 7).contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(BouncyButtonStyle())
                 }
             }
         case .voice:
@@ -1084,7 +1098,7 @@ struct SharedMediaSection: View {
                                     }
                                 }
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(BouncyButtonStyle())
                         } else {
                             VStack(alignment: .leading, spacing: 2) {
                                 VoiceView(m: m, mine: false)
@@ -1112,7 +1126,7 @@ struct SharedMediaSection: View {
                         }
                         .padding(.vertical, 7).contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(BouncyButtonStyle())
                 }
             }
         }

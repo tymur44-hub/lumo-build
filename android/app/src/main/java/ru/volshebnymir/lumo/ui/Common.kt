@@ -46,8 +46,20 @@ import coil.compose.AsyncImage
 import ru.volshebnymir.lumo.core.Fmt
 
 @Composable
-fun Avatar(name: String, url: String?, color: Int, size: Dp, online: Boolean = false, modifier: Modifier = Modifier) {
+fun Avatar(name: String, url: String?, color: Int, size: Dp, online: Boolean = false, modifier: Modifier = Modifier, storyUid: String? = null) {
     val p = P
+    val sg = storyUid?.let { u -> ru.volshebnymir.lumo.core.AppModel.stories.firstOrNull { it.userId == u } }
+    if (sg != null) {
+        val ring = when {
+            sg.userId == ru.volshebnymir.lumo.core.AppModel.myId -> androidx.compose.ui.graphics.Brush.sweepGradient(listOf(p.a1, p.a2, p.a1))
+            sg.unseen -> androidx.compose.ui.graphics.Brush.sweepGradient(listOf(Color(0xFFFF9F1A), Color(0xFFFF3B8A), p.a1, p.a2, Color(0xFFFF9F1A)))
+            else -> androidx.compose.ui.graphics.SolidColor(p.line)
+        }
+        Box(modifier.size(size).border(2.5.dp, ring, CircleShape).padding(3.5.dp).clip(CircleShape).clickable { Ui.storyUser = sg.userId }) {
+            Avatar(name, url, color, size - 13.dp, online)
+        }
+        return
+    }
     Box(modifier.size(size)) {
         Box(Modifier.size(size).clip(CircleShape).background(p.avatar(color)), contentAlignment = Alignment.Center) {
             Text(Fmt.initials(name), color = Color.White, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.36f).sp)
@@ -65,7 +77,7 @@ fun Avatar(name: String, url: String?, color: Int, size: Dp, online: Boolean = f
 fun Modifier.bouncy(onClick: () -> Unit): Modifier {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
-    val s by animateFloatAsState(if (pressed) 0.95f else 1f, spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow), label = "b")
+    val s by animateFloatAsState(if (pressed) 0.96f else 1f, spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow), label = "b")
     return this.scale(s).clickable(src, null, onClick = onClick)
 }
 

@@ -56,6 +56,8 @@ final class AppModel: ObservableObject {
     @Published var typing: [String: [String: String]] = [:]
     @Published var online: Set<String> = []
     @Published var stories: [StoryGroup] = []
+    @Published var storyOpen: String?
+    private var storyTask: Task<Void, Never>?
     @Published var calls: [Message] = []
     @Published var botName: String?
     @Published var tgLinked = false
@@ -164,11 +166,21 @@ final class AppModel: ObservableObject {
             ["event": "*", "schema": "public", "table": "lm_chat_wall"],
         ])
         ch.onChange = { [weak self] d in self?.onDB(d) }
+        let sch = Realtime.shared.channel("lm-stories")
+        sch.onBroadcast = { [weak self] _, _ in
+            guard let self = self else { return }
+            self.storyTask?.cancel()
+            self.storyTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                if !Task.isCancelled { await self.loadStories() }
+            }
+        }
         Realtime.shared.onReconnect = { [weak self] in
             guard let self = self else { return }
             Task {
                 await self.refreshing {
                     await self.loadChats()
+                    await self.loadStories()
                     if let c = self.openChatId { await self.loadMessages(c) }
                 }
             }
@@ -855,10 +867,10 @@ final class AppModel: ObservableObject {
         stories = groups
     }
 
-    func addStory(kind: String, data: Data, ext: String, contentType: String, caption: String, meta: JSON, hours: Int = 24) async -> Bool {
+    func addStory(kind: String, data: Data, ext: String, contentType: String, caption: String, meta: JSON, hours: Int = 24, aud: String = "all", allow: [String] = []) async -> Bool {
         do {
             let url = try await API.shared.upload(data, ext: ext, contentType: contentType)
-            _ = try await API.shared.rpc("lm_story_add", ["p_kind": kind, "p_url": url, "p_caption": caption, "p_meta": meta, "p_hours": hours])
+            _ = try await API.shared.rpc("lm_story_add2", ["p_kind": kind, "p_url": url, "p_caption": caption, "p_meta": meta, "p_hours": hours, "p_aud": aud, "p_allow": allow])
             await loadStories()
             say("История опубликована")
             return true

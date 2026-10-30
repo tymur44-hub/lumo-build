@@ -197,10 +197,12 @@ object AppModel {
                 .put(jsonOf("event" to "*", "schema" to "public", "table" to "lm_reactions_extra"))
                 .put(jsonOf("event" to "*", "schema" to "public", "table" to "lm_chat_wall")))
             db.onChange = { onDB(it) }
+            val sch = Realtime.channel("lm-stories")
+            sch.onBroadcast = { _, _ -> storyJob?.cancel(); storyJob = scope.launch { delay(350); loadStories() } }
             Realtime.onReconnect = {
                 scope.launch {
                     netStatus = "Обновление…"
-                    loadChats()
+                    loadChats(); loadStories()
                     openChatId?.let { loadMessages(it) }
                     if (Realtime.isOpen) netStatus = null
                 }
@@ -988,6 +990,7 @@ object AppModel {
         return rows.map { Message.from(it) }.onEach { replyCache[it.id] = it }
     }
 
+    private var storyJob: Job? = null
     suspend fun loadStories() {
         val rows = (runCatching { Api.rpc("lm_stories_feed") }.getOrNull() as? JSONArray).objects().map { StoryItem.from(it) }
         val groups = rows.groupBy { it.userId }.map { (uid, l) ->
@@ -999,9 +1002,9 @@ object AppModel {
         stories.clear(); stories.addAll(groups)
     }
 
-    suspend fun addStory(kind: String, data: ByteArray, ext: String, contentType: String, caption: String, meta: JSONObject, hours: Int = 24): Boolean = try {
+    suspend fun addStory(kind: String, data: ByteArray, ext: String, contentType: String, caption: String, meta: JSONObject, hours: Int = 24, aud: String = "all", allow: List<String> = emptyList()): Boolean = try {
         val url = Api.upload(data, ext, contentType)
-        Api.rpc("lm_story_add", jsonOf("p_kind" to kind, "p_url" to url, "p_caption" to caption, "p_meta" to meta, "p_hours" to hours))
+        Api.rpc("lm_story_add2", jsonOf("p_kind" to kind, "p_url" to url, "p_caption" to caption, "p_meta" to meta, "p_hours" to hours, "p_aud" to aud, "p_allow" to JSONArray(allow)))
         loadStories(); say("История опубликована"); true
     } catch (e: Exception) { say("Ошибка: " + (e.message ?: "")); false }
 

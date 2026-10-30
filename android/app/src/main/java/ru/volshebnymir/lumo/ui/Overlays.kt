@@ -30,6 +30,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Icon
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -88,7 +91,7 @@ object Ui {
     fun Overlays() {
         storyUser?.let { StoryViewer(it) { storyUser = null } }
         if (addStory) AddStoryScreen { addStory = false }
-        if (qrMine) MyQRScreen { qrMine = false }
+        androidx.compose.animation.AnimatedVisibility(qrMine, enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(380)) + androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(420), initialScale = 0.88f), exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(220)) + androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(220), targetScale = 0.92f)) { MyQRScreen { qrMine = false } }
         if (qrScan) QRScanScreen { qrScan = false }
         AppModel.miniApp?.let { MiniAppScreen(it) { AppModel.miniApp = null } }
     }
@@ -114,19 +117,19 @@ fun StoriesBar() {
     val mine = AppModel.stories.firstOrNull { it.userId == AppModel.myId }
     val others = AppModel.stories.filter { it.userId != AppModel.myId }
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Column(Modifier.width(78.dp).clickable { if (mine != null) Ui.storyUser = AppModel.myId else Ui.addStory = true }, horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.width(78.dp).bouncy { if (mine != null) Ui.storyUser = AppModel.myId else Ui.addStory = true }, horizontalAlignment = Alignment.CenterHorizontally) {
             Box {
                 if (mine != null) Ring(false, true) { Avatar(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, 54.dp) }
                 else Box(Modifier.padding(8.dp)) { Avatar(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, 54.dp) }
                 Box(Modifier.align(Alignment.BottomEnd).size(22.dp).clip(CircleShape).background(p.bg).padding(2.dp).clip(CircleShape).background(p.a1)
-                    .clickable { Ui.addStory = true }, contentAlignment = Alignment.Center) {
+                    .bouncy { Ui.addStory = true }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Add, null, tint = Color.White, modifier = Modifier.size(14.dp))
                 }
             }
             Text("Моя история", color = p.text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
         }
         others.forEach { g ->
-            Column(Modifier.width(72.dp).clickable { Ui.storyUser = g.userId }, horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.width(72.dp).bouncy { Ui.storyUser = g.userId }, horizontalAlignment = Alignment.CenterHorizontally) {
                 Ring(g.unseen, false) { Avatar(g.name, g.avatarUrl, g.color, 54.dp) }
                 Text(g.name.split(" ").first(), color = p.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -224,7 +227,7 @@ fun StoryViewer(startUser: String, onClose: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.45f)).padding(10.dp))
             Spacer(Modifier.height(10.dp))
             if (mine) Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.15f)).clickable {
+                Row(Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.15f)).bouncy {
                     scope.launch { viewers = AppModel.storyViewers(s) }
                 }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Visibility, null, tint = Color.White, modifier = Modifier.size(18.dp))
@@ -363,23 +366,23 @@ private fun StoryCamera(onClose: () -> Unit, onPicked: (android.net.Uri, Boolean
         }
         Column(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.size(78.dp).clip(CircleShape).border(4.dp, Color.White.copy(alpha = 0.55f), CircleShape).padding(6.dp).clip(CircleShape)
-                .background(if (video) Color(0xFFFF3B30) else Color.White).clickable { shoot() }, contentAlignment = Alignment.Center) {
+                .background(if (video) Color(0xFFFF3B30) else Color.White).bouncy { shoot() }, contentAlignment = Alignment.Center) {
                 if (rec != null) Box(Modifier.size(24.dp).clip(RoundedCornerShape(5.dp)).background(Color.White))
             }
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Box(Modifier.size(54.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.18f))
-                    .clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }, contentAlignment = Alignment.Center) {
+                    .bouncy { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.PhotoLibrary, null, tint = Color.White, modifier = Modifier.size(26.dp))
                 }
                 Row(Modifier.clip(RoundedCornerShape(28.dp)).background(Color.White.copy(alpha = 0.16f)).padding(4.dp)) {
                     listOf(true to "ВИДЕО", false to "ФОТО").forEach { (v, t) ->
                         Text(t, color = if (video == v) Color(0xFFFFD60A) else Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp,
                             modifier = Modifier.clip(RoundedCornerShape(24.dp)).background(if (video == v) Color.White.copy(alpha = 0.18f) else Color.Transparent)
-                                .clickable { if (rec == null) video = v }.padding(horizontal = 22.dp, vertical = 12.dp))
+                                .bouncy { if (rec == null) video = v }.padding(horizontal = 22.dp, vertical = 12.dp))
                     }
                 }
-                Box(Modifier.size(54.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f)).clickable { if (rec == null) front = !front }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(54.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f)).bouncy { if (rec == null) front = !front }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Cameraswitch, null, tint = Color.White, modifier = Modifier.size(26.dp))
                 }
             }
@@ -396,6 +399,8 @@ private fun StoryEdit(first: android.net.Uri, firstVideo: Boolean, onClose: () -
     var isVideo by remember { mutableStateOf(firstVideo) }
     var caption by remember { mutableStateOf("") }
     var hours by remember { mutableStateOf(24) }
+    var aud by remember { mutableStateOf("all") }
+    var allow by remember { mutableStateOf(listOf<String>()) }
     var busy by remember { mutableStateOf(false) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) { uri = u; isVideo = ctx.contentResolver.getType(u)?.startsWith("video") == true }
@@ -407,7 +412,7 @@ private fun StoryEdit(first: android.net.Uri, firstVideo: Boolean, onClose: () -
             Text("Новая история", color = p.text, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         }
         Box(Modifier.weight(1f).fillMaxWidth().padding(14.dp).clip(RoundedCornerShape(22.dp)).background(p.panel2)
-            .clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }, contentAlignment = Alignment.Center) {
+            .bouncy { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }, contentAlignment = Alignment.Center) {
             val u = uri
             if (u == null) Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Filled.AddPhotoAlternate, null, tint = p.muted, modifier = Modifier.size(48.dp))
@@ -420,7 +425,7 @@ private fun StoryEdit(first: android.net.Uri, firstVideo: Boolean, onClose: () -
             Spacer(Modifier.height(6.dp))
             StoryHoursPicker(hours) { hours = it }
             Spacer(Modifier.height(6.dp))
-            Text("История видна вашим контактам и тем, с кем у вас есть чат", color = p.muted, fontSize = 12.5.sp)
+            StoryAudiencePicker(aud, allow, { aud = it }, { allow = it })
             Spacer(Modifier.height(10.dp))
             GradientButton("Опубликовать", busy, enabled = uri != null) {
                 val u = uri ?: return@GradientButton
@@ -435,7 +440,7 @@ private fun StoryEdit(first: android.net.Uri, firstVideo: Boolean, onClose: () -
                     }
                     if (ok == null) { AppModel.say("Не удалось открыть файл"); busy = false; return@launch }
                     if (ok.first.first.size > 50 * 1024 * 1024) { AppModel.say("Файл больше 50 МБ"); busy = false; return@launch }
-                    val done = AppModel.addStory(if (isVideo) "video" else "image", ok.first.first, ok.first.second, ok.first.third, caption.trim(), ok.second, hours)
+                    val done = AppModel.addStory(if (isVideo) "video" else "image", ok.first.first, ok.first.second, ok.first.third, caption.trim(), ok.second, hours, aud, allow)
                     busy = false
                     if (done) onClose()
                 }
@@ -536,5 +541,50 @@ fun QRScanScreen(onClose: () -> Unit) {
         }
         Text("Наведите на QR-код профиля или на код входа на сайте Lumo (на компьютере)", color = Color.White, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(30.dp))
+    }
+}
+
+
+/** Кто увидит историю: все, только контакты, выбранные люди или все, кроме выбранных */
+@Composable
+fun StoryAudiencePicker(aud: String, allow: List<String>, onAud: (String) -> Unit, onAllow: (List<String>) -> Unit) {
+    val p = P
+    var dlg by remember { mutableStateOf(false) }
+    Text("Кто увидит историю", color = p.muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp, bottom = 4.dp))
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf("all" to "Все", "contacts" to "Контакты", "only" to "Выбранные", "except" to "Все, кроме…").forEach { (k, t) ->
+            Pill(t, aud == k) { onAud(k); if ((k == "only" || k == "except")) dlg = true }
+        }
+    }
+    val hint = when (aud) {
+        "contacts" -> "Только люди из ваших контактов"
+        "only" -> if (allow.isEmpty()) "Выберите, кто увидит историю" else "Увидят ${allow.size} чел. · нажмите, чтобы изменить"
+        "except" -> if (allow.isEmpty()) "Выберите, от кого скрыть" else "Скрыто от ${allow.size} чел. · нажмите, чтобы изменить"
+        else -> "Контакты и те, с кем у вас есть чат"
+    }
+    Text(hint, color = p.muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 6.dp).clickable(enabled = aud == "only" || aud == "except") { dlg = true })
+    if (dlg) {
+        var sel by remember { mutableStateOf(allow.toSet()) }
+        val people = AppModel.contacts.toList()
+        AlertDialog(
+            onDismissRequest = { dlg = false },
+            containerColor = p.panel,
+            title = { Text(if (aud == "only") "Кто увидит" else "Скрыть от", color = p.text) },
+            text = {
+                if (people.isEmpty()) Text("В контактах пока никого", color = p.muted)
+                else LazyColumn(Modifier.heightIn(max = 380.dp)) {
+                    items(people) { id ->
+                        val pr = AppModel.profiles[id]
+                        Row(Modifier.fillMaxWidth().bouncy { sel = if (id in sel) sel - id else sel + id }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(AppModel.displayName(id), pr?.avatarUrl, pr?.color ?: 0, 38.dp)
+                            Text(AppModel.displayName(id), color = p.text, modifier = Modifier.weight(1f).padding(start = 10.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Checkbox(id in sel, { sel = if (id in sel) sel - id else sel + id })
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton({ onAllow(sel.toList()); dlg = false }) { Text("Готово", color = p.accent) } },
+            dismissButton = { TextButton({ dlg = false }) { Text("Отмена", color = p.muted) } },
+        )
     }
 }

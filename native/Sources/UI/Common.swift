@@ -10,8 +10,13 @@ struct AvatarView: View {
     var size: CGFloat = 48
     var online = false
     var icon: String?
+    var storyUid: String? = nil
 
     var body: some View {
+        if let u = storyUid { StoryRingAvatar(uid: u, size: size) { base } } else { base }
+    }
+
+    private var base: some View {
         ZStack {
             Circle().fill(Theme.avatarGradient(color))
             if let i = icon {
@@ -37,6 +42,31 @@ struct AvatarView: View {
                     .offset(x: -size * 0.01, y: -size * 0.01)
             }
         }
+    }
+}
+
+/// Круг вокруг аватара, если у человека есть история: нажатие открывает её
+struct StoryRingAvatar<Content: View>: View {
+    let uid: String
+    let size: CGFloat
+    @ViewBuilder var content: () -> Content
+    @ObservedObject private var m = AppModel.shared
+    @State private var spin = false
+    var body: some View {
+        if let g = m.stories.first(where: { $0.userId == uid }) {
+            let fresh = g.unseen
+            let ring: AngularGradient = uid == m.myId
+                ? AngularGradient(colors: [Theme.a1, Theme.a2, Theme.a1], center: .center)
+                : (fresh ? AngularGradient(colors: [Color(hex: 0xFF9F1A), Color(hex: 0xFF3B8A), Theme.a1, Theme.a2, Color(hex: 0xFF9F1A)], center: .center)
+                         : AngularGradient(colors: [Theme.line, Theme.line], center: .center))
+            content()
+                .scaleEffect((size - 11) / size)
+                .frame(width: size, height: size)
+                .overlay(Circle().stroke(ring, lineWidth: 2.5).rotationEffect(.degrees(spin && fresh ? 360 : 0)))
+                .contentShape(Circle())
+                .onTapGesture { m.storyOpen = uid }
+                .onAppear { if fresh { withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) { spin = true } } }
+        } else { content() }
     }
 }
 

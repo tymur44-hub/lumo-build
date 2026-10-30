@@ -459,7 +459,7 @@ fun PhoneContactsSection() {
     if (PhoneStore.matched.isNotEmpty()) {
         Text("В LUMO", color = p.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
         PhoneStore.matched.forEach { m ->
-            Row(Modifier.fillMaxWidth().clickable { AppModel.push(Screen.Person(m.id)) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().bouncy { AppModel.push(Screen.Person(m.id)) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Avatar(m.name, m.avatarUrl, m.color, 50.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {

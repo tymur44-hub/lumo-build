@@ -161,7 +161,7 @@ fun BubbleColorDialog(chatId: String, onClose: () -> Unit) {
                         Box(Modifier.size(46.dp).clip(CircleShape)
                             .background(if (c == null) Brush.linearGradient(listOf(p.panel2, p.panel2)) else Brush.linearGradient(listOf(Color(c.first), Color(c.second))))
                             .border(3.dp, if (cur == i) p.text else Color.Transparent, CircleShape)
-                            .clickable { Extra.setBub(chatId, i); onClose() })
+                            .bouncy { Extra.setBub(chatId, i); onClose() })
                     }
                 }
             }
@@ -229,7 +229,7 @@ fun ProfileLinks(userId: String) {
             Text("Ссылки", color = p.muted, fontSize = 13.sp)
             links.forEach { (t, u) ->
                 Text(t, color = p.a2, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
-                    modifier = Modifier.fillMaxWidth().clickable { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(u)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } }.padding(vertical = 6.dp))
+                    modifier = Modifier.fillMaxWidth().bouncy { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(u)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } }.padding(vertical = 6.dp))
             }
         }
     }
@@ -255,7 +255,7 @@ private fun PinPad(title: String, error: String?, onDone: (String) -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(vertical = 5.dp)) {
                 row.forEach { k ->
                     if (k.isEmpty()) Spacer(Modifier.size(64.dp))
-                    else Box(Modifier.size(64.dp).clip(CircleShape).background(p.panel2).clickable {
+                    else Box(Modifier.size(64.dp).clip(CircleShape).background(p.panel2).bouncy {
                         if (k == "⌫") { if (pin.isNotEmpty()) pin = pin.dropLast(1) }
                         else if (pin.length < 4) { pin += k; if (pin.length == 4) onDone(pin) }
                     }, contentAlignment = Alignment.Center) { Text(k, color = p.text, fontSize = 24.sp, fontWeight = FontWeight.Medium) }
@@ -288,7 +288,7 @@ fun LockOverlay() {
                 if (Extra.check(pin)) { err = null; Extra.locked = false } else err = "Неверный код"
             }
             if (Extra.bio) Text("Войти по отпечатку или лицу", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 16.sp,
-                modifier = Modifier.padding(top = 18.dp).clickable { Extra.askBio(ctx) { Extra.locked = false } }.padding(10.dp))
+                modifier = Modifier.padding(top = 18.dp).bouncy { Extra.askBio(ctx) { Extra.locked = false } }.padding(10.dp))
         }
     }
 }
@@ -306,16 +306,16 @@ fun LockSettingsDialog(onClose: () -> Unit) {
                 "menu" -> {
                     Text("Блокировка включена", color = p.text, fontWeight = FontWeight.Black, fontSize = 20.sp)
                     Text("Код спрашивается при входе и после сворачивания больше чем на минуту.", color = p.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 10.dp))
-                    if (Extra.canBio(LocalContext.current)) Row(Modifier.fillMaxWidth().clickable { Extra.chooseBio(!Extra.bio) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (Extra.canBio(LocalContext.current)) Row(Modifier.fillMaxWidth().bouncy { Extra.chooseBio(!Extra.bio) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Отпечаток или лицо", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             Text("Разблокировка без ввода кода", color = p.muted, fontSize = 12.5.sp)
                         }
                         androidx.compose.material3.Switch(checked = Extra.bio, onCheckedChange = { Extra.chooseBio(it) })
                     }
-                    Text("Сменить код", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().clickable { step = "old-change" }.padding(10.dp), textAlign = TextAlign.Center)
-                    Text("Выключить", color = p.danger, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().clickable { step = "old-off" }.padding(10.dp), textAlign = TextAlign.Center)
-                    Text("Закрыть", color = p.muted, fontSize = 15.sp, modifier = Modifier.clickable { onClose() }.padding(10.dp))
+                    Text("Сменить код", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().bouncy { step = "old-change" }.padding(10.dp), textAlign = TextAlign.Center)
+                    Text("Выключить", color = p.danger, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().bouncy { step = "old-off" }.padding(10.dp), textAlign = TextAlign.Center)
+                    Text("Закрыть", color = p.muted, fontSize = 15.sp, modifier = Modifier.bouncy { onClose() }.padding(10.dp))
                 }
                 "old-change", "old-off" -> PinPad("Введите текущий код", err) { pin ->
                     if (Extra.check(pin)) { err = null; if (step == "old-off") { Extra.setPin(null); AppModel.say("Блокировка выключена"); onClose() } else step = "new" } else err = "Неверный код"

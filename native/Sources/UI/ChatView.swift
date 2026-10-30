@@ -101,6 +101,7 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let pid = chat?.pinnedMessageId { pinnedBar(pid) }
+            PaidBar(chat: chat, chatId: chatId).environmentObject(model)
             if isProt {
                 ScreenShield { messagesList.environmentObject(model).environmentObject(look).environmentObject(calls) }
             } else {
@@ -167,7 +168,7 @@ struct ChatView: View {
                     Text(selected.isEmpty ? "Выберите сообщения" : "Выбрано: \(selected.count)")
                         .font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text)
                 } else {
-                    Button { showInfo = true } label: { header }.buttonStyle(.plain)
+                    Button { showInfo = true } label: { header }.buttonStyle(BouncyButtonStyle())
                 }
             }
             ToolbarItem(placement: .navigationBarLeading) {
@@ -430,6 +431,9 @@ struct ChatView: View {
             })
         }
         if !isProt { a.append(MsgAction(title: "Переслать", icon: "arrowshape.turn.up.right") { forwarding = ForwardBatch(messages: [m]) }) }
+        if !isProt, let u = m.mediaURL.flatMap(URL.init(string:)), m.kind == "image" || m.kind == "video" {
+            a.append(MsgAction(title: "Сохранить в галерею", icon: "arrow.down.to.line") { Task { if m.kind == "image" { await Gallery.saveImage(u) } else { await Gallery.saveVideo(u) } } })
+        }
         if !mine && m.senderId != nil {
             a.append(MsgAction(title: "Отправить люмены", icon: "sparkle") { tipping = m })
         }
@@ -512,7 +516,7 @@ struct ChatView: View {
                             } label: {
                                 Text(e).font(.system(size: 26)).frame(width: 38, height: 42)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(BouncyButtonStyle())
                         }
                     }
                     .padding(.horizontal, 6)
@@ -693,6 +697,7 @@ struct ChatView: View {
         HStack(spacing: 9) {
             let saved = chat?.isPrivate == true && chat?.peerId == model.myId
             AvatarView(name: chat?.displayName ?? "", url: chat?.displayAvatar, color: chat?.displayColor ?? 0, size: 36,
+                       storyUid: chat?.isPrivate == true && !saved ? chat?.peerId : nil,
                        online: chat?.isPrivate == true && !saved && model.isOnline(chat?.peerId),
                        icon: saved ? "bookmark.fill" : nil)
             VStack(alignment: .leading, spacing: 0) {
@@ -1153,7 +1158,7 @@ struct StickerPanel: View {
                 } else if tab == 2 {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 10) {
                         ForEach(Self.animated, id: \.self) { e in
-                            Button { onAnim(e) } label: { AnimatedEmoji(emoji: e, size: 46, tappable: false) }.buttonStyle(.plain)
+                            Button { onAnim(e) } label: { AnimatedEmoji(emoji: e, size: 46, tappable: false) }.buttonStyle(BouncyButtonStyle())
                         }
                     }
                     .padding(10)
@@ -1177,7 +1182,7 @@ struct StickerPanel: View {
                 .foregroundColor(tab == i ? .white : Theme.muted)
                 .background(Capsule().fill(tab == i ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.panel2)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(BouncyButtonStyle())
     }
 }
 
@@ -1227,4 +1232,58 @@ struct MsgAction {
 struct ForwardBatch: Identifiable {
     let id = UUID()
     let messages: [Message]
+}
+
+
+/// Платные сообщения: цена для меня и кнопка «отключить для этого пользователя» у получателя
+struct PaidBar: View {
+    @EnvironmentObject var model: AppModel
+    let chat: ChatItem?
+    let chatId: String
+    @State private var price = 0
+    var body: some View {
+        Group {
+            if let peer = chat?.peerId, chat?.isPrivate == true, peer != model.myId {
+                let paidIn = (model.messages[chatId] ?? []).filter { $0.senderId == peer && (($0.meta.int("paid")) ?? 0) > 0 }
+                let show = !model.isContact(peer) && !paidIn.isEmpty
+                VStack(spacing: 0) {
+                    if price > 0 && !show {
+                        HStack(spacing: 8) {
+                            LumenGem(size: 18)
+                            Text("Каждое сообщение этому пользователю стоит \(price) \(lumenWord(price))").font(.system(size: 13)).foregroundColor(Theme.text)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 8).background(Theme.a1.opacity(0.12))
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                    if show {
+                        let total = paidIn.reduce(0) { $0 + (($1.meta.int("paid")) ?? 0) }
+                        VStack(spacing: 8) {
+                            Text("\(model.displayName(peer)) заплатил(а) за сообщения: \(total) \(lumenWord(total))")
+                                .font(.system(size: 14)).foregroundColor(Theme.text).multilineTextAlignment(.center)
+                            Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                Task {
+                                    do { _ = try await API.shared.rpc("lm_paid_trust", ["p_user": peer]); await model.loadContacts(); model.say("Платные сообщения отключены для этого пользователя") }
+                                    catch { model.say(error.localizedDescription) }
+                                }
+                            } label: {
+                                Text("Отключить платные сообщения для этого пользователя").font(.system(size: 13.5, weight: .bold)).foregroundColor(Theme.a1)
+                                    .multilineTextAlignment(.center).padding(.horizontal, 18).padding(.vertical, 10)
+                                    .background(Theme.a1.opacity(0.16), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            }.buttonStyle(BouncyButtonStyle())
+                            Text("Он будет добавлен в контакты.").font(.system(size: 12)).foregroundColor(Theme.muted)
+                        }
+                        .frame(maxWidth: .infinity).padding(14).background(Theme.panel.opacity(0.96))
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: show)
+                .task(id: peer + String(model.contacts.count)) {
+                    let r = try? await API.shared.rpc("lm_paid_info", ["p_peer": peer])
+                    price = (r as? Int) ?? (r as? NSNumber)?.intValue ?? 0
+                }
+            }
+        }
+    }
 }

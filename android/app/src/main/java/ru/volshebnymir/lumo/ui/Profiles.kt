@@ -63,10 +63,10 @@ fun TopBar(title: String, right: (@Composable () -> Unit)? = null) {
 
 /** Шапка профиля как в Telegram: большое фото, имя, статус и кнопки действий */
 @Composable
-private fun ProfileHead(name: String, url: String?, color: Int, status: String, statusOn: Boolean, onAvatar: () -> Unit) {
+private fun ProfileHead(name: String, url: String?, color: Int, status: String, statusOn: Boolean, uid: String? = null, onAvatar: () -> Unit) {
     val p = P
     Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.clickable(enabled = !url.isNullOrEmpty()) { onAvatar() }) { Avatar(name, url, color, 112.dp) }
+        Box(Modifier.clickable(enabled = !url.isNullOrEmpty()) { onAvatar() }) { Avatar(name, url, color, 112.dp, storyUid = uid) }
         Spacer(Modifier.height(12.dp))
         Text(name, color = p.text, fontWeight = FontWeight.Black, fontSize = 25.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 20.dp))
         if (status.isNotEmpty()) Text(status, color = if (statusOn) p.a2 else p.muted, fontSize = 15.sp)
@@ -116,7 +116,7 @@ fun SharedMediaSection(chatId: String?) {
                 list.chunked(3).forEach { row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         row.forEach { m ->
-                            Box(Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(6.dp)).background(Color.Black).clickable { viewer = m }, contentAlignment = Alignment.Center) {
+                            Box(Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(6.dp)).background(Color.Black).bouncy { viewer = m }, contentAlignment = Alignment.Center) {
                                 AsyncImage(m.mediaUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                 if (m.kind == "video") Icon(Icons.Filled.PlayCircle, null, tint = Color.White)
                             }
@@ -127,7 +127,7 @@ fun SharedMediaSection(chatId: String?) {
                 }
             }
             else -> list.forEach { m ->
-                Row(Modifier.fillMaxWidth().clickable { MediaUtil.open(ctx, m.mediaUrl) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().bouncy { MediaUtil.open(ctx, m.mediaUrl) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(40.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) {
                         Icon(when (m.kind) { "voice" -> Icons.Filled.Mic; "video_note" -> Icons.Filled.SlowMotionVideo; else -> Icons.Filled.Description }, null, tint = Color.White)
                     }
@@ -178,7 +178,7 @@ private fun MyProfileTabs(savedChat: String?, open: (Message) -> Unit) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                             row.forEach { st ->
                                 val kind = st.optString("kind"); val url = st.optString("media_url")
-                                Box(Modifier.weight(1f).aspectRatio(0.75f).clip(RoundedCornerShape(8.dp)).background(Color.Black).clickable { if (url.isNotEmpty()) open(storyMsg(if (kind == "video") "video" else "image", url)) }, contentAlignment = Alignment.Center) {
+                                Box(Modifier.weight(1f).aspectRatio(0.75f).clip(RoundedCornerShape(8.dp)).background(Color.Black).bouncy { if (url.isNotEmpty()) open(storyMsg(if (kind == "video") "video" else "image", url)) }, contentAlignment = Alignment.Center) {
                                     if (kind == "text" || url.isEmpty()) Text(st.optString("caption"), color = Color.White, fontSize = 12.sp, textAlign = TextAlign.Center, maxLines = 5, modifier = Modifier.padding(6.dp))
                                     else AsyncImage(url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                     if (kind == "video") Icon(Icons.Filled.PlayCircle, null, tint = Color.White)
@@ -208,7 +208,7 @@ fun ChannelCard(pr: ru.volshebnymir.lumo.core.Profile) {
     val p = P
     val scope = rememberCoroutineScope()
     val id = pr.channelId ?: return
-    Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.panel).clickable {
+    Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.panel).bouncy {
         scope.launch { if (AppModel.chat(id) != null) AppModel.open(id) else AppModel.join(id) }
     }.padding(16.dp)) {
         Text("КАНАЛ", color = p.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -270,7 +270,7 @@ fun PersonScreen(userId: String) {
             })
             if (sendLumens) LumenSendDialog(userId) { sendLumens = false }
             if (giftShop) GiftShopDialog(userId) { giftShop = false }
-            ProfileHead(AppModel.displayName(userId), pr?.avatarUrl, pr?.color ?: 0, AppModel.lastSeenText(userId), AppModel.isOnline(userId)) {
+            ProfileHead(AppModel.displayName(userId), pr?.avatarUrl, pr?.color ?: 0, AppModel.lastSeenText(userId), AppModel.isOnline(userId), userId) {
                 pr?.avatarUrl?.let { viewer = avatarMsg(it) }
             }
             var more by remember { mutableStateOf(false) }
@@ -395,7 +395,7 @@ fun InfoScreen(chatId: String) {
     }
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            TopBar("", right = { if (admin) Text("Изм.", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.clickable { if (c?.isPrivate == false) AppModel.push(Screen.EditChat(chatId)) else edit = true }.padding(12.dp)) })
+            TopBar("", right = { if (admin) Text("Изм.", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.bouncy { if (c?.isPrivate == false) AppModel.push(Screen.EditChat(chatId)) else edit = true }.padding(12.dp)) })
             ProfileHead(c?.displayName ?: "", c?.displayAvatar, c?.displayColor ?: 0,
                 if (c?.isChannel == true) "${c.membersCount} подписч." else "${c?.membersCount ?: 0} участн.", false) {
                 c?.displayAvatar?.let { viewer = avatarMsg(it) }
@@ -433,8 +433,8 @@ fun InfoScreen(chatId: String) {
                 members.forEach { (uid, role) ->
                     val pr = AppModel.profiles[uid]
                     Box {
-                        Row(Modifier.fillMaxWidth().clickable { if (uid != AppModel.myId) memberMenu = uid to role }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(AppModel.displayName(uid), pr?.avatarUrl, pr?.color ?: 0, 42.dp, online = AppModel.isOnline(uid))
+                        Row(Modifier.fillMaxWidth().bouncy { if (uid != AppModel.myId) memberMenu = uid to role }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(AppModel.displayName(uid), pr?.avatarUrl, pr?.color ?: 0, 42.dp, online = AppModel.isOnline(uid), storyUid = uid)
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(AppModel.displayName(uid), color = p.text, fontWeight = FontWeight.SemiBold)
@@ -485,7 +485,7 @@ fun InfoScreen(chatId: String) {
                     if (cand.isEmpty()) Text("Все ваши контакты уже в группе", color = p.muted)
                     cand.forEach { id ->
                         val on = id in picked
-                        Row(Modifier.fillMaxWidth().clickable { if (on) picked.remove(id) else picked.add(id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().bouncy { if (on) picked.remove(id) else picked.add(id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(if (on) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, tint = if (on) p.a1 else p.muted)
                             Spacer(Modifier.width(8.dp))
                             Text(AppModel.displayName(id), color = p.text)
@@ -514,7 +514,7 @@ fun ChatSearchScreen(chatId: String) {
             if (r != null && r.isEmpty()) item { Text("Ничего не найдено", color = p.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(40.dp)) }
             items(r ?: emptyList(), key = { it.id }) { m ->
                 val pr = m.senderId?.let { AppModel.profiles[it] }
-                Row(Modifier.fillMaxWidth().clickable { AppModel.pop(); AppModel.pendingJump = m.id; if (AppModel.stack.lastOrNull() !is Screen.Chat) AppModel.push(Screen.Chat(chatId)) }
+                Row(Modifier.fillMaxWidth().bouncy { AppModel.pop(); AppModel.pendingJump = m.id; if (AppModel.stack.lastOrNull() !is Screen.Chat) AppModel.push(Screen.Chat(chatId)) }
                     .padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Avatar(AppModel.displayName(m.senderId), pr?.avatarUrl, pr?.color ?: 0, 42.dp)
                     Spacer(Modifier.width(10.dp))
@@ -539,8 +539,8 @@ fun MyProfileScreen() {
     val saved = AppModel.chats.firstOrNull { it.isPrivate && it.peerId == AppModel.myId }
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            TopBar("", right = { Text("Изм.", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.clickable { AppModel.push(Screen.EditProfile) }.padding(12.dp)) })
-            ProfileHead(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, "в сети", true) { me?.avatarUrl?.let { viewer = avatarMsg(it) } }
+            TopBar("", right = { Text("Изм.", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.bouncy { AppModel.push(Screen.EditProfile) }.padding(12.dp)) })
+            ProfileHead(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, "в сети", true, AppModel.myId) { me?.avatarUrl?.let { viewer = avatarMsg(it) } }
             Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionTile(Icons.Filled.QrCode, "QR-код", Modifier.weight(1f)) { Ui.qrMine = true }
                 ActionTile(Icons.Filled.Edit, "Изменить", Modifier.weight(1f)) { AppModel.push(Screen.EditProfile) }
@@ -652,7 +652,7 @@ fun EditProfileScreen() {
                     Icon(Icons.Filled.Close, null, tint = p.text, modifier = Modifier.size(28.dp))
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.TopCenter).padding(top = 4.dp)) {
-                    Box(Modifier.clickable { photoMenu = true }) {
+                    Box(Modifier.bouncy { photoMenu = true }) {
                         Avatar(listOf(first, last).joinToString(" ").trim(), me?.avatarUrl, me?.color ?: 0, 120.dp)
                         androidx.compose.material3.DropdownMenu(photoMenu, { photoMenu = false }) {
                             androidx.compose.material3.DropdownMenuItem(text = { Text("Выбрать фото") }, leadingIcon = { Icon(Icons.Filled.Photo, null) },
@@ -662,7 +662,7 @@ fun EditProfileScreen() {
                                 onClick = { photoMenu = false; scope.launch { runCatching { AppModel.setAvatar(null) } } })
                         }
                     }
-                    Text("Изменить фотографию", color = p.a1, fontSize = 18.sp, modifier = Modifier.padding(top = 12.dp).clickable { photoMenu = true })
+                    Text("Изменить фотографию", color = p.a1, fontSize = 18.sp, modifier = Modifier.padding(top = 12.dp).bouncy { photoMenu = true })
                 }
                 Box(Modifier.align(Alignment.TopEnd).size(52.dp).clip(CircleShape).background(p.accent).bouncy { save() }, contentAlignment = Alignment.Center) {
                     if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.5.dp)
@@ -679,7 +679,7 @@ fun EditProfileScreen() {
             GroupCard { PlainField(bio, { bio = it.take(70) }, "О себе", singleLine = false) }
             HintWithLink("Раздел «О себе» видят: " + privLabel(me?.priv("bio") ?: "all").lowercase() + ".", "Изменить") { AppModel.push(Screen.PrivacyKey("bio")) }
             GroupCard {
-                Row(Modifier.fillMaxWidth().clickable { datePick = true }.padding(horizontal = 18.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().bouncy { datePick = true }.padding(horizontal = 18.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF3A8DFF)), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.Cake, null, tint = Color.White, modifier = Modifier.size(20.dp))
                     }
@@ -705,7 +705,7 @@ fun EditProfileScreen() {
             Spacer(Modifier.height(18.dp))
             GroupCard {
                 Text("Удалить аккаунт", color = p.danger, fontSize = 17.sp, textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().clickable { delAcc = true }.padding(17.dp))
+                    modifier = Modifier.fillMaxWidth().bouncy { delAcc = true }.padding(17.dp))
             }
             Spacer(Modifier.height(40.dp))
         }
@@ -735,7 +735,7 @@ fun EditProfileScreen() {
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                     if (mine.isEmpty()) Text("У вас пока нет своих каналов. Создайте канал — и его можно будет показать в профиле.", color = p.muted)
                     mine.forEach { c ->
-                        Row(Modifier.fillMaxWidth().clickable { channelPick = false; scope.launch { AppModel.setChannel(c.id) } }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().bouncy { channelPick = false; scope.launch { AppModel.setChannel(c.id) } }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(c.displayName, c.displayAvatar, c.displayColor, 40.dp)
                             Spacer(Modifier.width(10.dp))
                             Text(c.displayName, color = p.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -800,7 +800,7 @@ fun EditColorScreen() {
     var c by remember { mutableIntStateOf(me?.color ?: 0) }
     Column(Modifier.fillMaxSize().background(p.bg).verticalScroll(rememberScrollState())) {
         TopBar("Персональные цвета", right = {
-            Text("Готово", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.clickable {
+            Text("Готово", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.bouncy {
                 scope.launch { AppModel.setColor(c); AppModel.say("Цвет сохранён"); AppModel.pop() }
             }.padding(12.dp))
         })
@@ -934,14 +934,14 @@ fun NewChatScreen() {
                 }
                 items(AppModel.contacts.toList(), key = { it }) { id ->
                     val pr = AppModel.profiles[id]
-                    Row(Modifier.fillMaxWidth().clickable { scope.launch { AppModel.openDM(id) } }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(AppModel.displayName(id), pr?.avatarUrl, pr?.color ?: 0, 46.dp, online = AppModel.isOnline(id))
+                    Row(Modifier.fillMaxWidth().bouncy { scope.launch { AppModel.openDM(id) } }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(AppModel.displayName(id), pr?.avatarUrl, pr?.color ?: 0, 46.dp, online = AppModel.isOnline(id), storyUid = id)
                         Spacer(Modifier.width(12.dp))
                         Text(AppModel.displayName(id), color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                     }
                 }
             } else items(results, key = { it.id }) { r ->
-                Row(Modifier.fillMaxWidth().clickable { scope.launch { AppModel.openDM(r.id) } }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().bouncy { scope.launch { AppModel.openDM(r.id) } }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Avatar(r.name, r.avatarUrl, r.color, 46.dp)
                     Spacer(Modifier.width(12.dp))
                     Column {
@@ -965,7 +965,7 @@ fun NewChatScreen() {
                         Text("Участники из контактов", color = p.muted, fontSize = 13.sp)
                         AppModel.contacts.forEach { id ->
                             val on = id in picked
-                            Row(Modifier.fillMaxWidth().clickable { if (on) picked.remove(id) else picked.add(id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth().bouncy { if (on) picked.remove(id) else picked.add(id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(if (on) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, tint = if (on) p.a1 else p.muted)
                                 Spacer(Modifier.width(8.dp))
                                 Text(AppModel.displayName(id), color = p.text)
@@ -1056,7 +1056,7 @@ fun EditChatScreen(chatId: String) {
                     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Avatar(c.displayName, c.displayAvatar, c.displayColor, 110.dp)
                         Text("Изменить фотографию", color = p.a1, fontSize = 18.sp, fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(top = 10.dp).clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }.padding(8.dp))
+                            modifier = Modifier.padding(top = 10.dp).bouncy { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }.padding(8.dp))
                     }
                     GroupCard {
                         PlainField(title, { title = it.take(64) }, "Название")
@@ -1087,12 +1087,12 @@ fun EditChatScreen(chatId: String) {
                 }
                 "type" -> {
                     GroupCard {
-                        Row(Modifier.fillMaxWidth().clickable { isPublic = false }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().bouncy { isPublic = false }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) { Text("Частный", color = p.text, fontSize = 17.sp); Text("Попасть можно только по приглашению", color = p.muted, fontSize = 13.sp) }
                             if (!isPublic) Icon(Icons.Filled.Check, null, tint = p.a1)
                         }
                         CardDivider()
-                        Row(Modifier.fillMaxWidth().clickable { isPublic = true }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().bouncy { isPublic = true }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) { Text("Публичный", color = p.text, fontSize = 17.sp); Text("Можно найти через поиск по адресу", color = p.muted, fontSize = 13.sp) }
                             if (isPublic) Icon(Icons.Filled.Check, null, tint = p.a1)
                         }
@@ -1102,13 +1102,13 @@ fun EditChatScreen(chatId: String) {
                         GroupCard { PlainField(uname, { uname = it.lowercase().filter { ch -> ch.isLetterOrDigit() || ch == '_' }.take(32); err = null }, "username") }
                         HintWithLink("Можно использовать a–z, 0–9 и _. Минимум 5 символов. Ссылка: " + ru.volshebnymir.lumo.core.Config.SITE + "#@" + uname.ifBlank { "..." })
                         if (uname.length >= 5) Text("Скопировать ссылку", color = p.a1, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(start = 30.dp).clickable { copy(ctx, ru.volshebnymir.lumo.core.Config.SITE + "#@" + uname) })
+                            modifier = Modifier.padding(start = 30.dp).bouncy { copy(ctx, ru.volshebnymir.lumo.core.Config.SITE + "#@" + uname) })
                     }
                     err?.let { Text(it, color = p.danger, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 30.dp, vertical = 8.dp)) }
                 }
                 "reactions" -> {
                     GroupCard {
-                        Row(Modifier.fillMaxWidth().clickable { rxOn = !rxOn; rxTouched = true }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().bouncy { rxOn = !rxOn; rxTouched = true }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("Реакции на посты", color = p.text, fontSize = 17.sp, modifier = Modifier.weight(1f))
                             androidx.compose.material3.Switch(rxOn, { rxOn = it; rxTouched = true })
                         }
@@ -1119,7 +1119,7 @@ fun EditChatScreen(chatId: String) {
                             ALL_REACTIONS.forEachIndexed { i, e ->
                                 if (i > 0) CardDivider()
                                 val on = e in rxSet
-                                Row(Modifier.fillMaxWidth().clickable { rxSet = if (on) rxSet - e else rxSet + e; rxTouched = true }.padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(Modifier.fillMaxWidth().bouncy { rxSet = if (on) rxSet - e else rxSet + e; rxTouched = true }.padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Text(e, fontSize = 26.sp, modifier = Modifier.weight(1f))
                                     Icon(if (on) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, tint = if (on) p.a1 else p.muted)
                                 }
@@ -1134,7 +1134,7 @@ fun EditChatScreen(chatId: String) {
                         GroupCard {
                             IconRow(Icons.Filled.Groups, Color(0xFF5B6CFF), linkedChat?.title ?: "Группа", "Привязана") { linkedChat?.let { AppModel.push(Screen.Chat(it.id)) } }
                             CardDivider(70)
-                            Row(Modifier.fillMaxWidth().clickable { scope.launch { AppModel.linkDiscussion(chatId, null) } }.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                            Row(Modifier.fillMaxWidth().bouncy { scope.launch { AppModel.linkDiscussion(chatId, null) } }.padding(horizontal = 20.dp, vertical = 16.dp)) {
                                 Text("Отвязать группу", color = p.danger, fontSize = 17.sp)
                             }
                         }
@@ -1142,7 +1142,7 @@ fun EditChatScreen(chatId: String) {
                     } else {
                         val cand = AppModel.chats.filter { it.type == "group" && it.role == "owner" && Lumens.cfg.values.none { v -> v.linked == it.id } }
                         GroupCard {
-                            Row(Modifier.fillMaxWidth().clickable {
+                            Row(Modifier.fillMaxWidth().bouncy {
                                 scope.launch { AppModel.createChat("group", "Обсуждение: " + title.ifBlank { c.displayName }, "", emptyList())?.let { gid -> AppModel.linkDiscussion(chatId, gid) } }
                             }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.Add, null, tint = p.a1); Spacer(Modifier.width(14.dp))
@@ -1150,7 +1150,7 @@ fun EditChatScreen(chatId: String) {
                             }
                             cand.forEach { g ->
                                 CardDivider()
-                                Row(Modifier.fillMaxWidth().clickable { scope.launch { AppModel.linkDiscussion(chatId, g.id) } }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(Modifier.fillMaxWidth().bouncy { scope.launch { AppModel.linkDiscussion(chatId, g.id) } }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Avatar(g.displayName, g.displayAvatar, g.displayColor, 38.dp); Spacer(Modifier.width(12.dp))
                                     Text(g.displayName, color = p.text, fontSize = 17.sp)
                                 }
@@ -1165,7 +1165,7 @@ fun EditChatScreen(chatId: String) {
                         list.forEachIndexed { i, (uid, role) ->
                             if (i > 0) CardDivider(70)
                             Box {
-                                Row(Modifier.fillMaxWidth().clickable { if (uid != AppModel.myId) memberMenu = uid }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(Modifier.fillMaxWidth().bouncy { if (uid != AppModel.myId) memberMenu = uid }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Avatar(AppModel.displayName(uid), AppModel.profiles[uid]?.avatarUrl, AppModel.profiles[uid]?.color ?: 0, 42.dp)
                                     Spacer(Modifier.width(12.dp))
                                     Column(Modifier.weight(1f)) {

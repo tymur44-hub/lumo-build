@@ -110,7 +110,7 @@ struct AppearanceView: View {
                     Button { showIcons = true } label: {
                         SettingsRow(icon: "square.grid.2x2.fill", color: Color(hex: 0x5b6cff), title: "Иконка приложения", subtitle: "Шесть оформлений, часть — с премиум-значком")
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(BouncyButtonStyle())
                 }
                 .sheet(isPresented: $showIcons) { AppIconSheet().environmentObject(model) }
 
@@ -172,6 +172,6 @@ struct AppearanceView: View {
             .foregroundColor(look.theme == v ? .white : Theme.text)
             .background(RoundedRectangle(cornerRadius: 14).fill(look.theme == v ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.clear)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(BouncyButtonStyle())
     }
 }

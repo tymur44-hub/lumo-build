@@ -124,7 +124,7 @@ fun EmojiPickerDialog(onClose: () -> Unit) {
                 ANIM_EMOJI.chunked(4).forEach { row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         row.forEach { (k, _) ->
-                            Box(Modifier.size(60.dp).clip(RoundedCornerShape(16.dp)).clickable { scope.launch { AppModel.setEmojiStatus("a:$k"); onClose() } }, contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(60.dp).clip(RoundedCornerShape(16.dp)).bouncy { scope.launch { AppModel.setEmojiStatus("a:$k"); onClose() } }, contentAlignment = Alignment.Center) {
                                 StatusEmoji("a:$k", 32.sp)
                             }
                         }
@@ -134,7 +134,7 @@ fun EmojiPickerDialog(onClose: () -> Unit) {
                 CLASSIC_EMOJI.chunked(4).forEach { row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         row.forEach { e ->
-                            Box(Modifier.size(60.dp).clip(RoundedCornerShape(16.dp)).clickable { scope.launch { AppModel.setEmojiStatus(e); onClose() } }, contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(60.dp).clip(RoundedCornerShape(16.dp)).bouncy { scope.launch { AppModel.setEmojiStatus(e); onClose() } }, contentAlignment = Alignment.Center) {
                                 Text(e, fontSize = 30.sp)
                             }
                         }
@@ -142,8 +142,8 @@ fun EmojiPickerDialog(onClose: () -> Unit) {
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Убрать статус", color = p.danger, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { scope.launch { AppModel.setEmojiStatus(""); onClose() } }.padding(8.dp))
-                Text("Закрыть", color = p.a1, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onClose() }.padding(8.dp))
+                Text("Убрать статус", color = p.danger, fontWeight = FontWeight.Bold, modifier = Modifier.bouncy { scope.launch { AppModel.setEmojiStatus(""); onClose() } }.padding(8.dp))
+                Text("Закрыть", color = p.a1, fontWeight = FontWeight.Bold, modifier = Modifier.bouncy { onClose() }.padding(8.dp))
             }
         }
     }
@@ -196,7 +196,7 @@ fun ShimmerButton(text: String, modifier: Modifier = Modifier, onClick: () -> Un
     val tr = rememberInfiniteTransition(label = "shim")
     val x by tr.animateFloat(-0.4f, 1.4f, infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Restart), label = "x")
     val base = Brush.horizontalGradient(listOf(Color(0xFF5B8CFF), Color(0xFFA066FF), Color(0xFFD86BFF)))
-    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(base).clickable { onClick() }
+    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(base).bouncy { onClick() }
         .drawWithContent {
             drawContent()
             val w = size.width
@@ -246,7 +246,7 @@ fun PremiumScreen() {
                         Text("У вас активен Premium", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Text(if (owner) "Бессрочно — вы владелец Lumo" else until?.let { "Действует до " + it.take(10) } ?: "Подписка активна", color = p.muted, fontSize = 14.sp)
                         Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { emo = true }) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.bouncy { emo = true }) {
                             Text("Ваш смайлик-статус:", color = p.muted, fontSize = 14.sp)
                             Spacer(Modifier.width(8.dp))
                             AppModel.me?.emojiStatus?.let { StatusEmoji(it, 22.sp) } ?: Text("выбрать", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -258,7 +258,7 @@ fun PremiumScreen() {
                     PLANS.forEachIndexed { i, pl ->
                         val on = plan == pl.id
                         if (i > 0) Box(Modifier.padding(start = 50.dp).fillMaxWidth().height(1.dp).background(p.line))
-                        Row(Modifier.fillMaxWidth().clickable { plan = pl.id }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().bouncy { plan = pl.id }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(24.dp).clip(CircleShape).background(if (on) p.a1 else Color.Transparent).border(2.dp, if (on) p.a1 else p.muted, CircleShape), contentAlignment = Alignment.Center) {
                                 if (on) Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
                             }
@@ -275,7 +275,7 @@ fun PremiumScreen() {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel)) {
                     FEATURES.forEachIndexed { i, f ->
                         if (i > 0) Box(Modifier.padding(start = 62.dp).fillMaxWidth().height(1.dp).background(p.line))
-                        Row(Modifier.fillMaxWidth().clickable { detail = i }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().bouncy { detail = i }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(f.color), contentAlignment = Alignment.Center) {
                                 Icon(f.icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
                             }
@@ -375,14 +375,14 @@ fun SendMenuDialog(text: String, onClose: () -> Unit, onFx: (String) -> Unit, on
                     }
                     if (more) Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         FX_LIST.drop(7).forEach { e -> FxCell(e, prem) { onFx(e) } }
-                    } else Box(Modifier.align(Alignment.End).padding(top = 2.dp).size(32.dp).clip(CircleShape).background(p.a1.copy(alpha = 0.35f)).clickable { more = true }, contentAlignment = Alignment.Center) {
+                    } else Box(Modifier.align(Alignment.End).padding(top = 2.dp).size(32.dp).clip(CircleShape).background(p.a1.copy(alpha = 0.35f)).bouncy { more = true }, contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.KeyboardArrowDown, null, tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                 }
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(text.take(400), color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f, fill = false)
                         .clip(RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp)).background(p.accent).padding(horizontal = 14.dp, vertical = 9.dp))
-                    Box(Modifier.size(48.dp).clip(CircleShape).background(p.accent).clickable { onSend() }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(48.dp).clip(CircleShape).background(p.accent).bouncy { onSend() }, contentAlignment = Alignment.Center) {
                         Icon(Icons.AutoMirrored.Filled.Send, null, tint = Color.White)
                     }
                 }
@@ -399,7 +399,7 @@ fun SendMenuDialog(text: String, onClose: () -> Unit, onFx: (String) -> Unit, on
 @Composable
 private fun FxCell(e: String, prem: Boolean, onClick: () -> Unit) {
     val p = P
-    Box(Modifier.size(42.dp).clip(CircleShape).clickable { onClick() }, contentAlignment = Alignment.Center) {
+    Box(Modifier.size(42.dp).clip(CircleShape).bouncy { onClick() }, contentAlignment = Alignment.Center) {
         Text(e, fontSize = 28.sp)
         if (!prem) Box(Modifier.align(Alignment.BottomEnd).size(15.dp).clip(CircleShape).background(p.muted), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Lock, null, tint = Color.White, modifier = Modifier.size(9.dp))
@@ -410,7 +410,7 @@ private fun FxCell(e: String, prem: Boolean, onClick: () -> Unit) {
 @Composable
 private fun MenuRow(icon: androidx.compose.ui.graphics.vector.ImageVector, t: String, onClick: () -> Unit) {
     val p = P
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).clickable { onClick() }.padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).bouncy { onClick() }.padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = p.text, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(14.dp))
         Text(t, color = p.text, fontSize = 16.sp)
@@ -459,7 +459,7 @@ fun AppIconDialog(onClose: () -> Unit) {
             ICONS.chunked(3).forEach { row ->
                 Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     row.forEach { (k, title, res) ->
-                        Column(Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                        Column(Modifier.clip(RoundedCornerShape(16.dp)).bouncy {
                             if (k != "Classic" && !AppModel.isPremium) AppModel.say(PREMIUM_SOON)
                             else { applyIcon(ctx, k); cur = k }
                         }.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -470,7 +470,7 @@ fun AppIconDialog(onClose: () -> Unit) {
                     }
                 }
             }
-            Text("Закрыть", color = p.a1, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.End).clickable { onClose() }.padding(8.dp))
+            Text("Закрыть", color = p.a1, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.End).bouncy { onClose() }.padding(8.dp))
         }
     }
 }

@@ -42,6 +42,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.volshebnymir.lumo.core.AppModel
+import ru.volshebnymir.lumo.core.Api
+import ru.volshebnymir.lumo.core.jsonOf
+import androidx.compose.foundation.horizontalScroll
 import ru.volshebnymir.lumo.core.premium
 import ru.volshebnymir.lumo.core.PREMIUM_SOON
 import ru.volshebnymir.lumo.core.isPremium
@@ -82,7 +85,7 @@ fun SettingsScreen() {
         Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(26.dp))
             .background(Brush.linearGradient(listOf(p.a1.copy(alpha = 0.16f), p.a2.copy(alpha = 0.1f))))
             .border(1.dp, p.line, RoundedCornerShape(26.dp)).padding(vertical = 18.dp, horizontal = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+            Box(Modifier.bouncy { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                 Avatar(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, 110.dp)
                 Box(Modifier.align(Alignment.BottomEnd).size(34.dp).clip(CircleShape).background(p.bg).padding(3.dp).clip(CircleShape).background(p.a1), contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.CameraAlt, null, tint = Color.White, modifier = Modifier.size(16.dp))
@@ -92,7 +95,7 @@ fun SettingsScreen() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(me?.name ?: "", color = p.text, fontWeight = FontWeight.Black, fontSize = 24.sp)
                 if (me?.verified == true) Icon(Icons.Filled.Verified, null, tint = p.a2, modifier = Modifier.padding(start = 6.dp).size(20.dp))
-                if (me?.premium == true) { val es = me?.emojiStatus; Box(Modifier.padding(start = 6.dp).clip(CircleShape).clickable { emojiDlg = true }.padding(2.dp)) { if (es != null) StatusEmoji(es, 22.sp) else Icon(Icons.Filled.Star, null, tint = Color(0xFFFFB020), modifier = Modifier.size(20.dp)) } }
+                if (me?.premium == true) { val es = me?.emojiStatus; Box(Modifier.padding(start = 6.dp).clip(CircleShape).bouncy { emojiDlg = true }.padding(2.dp)) { if (es != null) StatusEmoji(es, 22.sp) else Icon(Icons.Filled.Star, null, tint = Color(0xFFFFB020), modifier = Modifier.size(20.dp)) } }
             }
             Text("@" + (me?.username ?: ""), color = p.muted, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             if (!me?.bio.isNullOrEmpty()) Text(me!!.bio, color = p.text, fontSize = 14.5.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, start = 14.dp, end = 14.dp))
@@ -187,7 +190,7 @@ fun CallsHistoryScreen() {
                 var label = when { out -> if (ok) "Исходящий" else "Отменённый"; ok -> "Входящий"; st == "rejected" -> "Отклонённый"; else -> "Пропущенный" }
                 label += (if (m.isVideoCall) " видеозвонок" else " звонок") + " · " + Fmt.listTime(m.createdAt)
                 if (ok && m.duration > 0) label += " · " + Fmt.duration(m.duration)
-                Row(Modifier.fillMaxWidth().clickable { AppModel.push(Screen.Chat(c.id)) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().bouncy { AppModel.push(Screen.Chat(c.id)) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Avatar(c.displayName, c.displayAvatar, c.displayColor, 50.dp, online = AppModel.isOnline(c.peerId))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
@@ -314,14 +317,14 @@ fun PrivacyScreen() {
         Spacer(Modifier.height(6.dp))
         SectionTitle("Конфиденциальность")
         Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(p.panel)) {
-            Row(Modifier.fillMaxWidth().clickable { AppModel.push(Screen.MsgPrivacy) }.padding(horizontal = 20.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().bouncy { AppModel.push(Screen.MsgPrivacy) }.padding(horizontal = 20.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Сообщения", color = p.text, fontSize = 17.sp, modifier = Modifier.weight(1f))
                 Text(if (me?.privacy?.optString("msg_prem") == "premium") "Контакты и Premium" else "Все", color = p.muted, fontSize = 16.sp)
                 Icon(Icons.Filled.ChevronRight, null, tint = p.muted.copy(alpha = 0.6f), modifier = Modifier.size(22.dp))
             }
             Box(Modifier.padding(start = 20.dp).fillMaxWidth().height(1.dp).background(p.line))
             PRIVACY_ITEMS.forEachIndexed { i, it ->
-                Row(Modifier.fillMaxWidth().clickable { AppModel.push(Screen.PrivacyKey(it.key)) }.padding(horizontal = 20.dp, vertical = 17.dp),
+                Row(Modifier.fillMaxWidth().bouncy { AppModel.push(Screen.PrivacyKey(it.key)) }.padding(horizontal = 20.dp, vertical = 17.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(it.title, color = p.text, fontSize = 17.sp, modifier = Modifier.weight(1f))
                     Text(privLabel(me?.priv(it.key) ?: "all"), color = p.muted, fontSize = 16.sp)
@@ -382,7 +385,7 @@ fun BlockedScreen() {
                     Avatar(AppModel.displayName(id), pr?.avatarUrl, pr?.color ?: 0, 46.dp)
                     Spacer(Modifier.width(12.dp))
                     Text(AppModel.displayName(id), color = p.text, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    Text("Разблокировать", color = p.a1, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { scope.launch { AppModel.setBlocked(id, false) } }.padding(8.dp))
+                    Text("Разблокировать", color = p.a1, fontWeight = FontWeight.Bold, modifier = Modifier.bouncy { scope.launch { AppModel.setBlocked(id, false) } }.padding(8.dp))
                 }
             }
         }
@@ -468,7 +471,7 @@ fun MsgPrivacyScreen() {
         Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(p.panel)) {
             listOf("all" to "Все", "premium" to "Контакты и Premium-подписчики").forEachIndexed { i, (v, t) ->
                 val locked = v == "premium" && !AppModel.isPremium
-                Row(Modifier.fillMaxWidth().clickable {
+                Row(Modifier.fillMaxWidth().bouncy {
                     if (locked) AppModel.say(PREMIUM_SOON) else scope.launch { AppModel.setPrivacyKey("msg_prem", v) }
                 }.padding(horizontal = 20.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.width(34.dp)) {
@@ -481,6 +484,29 @@ fun MsgPrivacyScreen() {
             }
         }
         Text("Вы можете запретить входящие сообщения от пользователей, которых нет в Вашем списке контактов и которым Вы не писали сами.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 30.dp))
-        Text("Подробнее о Lumo Premium", color = p.a1, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 30.dp, vertical = 8.dp).clickable { AppModel.push(Screen.Premium) })
+        Text("Подробнее о Lumo Premium", color = p.a1, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 30.dp, vertical = 8.dp).bouncy { AppModel.push(Screen.Premium) })
+        PaidPriceSection()
     }
+}
+
+/** Цена за сообщение от незнакомых: контакты и те, с кем уже есть переписка, пишут бесплатно */
+@Composable
+private fun PaidPriceSection() {
+    val p = P
+    val scope = rememberCoroutineScope()
+    var price by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        val r = runCatching { Api.rpc("lm_paid_get") }.getOrNull()
+        price = (r as? Number)?.toInt() ?: r?.toString()?.toIntOrNull() ?: 0
+    }
+    SectionTitle("Платные сообщения")
+    Row(Modifier.padding(horizontal = 14.dp).fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(0 to "Бесплатно", 5 to "5", 10 to "10", 25 to "25", 50 to "50", 100 to "100").forEach { (v, t) ->
+            Pill(t, price == v) {
+                if (v > 0 && !AppModel.isPremium) AppModel.say(PREMIUM_SOON)
+                else scope.launch { runCatching { Api.rpc("lm_paid_set", jsonOf("p_price" to v)) }.onSuccess { price = v; AppModel.say(if (v == 0) "Платные сообщения выключены" else "Цена сообщения: $v") }.onFailure { AppModel.say(it.message ?: "Ошибка") } }
+            }
+        }
+    }
+    Text("Незнакомые люди смогут написать вам только за люмены, а вы получите оплату. Контакты и те, с кем вы уже переписываетесь, пишут бесплатно. Отключить для конкретного человека можно в его чате.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 30.dp))
 }

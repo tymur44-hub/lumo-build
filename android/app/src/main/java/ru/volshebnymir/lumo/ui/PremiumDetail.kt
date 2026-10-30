@@ -56,7 +56,7 @@ fun PremiumDetailDialog(start: Int, owner: Boolean, onClose: () -> Unit, onBuy: 
                     ShimmerButton(if (owner) "Открыть Premium" else "Подключить за 199 ₽ в месяц") { onBuy() }
                 }
             }
-            Box(Modifier.statusBarsPadding().padding(16.dp).size(36.dp).clip(CircleShape).background(p.panel.copy(alpha = 0.85f)).clickable { onClose() }, contentAlignment = Alignment.Center) {
+            Box(Modifier.statusBarsPadding().padding(16.dp).size(36.dp).clip(CircleShape).background(p.panel.copy(alpha = 0.85f)).bouncy { onClose() }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Close, null, tint = p.text, modifier = Modifier.size(20.dp))
             }
         }

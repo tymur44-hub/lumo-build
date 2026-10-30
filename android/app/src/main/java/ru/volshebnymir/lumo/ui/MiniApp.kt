@@ -106,7 +106,7 @@ fun MiniAppScreen(req: MiniAppReq, onClose: () -> Unit) {
 
     Column(Modifier.fillMaxSize().background(p.bg).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }.statusBarsPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().background(p.panel).padding(horizontal = 6.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clickable { if (backVisible) web?.evaluateJavascript("window.__lumoBack&&window.__lumoBack()", null) else onClose() }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp).bouncy { if (backVisible) web?.evaluateJavascript("window.__lumoBack&&window.__lumoBack()", null) else onClose() }, contentAlignment = Alignment.Center) {
                 Icon(if (backVisible) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Close, null, tint = p.text)
             }
             Text(title, color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 4.dp))

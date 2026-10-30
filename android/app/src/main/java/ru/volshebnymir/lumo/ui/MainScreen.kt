@@ -228,7 +228,7 @@ fun androidx.compose.foundation.layout.RowScope.TabItem(t: Tab, icon: ImageVecto
     val dy = remember { Animatable(0f) }
     Box(
         Modifier.weight(1f).clip(RoundedCornerShape(30.dp)).background(if (on) p.a1.copy(alpha = 0.16f) else Color.Transparent)
-            .clickable {
+            .bouncy {
                 AppModel.tab = t
                 scope.launch { pop.animateTo(1.1f, tween(200)); pop.animateTo(1f, spring(0.85f, Spring.StiffnessLow)) }
                 when (t) {
@@ -334,7 +334,7 @@ fun ChatListScreen() {
 fun ResultRow(r: SearchResult) {
     val p = P
     val scope = rememberCoroutineScope()
-    Row(Modifier.fillMaxWidth().clickable {
+    Row(Modifier.fillMaxWidth().bouncy {
         scope.launch { if (r.kind == "user") AppModel.openDM(r.id) else if (AppModel.chat(r.id) != null) AppModel.open(r.id) else AppModel.join(r.id) }
     }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Avatar(r.name, r.avatarUrl, r.color, 52.dp)
@@ -360,7 +360,7 @@ fun ChatRow(c: ChatItem, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (saved) Box(Modifier.size(56.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Bookmark, null, tint = Color.White) }
-            else Avatar(c.displayName, c.displayAvatar, c.displayColor, 56.dp, online = c.isPrivate && AppModel.isOnline(c.peerId))
+            else Avatar(c.displayName, c.displayAvatar, c.displayColor, 56.dp, online = c.isPrivate && AppModel.isOnline(c.peerId), storyUid = if (c.isPrivate) c.peerId else null)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -436,7 +436,7 @@ fun ChatPreviewMenu(c: ChatItem, onClose: () -> Unit) {
                 }
                 Column(Modifier.width(270.dp).align(Alignment.End).clip(RoundedCornerShape(26.dp)).background(p.panel2.copy(alpha = 0.97f)).padding(6.dp)) {
                     @Composable fun row(icon: ImageVector, t: String, danger: Boolean = false, f: () -> Unit) {
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).clickable { onClose(); f() }.padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).bouncy { onClose(); f() }.padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(icon, null, tint = if (danger) p.danger else p.text, modifier = Modifier.size(22.dp))
                             Spacer(Modifier.width(14.dp))
                             Text(t, color = if (danger) p.danger else p.text, fontSize = 16.sp)
@@ -481,7 +481,7 @@ fun ContactsScreen() {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 8.dp, bottom = 110.dp)) {
             if (q.isBlank()) item {
                 val ctx = LocalContext.current
-                Row(Modifier.fillMaxWidth().clickable {
+                Row(Modifier.fillMaxWidth().bouncy {
                     runCatching { ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "Я в Lumo — напиши мне: " + AppModel.profileLink), "Поделиться").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(50.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) { Icon(Icons.Filled.PersonAdd, null, tint = Color.White) }
@@ -497,8 +497,8 @@ fun ContactsScreen() {
                 if (list.isEmpty()) item { Text("Контактов пока нет. Найдите человека через поиск и добавьте его.", color = p.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(40.dp)) }
                 item { PhoneContactsSection() }
                 items(list, key = { it.id }) { pr ->
-                    Row(Modifier.fillMaxWidth().clickable { AppModel.push(Screen.Person(pr.id)) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(AppModel.displayName(pr.id), pr.avatarUrl, pr.color, 50.dp, online = AppModel.isOnline(pr.id))
+                    Row(Modifier.fillMaxWidth().bouncy { AppModel.push(Screen.Person(pr.id)) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(AppModel.displayName(pr.id), pr.avatarUrl, pr.color, 50.dp, online = AppModel.isOnline(pr.id), storyUid = pr.id)
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(AppModel.displayName(pr.id), color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -507,7 +507,7 @@ fun ContactsScreen() {
                     }
                 }
             } else items(results, key = { it.id }) { r ->
-                Row(Modifier.fillMaxWidth().clickable { AppModel.push(Screen.Person(r.id)) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().bouncy { AppModel.push(Screen.Person(r.id)) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Avatar(r.name, r.avatarUrl, r.color, 50.dp)
                     Spacer(Modifier.width(12.dp))
                     Column {

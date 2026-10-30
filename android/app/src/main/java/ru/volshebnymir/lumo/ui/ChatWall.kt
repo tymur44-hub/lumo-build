@@ -112,21 +112,21 @@ fun ChatWallDialog(chatId: String, peerName: String?, isPrivate: Boolean, onClos
             if (!preview) {
                 Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(40.dp).clickable { onClose() }, contentAlignment = Alignment.Center) { Icon(Icons.Filled.Close, null, tint = p.text) }
+                        Box(Modifier.size(40.dp).bouncy { onClose() }, contentAlignment = Alignment.Center) { Icon(Icons.Filled.Close, null, tint = p.text) }
                         Text("Обои чата", color = p.text, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(start = 8.dp))
                     }
                     Spacer(Modifier.height(12.dp))
                     LazyVerticalGrid(GridCells.Fixed(3), Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         items(WALL_ALL) { i ->
                             Box(Modifier.height(140.dp).clip(RoundedCornerShape(16.dp)).background(p.chatBg).border(1.dp, p.line, RoundedCornerShape(16.dp))
-                                .clickable { preset = i; uri = null; preview = true }) {
+                                .bouncy { preset = i; uri = null; preview = true }) {
                                 WallLayer(i, p)
                                 if (wallIsPremium(i)) Icon(Icons.Filled.Star, null, tint = Color(0xFFFFC247), modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(16.dp))
                             }
                         }
                     }
                     Row(Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(16.dp)).background(p.panel2)
-                        .clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }.padding(14.dp),
+                        .bouncy { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }.padding(14.dp),
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.PhotoLibrary, null, tint = p.a1)
                         Spacer(Modifier.width(8.dp))
@@ -134,7 +134,7 @@ fun ChatWallDialog(chatId: String, peerName: String?, isPrivate: Boolean, onClos
                     }
                     if (AppModel.chatWalls[chatId] != null) {
                         Text("Сбросить обои этого чата", color = p.danger, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().clickable { scope.launch { AppModel.clearWall(chatId); onClose() } }.padding(vertical = 14.dp))
+                            modifier = Modifier.fillMaxWidth().bouncy { scope.launch { AppModel.clearWall(chatId); onClose() } }.padding(vertical = 14.dp))
                     }
                 }
             } else {
@@ -145,7 +145,7 @@ fun ChatWallDialog(chatId: String, peerName: String?, isPrivate: Boolean, onClos
                     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim / 100f)))
                 }
                 Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(12.dp)) {
-                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).background(Color.Black.copy(alpha = 0.35f)).clickable { preview = false }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).background(Color.Black.copy(alpha = 0.35f)).bouncy { preview = false }, contentAlignment = Alignment.Center) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
                     }
                     Spacer(Modifier.height(10.dp))

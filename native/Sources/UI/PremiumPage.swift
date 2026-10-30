@@ -98,7 +98,7 @@ struct ShimmerButton: View {
                     .clipShape(Capsule())
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(BouncyButtonStyle())
     }
 }
 
@@ -192,7 +192,7 @@ struct PremiumPageView: View {
                                     }
                                     .padding(14).contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(BouncyButtonStyle())
                             }
                         }
                         .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
@@ -220,7 +220,7 @@ struct PremiumPageView: View {
                                 }
                                 .padding(.horizontal, 14).padding(.vertical, 11).contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(BouncyButtonStyle())
                             }
                         }
                         .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))

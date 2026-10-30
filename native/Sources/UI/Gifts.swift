@@ -266,7 +266,7 @@ struct OwnedGrid: View {
                         Text("№\(o.serial)").font(.system(size: 12, weight: .bold)).foregroundColor(rarityColor(o.rarity))
                     }
                     .padding(6).background(Theme.panel, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                }.buttonStyle(.plain)
+                }.buttonStyle(BouncyButtonStyle())
             }
         }
         .padding(.horizontal, 14)
@@ -275,10 +275,11 @@ struct OwnedGrid: View {
 
 private struct CatalogGrid: View {
     @ObservedObject var store = GiftStore.shared
+    var onlyRare = false
     let onPick: (Gift) -> Void
     var body: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-            ForEach(store.catalog) { g in
+            ForEach(store.catalog.filter { !onlyRare || $0.rarity != "common" }) { g in
                 Button { onPick(g) } label: {
                     VStack(spacing: 6) {
                         GiftThumb(id: g.id)
@@ -292,7 +293,7 @@ private struct CatalogGrid: View {
                     }
                     .padding(10).frame(maxWidth: .infinity)
                     .background(Theme.panel, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                }.buttonStyle(.plain)
+                }.buttonStyle(BouncyButtonStyle())
             }
         }
         .padding(.horizontal, 14)
@@ -331,20 +332,146 @@ struct GiftsView: View {
     }
 }
 
-/// Выбор подарка для человека
+/// Выбор подарка для человека: Premium в подарок и каталог подарков
 struct GiftShopSheet: View {
     @EnvironmentObject var model: AppModel
+    @ObservedObject private var lumens = Lumens.shared
     @Environment(\.dismiss) private var dismiss
     let user: String
     @State private var pick: Gift?
+    @State private var info = false
+    @State private var rare = false
     var body: some View {
-        NavigationStack {
-            ScrollView { CatalogGrid { pick = $0 }.padding(.vertical, 12) }
-                .background(Theme.bg.ignoresSafeArea())
-                .navigationTitle("Подарок для \(model.displayName(user))").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Закрыть") { dismiss() } } }
-                .task { await GiftStore.shared.load(); await Lumens.shared.load() }
-                .sheet(item: $pick) { g in GiftDetailSheet(gift: g, to: user, onDone: { dismiss() }).environmentObject(model) }
+        let name = model.displayName(user)
+        let pr = model.profiles[user]
+        ZStack(alignment: .top) {
+            Theme.bg.ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 8) {
+                    ZStack { StarSparkles().frame(width: 300, height: 170)
+                        AvatarView(name: name, url: pr?.avatarURL, color: pr?.color ?? 0, size: 104) }
+                        .padding(.top, 50)
+                    Text("Подарить Premium").font(.system(size: 28, weight: .black)).foregroundColor(Theme.text)
+                    Text("Подарите \(name) доступ к дополнительным функциям Lumo.")
+                        .font(.system(size: 15)).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(.horizontal, 28)
+                    HStack(spacing: 10) {
+                        ForEach(Array([("3 месяца", Color(hex: 0x4CAF50), ""), ("6 месяцев", Color(hex: 0x22A6FF), "-35%"), ("1 год", Color(hex: 0xFF5B5B), "-40%")].enumerated()), id: \.offset) { _, t in
+                            Button { model.say("Подарок Premium в разработке") } label: {
+                                VStack(spacing: 4) {
+                                    Text("🎁").font(.system(size: 36)).frame(width: 64, height: 64)
+                                        .background(t.1.opacity(0.22), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                    Text(t.0).font(.system(size: 15, weight: .black)).foregroundColor(Theme.text).padding(.top, 4)
+                                    Text("Premium").font(.system(size: 13)).foregroundColor(Theme.muted)
+                                    Text("Скоро").font(.system(size: 13, weight: .bold)).foregroundColor(Theme.a1)
+                                        .padding(.horizontal, 12).padding(.vertical, 5).background(Theme.a1.opacity(0.15), in: Capsule()).padding(.top, 4)
+                                }
+                                .frame(maxWidth: .infinity).padding(.vertical, 14)
+                                .background(Theme.panel, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                                .overlay(alignment: .topTrailing) {
+                                    if !t.2.isEmpty {
+                                        Text(t.2).font(.system(size: 10.5, weight: .black)).foregroundColor(.white)
+                                            .padding(.horizontal, 6).padding(.vertical, 2)
+                                            .background(LinearGradient(colors: [Theme.a1, Color(hex: 0xB069FF)], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 8))
+                                            .padding(6)
+                                    }
+                                }
+                            }.buttonStyle(BouncyButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal, 14).padding(.top, 6)
+                    Text("Оплата Premium ещё в разработке: как только она заработает, подарок можно будет отправить прямо отсюда.")
+                        .font(.system(size: 12)).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(.horizontal, 24)
+                    Text("Отправить подарок").font(.system(size: 26, weight: .black)).foregroundColor(Theme.text).padding(.top, 22)
+                    Text("Дарите \(name) подарки, которые можно хранить в профиле.")
+                        .font(.system(size: 15)).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(.horizontal, 28)
+                    Button { info = true } label: { Text("Подробнее о люменах ›").font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.a1) }
+                    HStack(spacing: 8) {
+                        chip("Все", !rare) { rare = false }
+                        chip("Коллекционные", rare) { rare = true }
+                    }
+                    CatalogGrid(onlyRare: rare) { pick = $0 }.padding(.bottom, 30)
+                }
+            }
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
+                        .frame(width: 44, height: 44).background(Theme.panel, in: Circle())
+                }.buttonStyle(BouncyButtonStyle())
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Баланс").font(.system(size: 13)).foregroundColor(Theme.muted)
+                    HStack(spacing: 4) { LumenGem(size: 18); Text("\(lumens.balance)").font(.system(size: 16, weight: .black)).foregroundColor(Theme.text) }
+                }
+            }
+            .padding(.horizontal, 16).padding(.top, 8)
+        }
+        .task { await GiftStore.shared.load(); await Lumens.shared.load() }
+        .sheet(item: $pick) { g in GiftDetailSheet(gift: g, to: user, onDone: { dismiss() }).environmentObject(model) }
+        .sheet(isPresented: $info) { LumenInfoSheet().presentationDetents([.large]) }
+    }
+
+    private func chip(_ t: String, _ on: Bool, _ a: @escaping () -> Void) -> some View {
+        Button(action: a) {
+            Text(t).font(.system(size: 15, weight: .semibold)).foregroundColor(on ? Theme.text : Theme.muted)
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .background(on ? Theme.line : Color.clear, in: Capsule())
+        }.buttonStyle(BouncyButtonStyle()).animation(.spring(response: 0.3, dampingFraction: 0.7), value: on)
+    }
+}
+
+/// Мерцающие звёздочки за аватаром
+struct StarSparkles: View {
+    var body: some View {
+        TimelineView(.animation) { tl in
+            let ph = tl.date.timeIntervalSinceReferenceDate / 2.6
+            Canvas { ctx, size in
+                var g = SeededGen(seed: 7)
+                for i in 0..<34 {
+                    let x = g.next() * size.width, y = g.next() * size.height, s = 3 + g.next() * 7
+                    let a = (sin((ph + Double(i) * 0.13) * 6.283) + 1) / 2 * 0.8 + 0.1
+                    var p = Path(); p.move(to: CGPoint(x: x - s, y: y)); p.addLine(to: CGPoint(x: x + s, y: y)); p.move(to: CGPoint(x: x, y: y - s)); p.addLine(to: CGPoint(x: x, y: y + s))
+                    ctx.stroke(p, with: .color(Color(hex: 0xFFB020).opacity(a)), lineWidth: 1.6)
+                }
+            }
+        }
+    }
+}
+private struct SeededGen {
+    var s: UInt64
+    init(seed: UInt64) { s = seed &* 6364136223846793005 &+ 1442695040888963407 }
+    mutating func next() -> CGFloat { s = s &* 6364136223846793005 &+ 1442695040888963407; return CGFloat((s >> 33) & 0xFFFFFF) / CGFloat(0xFFFFFF) }
+}
+
+/// «Для чего нужны люмены?»
+struct LumenInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(spacing: 10) {
+            ZStack { StarSparkles().frame(width: 280, height: 140); LumenGem(size: 84) }.padding(.top, 10)
+            Text("Для чего нужны люмены?").font(.system(size: 22, weight: .black)).foregroundColor(Theme.text)
+            Text("Возможности люменов Lumo:").font(.system(size: 14)).foregroundColor(Theme.muted)
+            VStack(alignment: .leading, spacing: 16) {
+                row("gift", "Подарки друзьям", "Дарите друзьям подарки, которые они смогут добавить в профиль.")
+                row("paperplane", "Переводы в чате", "Отправляйте люмены другу прямо в переписке.")
+                row("lock", "Платные сообщения", "Установите цену, и незнакомцы смогут написать вам только за люмены.")
+                row("star", "Ежедневный бонус", "Заходите каждый день и получайте люмены, серия увеличивает награду.")
+            }
+            .padding(.horizontal, 22).padding(.top, 10)
+            Spacer()
+            Button { dismiss() } label: {
+                Text("OK").font(.system(size: 17, weight: .black)).foregroundColor(.white).frame(maxWidth: .infinity).padding(.vertical, 14)
+                    .background(LinearGradient(colors: [Theme.a1, Theme.a2], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }.buttonStyle(BouncyButtonStyle()).padding(.horizontal, 20).padding(.bottom, 14)
+        }
+        .background(Theme.bg.ignoresSafeArea())
+    }
+    private func row(_ icon: String, _ t: String, _ d: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon).font(.system(size: 22)).foregroundColor(Theme.a1).frame(width: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(t).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
+                Text(d).font(.system(size: 14)).foregroundColor(Theme.muted)
+            }
         }
     }
 }

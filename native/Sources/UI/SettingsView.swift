@@ -271,7 +271,7 @@ struct MyProfileView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(BouncyButtonStyle())
                         Button { showQR = true } label: {
                             Image(systemName: "qrcode").font(.system(size: 26, weight: .medium)).foregroundColor(Theme.a1)
                                 .frame(width: 48, height: 48).contentShape(Rectangle())
@@ -372,7 +372,7 @@ struct TGHint: View {
             Text(text).font(.system(size: 14)).foregroundColor(Theme.muted)
             if let l = link {
                 Button(action: action) { Text(l + " ›").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.a1) }
-                    .buttonStyle(.plain)
+                    .buttonStyle(BouncyButtonStyle())
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -819,7 +819,7 @@ struct CallRowView: View {
                 Image(systemName: m.isVideoCall ? "video.fill" : "phone.fill").foregroundColor(Theme.a1)
                     .frame(width: 40, height: 40).background(Circle().fill(Theme.panel2))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(BouncyButtonStyle())
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .contentShape(Rectangle())
@@ -1027,6 +1027,7 @@ struct PrivacyKeyView: View {
 struct MsgPrivacyView: View {
     @EnvironmentObject var model: AppModel
     @State private var goPremium = false
+    @State private var paidPrice = 0
 
     private func row(_ title: String, value: String, locked: Bool) -> some View {
         let cur = model.me?.privacy["msg_prem"] == "premium" ? "premium" : "all"
@@ -1063,12 +1064,37 @@ struct MsgPrivacyView: View {
                     Text("Подробнее о Lumo Premium").font(.system(size: 16)).foregroundColor(Theme.a1)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 32).padding(.top, 8)
                 }
+                Text("ПЛАТНЫЕ СООБЩЕНИЯ").font(.system(size: 13)).foregroundColor(Theme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 32).padding(.top, 24).padding(.bottom, 8)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach([(0, "Бесплатно"), (5, "5"), (10, "10"), (25, "25"), (50, "50"), (100, "100")], id: \.0) { v, t in
+                            Button {
+                                UISelectionFeedbackGenerator().selectionChanged()
+                                if v > 0 && !model.isPremium { model.say(premiumSoon); return }
+                                Task {
+                                    do { _ = try await API.shared.rpc("lm_paid_set", ["p_price": v]); paidPrice = v; model.say(v == 0 ? "Платные сообщения выключены" : "Цена сообщения: \(v)") }
+                                    catch { model.say(error.localizedDescription) }
+                                }
+                            } label: {
+                                Text(t).font(.system(size: 15, weight: .semibold)).foregroundColor(paidPrice == v ? .white : Theme.text)
+                                    .padding(.horizontal, 16).padding(.vertical, 9)
+                                    .background(paidPrice == v ? Theme.a1 : Theme.panel, in: Capsule())
+                            }.buttonStyle(BouncyButtonStyle()).animation(.spring(response: 0.3, dampingFraction: 0.7), value: paidPrice)
+                        }
+                    }.padding(.horizontal, 20)
+                }
+                TGHint(text: "Незнакомые люди смогут написать вам только за люмены, а вы получите оплату. Контакты и те, с кем вы уже переписываетесь, пишут бесплатно. Отключить для конкретного человека можно в его чате.")
             }
         }
         .background(Theme.bg.ignoresSafeArea())
         .navigationTitle("Сообщения")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await model.loadMe() }
+        .task {
+            await model.loadMe()
+            let r = try? await API.shared.rpc("lm_paid_get")
+            paidPrice = (r as? Int) ?? (r as? NSNumber)?.intValue ?? 0
+        }
     }
 }
 
@@ -1167,7 +1193,7 @@ struct MyProfileTabs: View {
                 .foregroundColor(tab == i ? .white : Theme.text)
                 .padding(.horizontal, 16).padding(.vertical, 8)
                 .background(tab == i ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.panel), in: Capsule())
-        }.buttonStyle(.plain)
+        }.buttonStyle(BouncyButtonStyle())
     }
 
     var body: some View {
@@ -1198,7 +1224,7 @@ struct MyProfileTabs: View {
                                     }
                                     .aspectRatio(0.75, contentMode: .fit).clipped()
                                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                }.buttonStyle(.plain)
+                                }.buttonStyle(BouncyButtonStyle())
                             }
                         }.padding(.horizontal, 14)
                     }
