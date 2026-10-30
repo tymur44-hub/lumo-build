@@ -91,14 +91,18 @@ fun GiftAnimated(id: String, modifier: Modifier = Modifier) {
         val svg = runCatching { ctx.assets.open("gifts/$id.svg").bufferedReader().use { it.readText() } }.getOrDefault("")
         "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}svg{width:100%;height:100%;display:block}</style></head><body>$svg</body></html>"
     }
+    Box(modifier.clip(RoundedCornerShape(26.dp))) {
+    GiftThumb(id, Modifier.fillMaxSize())
     AndroidView(factory = { c ->
         WebView(c).apply {
+            setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
             isVerticalScrollBarEnabled = false; isHorizontalScrollBarEnabled = false
             isClickable = false; isLongClickable = false
             loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
         }
-    }, modifier = modifier.clip(RoundedCornerShape(26.dp)))
+    }, modifier = Modifier.fillMaxSize())
+    }
 }
 
 @Composable
