@@ -425,6 +425,7 @@ struct ProfileEditView: View {
     @State private var showExtra = false
     @State private var pwSheet = false
     @State private var confirmDelete = false
+    @ObservedObject private var accounts = Accounts.shared
     @State private var loaded = false
 
     var body: some View {
@@ -516,6 +517,29 @@ struct ProfileEditView: View {
                     .buttonStyle(RowButtonStyle())
                 }
                 Color.clear.frame(height: 22)
+                TGCard {
+                    ForEach(accounts.list.filter { $0.id != model.myId }) { a in
+                        Button { Task { await model.switchAccount(a.id) } } label: {
+                            HStack(spacing: 14) {
+                                AvatarView(name: a.name.isEmpty ? a.username : a.name, url: a.avatar, color: 0, size: 40)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(a.name.isEmpty ? "Аккаунт" : a.name).font(.system(size: 17)).foregroundColor(Theme.text)
+                                    if !a.username.isEmpty { Text("@" + a.username).font(.system(size: 13)).foregroundColor(Theme.muted) }
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.muted.opacity(0.6))
+                            }
+                            .padding(.horizontal, 18).frame(minHeight: 58).contentShape(Rectangle())
+                        }
+                        .buttonStyle(RowButtonStyle())
+                        Divider().overlay(Theme.line).padding(.leading, 72)
+                    }
+                    Button { model.addAccount() } label: {
+                        TGIconRow(icon: "person.badge.plus", color: Theme.a1, title: "Добавить аккаунт", value: nil)
+                    }
+                    .buttonStyle(RowButtonStyle())
+                }
+                TGHint(text: "Без Premium доступен один аккаунт, с Premium — до 3. Переключаться между ними можно здесь.")
                 TGCard {
                     Button { confirmDelete = true } label: {
                         Text("Удалить аккаунт").font(.system(size: 17)).foregroundColor(Theme.danger)

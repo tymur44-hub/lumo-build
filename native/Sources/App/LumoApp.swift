@@ -84,11 +84,17 @@ struct RootView: View {
     @EnvironmentObject var calls: CallManager
     @ObservedObject private var phones = PhoneStore.shared
     @AppStorage("lm_perms_done") private var permsDone = false
+    @ObservedObject private var savedAccounts = Accounts.shared
 
     var body: some View {
         ZStack {
             Theme.bg.ignoresSafeArea()
-            if model.loggedIn { MainView() } else { LoginView() }
+            if model.loggedIn { MainView() } else {
+                LoginView()
+                if let a = savedAccounts.list.first {
+                    VStack { HStack { Button { Task { await model.switchAccount(a.id) } } label: { Text("‹ Вернуться в аккаунт").font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.a1) }.padding(14); Spacer() }; Spacer() }
+                }
+            }
             Color.clear.frame(width: 0, height: 0).fullScreenCover(item: Binding(get: { model.storyOpen.map { IdentifiedString(value: $0) } }, set: { model.storyOpen = $0?.value })) { s in StoryViewer(startUser: s.value).environmentObject(model) }
             if model.loggedIn && phones.loaded && phones.status == "required" {
                 PhoneAuthView(mode: .bind, required: true).transition(.opacity)

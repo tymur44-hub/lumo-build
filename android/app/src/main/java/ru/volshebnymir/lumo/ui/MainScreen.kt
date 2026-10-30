@@ -123,7 +123,12 @@ fun Root() {
         val prefs = remember { AppModel.ctx.getSharedPreferences("lumo_prefs", android.content.Context.MODE_PRIVATE) }
         var permsDone by remember { mutableStateOf(prefs.getBoolean("lm_perms_done", false)) }
         if (!permsDone) PermissionsScreen { prefs.edit().putBoolean("lm_perms_done", true).apply(); permsDone = true }
-        else if (AppModel.loggedIn) MainScreen() else LoginScreen()
+        else if (AppModel.loggedIn) MainScreen() else {
+            LoginScreen()
+            if (ru.volshebnymir.lumo.core.Accounts.list.isNotEmpty()) Box(Modifier.fillMaxWidth().statusBarsPadding().padding(10.dp)) {
+                androidx.compose.material3.TextButton({ AppModel.switchAccount(ru.volshebnymir.lumo.core.Accounts.list.first().id) }) { androidx.compose.material3.Text("‹ Вернуться в аккаунт", color = p.a1) }
+            }
+        }
         if (permsDone && AppModel.loggedIn && AppModel.demoId == null) {
             if (PhoneStore.loaded && PhoneStore.status == "required") PhoneAuthScreen(bind = true, required = true) {}
             else if (PhoneUi.bind) PhoneAuthScreen(bind = true) { PhoneUi.bind = false }

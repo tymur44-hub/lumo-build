@@ -49,8 +49,8 @@ struct DayLabel: View {
         Text(Fmt.day(date))
             .font(.system(size: 13, weight: .semibold))
             .padding(.horizontal, 12).padding(.vertical, 5)
-            .background(.ultraThinMaterial, in: Capsule())
-            .foregroundColor(Theme.muted)
+            .background(Capsule().fill(Color.black.opacity(0.38)))
+            .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
     }

@@ -500,8 +500,7 @@ struct ChatView: View {
         let mine = m.senderId == model.myId
         let acts = actions(m)
         return ZStack {
-            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
-                .overlay(Color.black.opacity(0.18).ignoresSafeArea())
+            Color.black.opacity(0.42).ignoresSafeArea()
                 .onTapGesture { closeMenu() }
             ScrollView(showsIndicators: false) {
                 VStack(alignment: mine ? .trailing : .leading, spacing: 10) {
@@ -556,7 +555,7 @@ struct ChatView: View {
                     .frame(width: 260)
                     .background(
                         RoundedRectangle(cornerRadius: 26)
-                            .fill(.regularMaterial)
+                            .fill(Theme.panel)
                             .overlay(RoundedRectangle(cornerRadius: 26).fill(LinearGradient(colors: [Theme.a2.opacity(0.10), Theme.a1.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing)))
                     )
                     .overlay(RoundedRectangle(cornerRadius: 26).stroke(Color.white.opacity(0.25), lineWidth: 0.8))

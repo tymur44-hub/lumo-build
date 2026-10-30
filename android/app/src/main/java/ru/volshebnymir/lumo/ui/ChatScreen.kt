@@ -579,8 +579,8 @@ private fun PinnedBar(chat: ChatItem?, chatId: String, onTap: (Int) -> Unit) {
 private fun DayChip(d: Date) {
     val p = P
     Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-        Text(Fmt.day(d), color = p.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(p.panel.copy(alpha = 0.8f)).padding(horizontal = 12.dp, vertical = 4.dp))
+        Text(Fmt.day(d), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.38f)).padding(horizontal = 12.dp, vertical = 4.dp))
     }
 }
 

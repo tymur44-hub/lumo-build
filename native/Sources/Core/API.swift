@@ -52,14 +52,18 @@ final class API {
     var onSessionChange: ((AuthSession?) -> Void)?
 
     private init() {
-        if let d = Keychain.load(), let s = try? JSONDecoder().decode(AuthSession.self, from: d) { session = s }
+        if let d = Keychain.load(), let s = try? JSONDecoder().decode(AuthSession.self, from: d) { session = s; Accounts.shared.saveTokens(s) }
     }
+
+    /// Вернуть сохранённый вход другого аккаунта
+    func restore(_ s: AuthSession) { setSession(s) }
 
     var userId: String? { session?.userId }
 
     private func setSession(_ s: AuthSession?) {
         session = s
         if let s = s, let d = try? JSONEncoder().encode(s) { Keychain.save(d) } else { Keychain.clear() }
+        if let s = s { Accounts.shared.saveTokens(s) }
         onSessionChange?(s)
     }
 

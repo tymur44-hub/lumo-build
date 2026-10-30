@@ -156,6 +156,8 @@ object Api {
         val p = ctx.getSharedPreferences("lumo_auth", Context.MODE_PRIVATE)
         val a = p.getString("a", null); val r = p.getString("r", null); val u = p.getString("u", null)
         if (a != null && r != null && u != null) session = Session(a, r, p.getLong("e", 0), u)
+        Accounts.init(c)
+        session?.let { Accounts.saveTokens(it) }
     }
 
     val userId: String? get() = session?.userId
@@ -165,8 +167,12 @@ object Api {
         val p = ctx.getSharedPreferences("lumo_auth", Context.MODE_PRIVATE).edit()
         if (s == null) p.clear() else p.putString("a", s.access).putString("r", s.refresh).putLong("e", s.expiresAt).putString("u", s.userId)
         p.apply()
+        if (s != null) Accounts.saveTokens(s)
         onSession?.invoke(s)
     }
+
+    /** Вернуть сохранённый сеанс другого аккаунта */
+    fun restore(a: Accounts.Acc) = setSession(Session(a.a, a.r, a.e, a.id))
 
     private fun applyAuth(j: JSONObject) {
         val at = j.optString("access_token"); val rt = j.optString("refresh_token")

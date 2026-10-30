@@ -278,8 +278,34 @@ object AppModel {
     fun logout() {
         scope.launch {
             presence(false)
+            Api.userId?.let { Accounts.remove(it) }
             Api.signOut()
             resetAfterLogout()
+            // если есть другой сохранённый аккаунт — входим в него
+            Accounts.list.firstOrNull()?.let { switchAccount(it.id) }
+        }
+    }
+
+    /** Добавить аккаунт: текущий остаётся сохранённым, открывается экран входа */
+    fun addAccount() {
+        if (Accounts.list.size >= Accounts.limit()) {
+            say(if (isPremium) "Можно добавить не больше 3 аккаунтов" else "Несколько аккаунтов доступны в Premium"); return
+        }
+        scope.launch {
+            presence(false)
+            resetAfterLogout()
+            Api.forget()
+        }
+    }
+
+    /** Переключиться на сохранённый аккаунт */
+    fun switchAccount(id: String) {
+        val acc = Accounts.list.firstOrNull { it.id == id } ?: return
+        scope.launch {
+            if (loggedIn) { presence(false); resetAfterLogout() }
+            Api.restore(acc)
+            loggedIn = true
+            start()
         }
     }
 
@@ -371,7 +397,7 @@ object AppModel {
 
     suspend fun loadMe() {
         val id = myId ?: return
-        fetchProfiles(listOf(id)).firstOrNull()?.let { me = it; profiles[id] = it }
+        fetchProfiles(listOf(id)).firstOrNull()?.let { me = it; profiles[id] = it; Accounts.info(id, it.name, it.username, it.avatarUrl) }
     }
 
     suspend fun loadProfiles(ids: Collection<String>) {

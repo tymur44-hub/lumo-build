@@ -705,6 +705,22 @@ fun EditProfileScreen() {
             }
             Spacer(Modifier.height(18.dp))
             GroupCard {
+                ru.volshebnymir.lumo.core.Accounts.list.filter { it.id != ru.volshebnymir.lumo.core.AppModel.myId }.forEach { a ->
+                    Row(Modifier.fillMaxWidth().bouncy { ru.volshebnymir.lumo.core.AppModel.switchAccount(a.id) }.padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(a.name.ifEmpty { a.username }, a.avatar, 0, 40.dp)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(a.name.ifEmpty { "Аккаунт" }, color = p.text, fontSize = 17.sp, maxLines = 1)
+                            if (a.username.isNotEmpty()) Text("@" + a.username, color = p.muted, fontSize = 13.sp)
+                        }
+                        Icon(Icons.Filled.ChevronRight, null, tint = p.muted.copy(alpha = 0.6f), modifier = Modifier.size(22.dp))
+                    }
+                    CardDivider(72)
+                }
+                IconRow(Icons.Filled.PersonAdd, p.a1, "Добавить аккаунт", null) { ru.volshebnymir.lumo.core.AppModel.addAccount() }
+            }
+            HintWithLink("Без Premium доступен один аккаунт, с Premium — до 3. Переключаться между ними можно здесь.")
+            GroupCard {
                 Text("Удалить аккаунт", color = p.danger, fontSize = 17.sp, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().bouncy { delAcc = true }.padding(17.dp))
             }

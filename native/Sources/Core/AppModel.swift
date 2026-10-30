@@ -263,8 +263,30 @@ final class AppModel: ObservableObject {
 
     func logout() async {
         presence(false)
+        if let u = API.shared.userId { Accounts.shared.remove(u) }
         await API.shared.signOut()
         resetAfterLogout()
+        // есть другой сохранённый аккаунт — входим в него
+        if let a = Accounts.shared.list.first { await switchAccount(a.id) }
+    }
+
+    /// Добавить аккаунт: текущий остаётся сохранённым, открывается экран входа
+    func addAccount() {
+        if Accounts.shared.list.count >= Accounts.shared.limit() {
+            say(isPremium ? "Можно добавить не больше 3 аккаунтов" : "Несколько аккаунтов доступны в Premium"); return
+        }
+        presence(false)
+        resetAfterLogout()
+        API.shared.forgetSession()
+    }
+
+    /// Переключиться на сохранённый аккаунт
+    func switchAccount(_ id: String) async {
+        guard let acc = Accounts.shared.list.first(where: { $0.id == id }) else { return }
+        if loggedIn { presence(false); resetAfterLogout() }
+        API.shared.restore(acc.session)
+        loggedIn = true
+        await start()
     }
 
     /// Соединение пропало/появилось. «Соединение…» показываем, только если связи нет дольше секунды
@@ -401,6 +423,7 @@ final class AppModel: ObservableObject {
         if let p = await fetchProfiles([id]).first {
             me = p
             profiles[id] = p
+            Accounts.shared.info(id, name: p.name, username: p.username, avatar: p.avatarURL)
         }
     }
 
