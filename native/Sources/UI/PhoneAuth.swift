@@ -37,6 +37,10 @@ struct PhoneAuthView: View {
     @State private var resend = 0
     @State private var isNew = false
     @State private var resetNote: String?
+    @State private var chan = "sms"
+    @State private var tgLink: String?
+    @State private var tgDirect = false
+    @Environment(\.openURL) private var openURL
     @FocusState private var focus: Bool
 
     private var full: String { "7" + digits }
@@ -99,8 +103,10 @@ struct PhoneAuthView: View {
     }
     private var subtitle: String {
         switch step {
-        case .phone: return mode == .bind ? "Номер нужен для входа и защиты аккаунта. Видеть его можно ограничить в настройках." : "Мы отправим SMS с кодом. Если аккаунта ещё нет — он создастся."
-        case .code: return "Код отправлен на " + PhoneStore.pretty(full)
+        case .phone: return mode == .bind ? "Номер нужен для входа и защиты аккаунта. Видеть его можно ограничить в настройках." : "Мы отправим код в SMS или в Telegram. Если аккаунта ещё нет — он создастся."
+        case .code:
+            if chan == "telegram" { return tgDirect ? "Код отправлен вам в Telegram (бот Lumo)" : "Откройте бота Lumo в Telegram, нажмите «Старт» и поделитесь номером — код придёт в чат" }
+            return "Код отправлен на " + PhoneStore.pretty(full)
         case .name: return "Это имя увидят ваши контакты. Его можно поменять позже."
         case .tfa: return "Для аккаунта включена двухэтапная аутентификация. Введите пароль." + (tfaHint.isEmpty ? "" : "\nПодсказка: " + tfaHint)
         case .done: return ""
@@ -152,6 +158,12 @@ struct PhoneAuthView: View {
                     .contentShape(Rectangle()).onTapGesture { focus = true }
                 }
                 if busy { ProgressView() }
+                if chan == "telegram", !tgDirect, let l = tgLink, let u = URL(string: l) {
+                    GradientButton(title: "Открыть Telegram", loading: false) { openURL(u) }
+                }
+                if chan == "sms" {
+                    Button("Получить код в Telegram") { sendCode(viaTg: true) }.font(.footnote.weight(.semibold))
+                }
                 Button { if resend == 0 { sendCode() } } label: {
                     Text(resend > 0 ? "Отправить ещё раз через \(resend) с" : "Отправить код ещё раз").font(.system(size: 15, weight: .semibold))
                         .foregroundColor(resend > 0 ? Theme.muted : Theme.a1)
@@ -202,15 +214,19 @@ struct PhoneAuthView: View {
         if c == "bad_tfa" { UINotificationFeedbackGenerator().notificationOccurred(.error); tfaPwd = "" }
     }
 
-    private func sendCode() {
+    private func sendCode(viaTg: Bool = false) {
         guard digits.count == 10, !busy else { return }
         busy = true; error = nil
         Task {
             defer { busy = false }
             do {
-                let j = try await store.call("send", ["phone": full, "purpose": mode == .bind ? "bind" : "auth"], auth: mode == .bind)
+                var body: JSON = ["phone": full, "purpose": mode == .bind ? "bind" : "auth"]
+                if viaTg { body["channel"] = "telegram" }
+                let j = try await store.call("send", body, auth: mode == .bind)
                 if j.str("error") != nil { fail(j); return }
                 code = ""; resend = 45; step = .code; focus = true
+                chan = j.str("channel") ?? "sms"; tgLink = j.str("link"); tgDirect = (j["direct"] as? Bool) == true
+                if chan == "telegram", !tgDirect, let l = tgLink, let u = URL(string: l) { openURL(u) }
             } catch { self.error = "Нет соединения. Попробуйте ещё раз" }
         }
     }

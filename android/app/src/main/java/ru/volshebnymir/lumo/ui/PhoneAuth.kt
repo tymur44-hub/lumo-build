@@ -96,13 +96,25 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
         if (c == "bad_tfa") tfaPwd = ""
     }
 
-    fun sendCode() {
+    var chan by remember { mutableStateOf("sms") }
+    var tgLink by remember { mutableStateOf<String?>(null) }
+    var tgDirect by remember { mutableStateOf(false) }
+    val ctxp = androidx.compose.ui.platform.LocalContext.current
+    fun openTg() { tgLink?.let { runCatching { ctxp.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }
+
+    fun sendCode(viaTg: Boolean = false) {
         if (digits.length != 10 || busy) return
         busy = true; err = null
         scope.launch {
             try {
-                val j = PhoneStore.call("send", jsonOf("phone" to full, "purpose" to purpose), auth = bind)
-                if (j.str("error") != null) fail(j) else { code = ""; resend = 45; step = PStep.Code }
+                val body = jsonOf("phone" to full, "purpose" to purpose)
+                if (viaTg) body.put("channel", "telegram")
+                val j = PhoneStore.call("send", body, auth = bind)
+                if (j.str("error") != null) fail(j) else {
+                    code = ""; resend = 45; step = PStep.Code
+                    chan = j.str("channel") ?: "sms"; tgLink = j.str("link"); tgDirect = j.bool("direct")
+                    if (chan == "telegram" && !tgDirect) openTg()
+                }
             } catch (e: Exception) { err = "Нет соединения. Попробуйте ещё раз" }
             busy = false
         }
@@ -159,8 +171,8 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
                     PStep.Code -> "Введите код"; PStep.Name -> "Как вас зовут?"; else -> "Пароль защиты"
                 }, color = p.text, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
                 Text(when (step) {
-                    PStep.Phone -> if (bind) "Номер нужен для входа и защиты аккаунта. Видеть его можно ограничить в настройках." else "Мы отправим код в SMS. Если аккаунта с этим номером нет, он будет создан."
-                    PStep.Code -> "Код отправлен на " + PhoneStore.pretty(full)
+                    PStep.Phone -> if (bind) "Номер нужен для входа и защиты аккаунта. Видеть его можно ограничить в настройках." else "Мы отправим код в SMS или в Telegram. Если аккаунта с этим номером нет, он будет создан."
+                    PStep.Code -> if (chan == "telegram") (if (tgDirect) "Код отправлен вам в Telegram (бот Lumo)" else "Откройте бота Lumo в Telegram, нажмите «Старт» и поделитесь номером — код придёт в чат") else "Код отправлен на " + PhoneStore.pretty(full)
                     PStep.Name -> "Это имя увидят ваши контакты. Его можно поменять позже."
                     else -> "Для аккаунта включена двухэтапная аутентификация. Введите пароль." + (if (tfaHint.isEmpty()) "" else "\nПодсказка: $tfaHint")
                 }, color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 12.dp))
@@ -201,6 +213,8 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
                             }
                         }
                         if (busy) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp)
+                        if (chan == "telegram" && !tgDirect && tgLink != null) GradientButton("Открыть Telegram", false, true) { openTg() }
+                        if (chan == "sms") Text("Получить код в Telegram", color = p.a1, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy { sendCode(true) })
                         Text(if (resend > 0) "Отправить ещё раз через $resend с" else "Отправить код ещё раз",
                             color = if (resend > 0) p.muted else p.a1, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy { if (resend == 0) sendCode() })
                         Text("Изменить номер", color = p.a1, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy { code = ""; err = null; step = PStep.Phone })
