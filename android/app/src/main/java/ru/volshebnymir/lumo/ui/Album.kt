@@ -152,7 +152,9 @@ fun AttachSheet(
     onCamera: () -> Unit,
     onNote: () -> Unit,
     onLumens: () -> Unit,
+    onPost: (String, String?, String?, org.json.JSONObject) -> Unit = { _, _, _, _ -> },
 ) {
+    var tabSel by remember { mutableStateOf("Галерея") }
     val p = P
     val ctx = LocalContext.current
     var granted by remember { mutableStateOf(galPerms().all { ContextCompatCheck(ctx, it) }) }
@@ -173,10 +175,16 @@ fun AttachSheet(
         Box(Modifier.fillMaxWidth().fillMaxHeight(0.92f)) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
-                    Text(if (picked.isEmpty()) "Недавние" else "Выбрано: ${picked.size}", color = p.text, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text(if (picked.isEmpty()) (if (tabSel == "Галерея") "Недавние" else if (tabSel == "Контакт") "Контакты" else tabSel) else "Выбрано: ${picked.size}", color = p.text, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     Box(Modifier.align(Alignment.CenterStart)) { RoundIcon(Icons.Filled.Close, 44.dp, bg = p.panel) { onDismiss() } }
                 }
-                if (!granted) {
+                if (tabSel == "Файл") FilesPanel(false, onPickFile = { onDismiss(); onFile() }, onGallery = { tabSel = "Галерея" },
+                    onResend = { m -> onPost("file", null, m.mediaUrl, m.meta); onDismiss() })
+                else if (tabSel == "Звук") FilesPanel(true, onPickFile = { onDismiss(); onAudio() }, onGallery = { tabSel = "Галерея" },
+                    onResend = { m -> onPost("file", null, m.mediaUrl, m.meta); onDismiss() })
+                else if (tabSel == "Геопозиция") LocationPanel { la, lo -> onPost("text", SpecialMsg.locationBody(null, la, lo), null, org.json.JSONObject()); onDismiss() }
+                else if (tabSel == "Контакт") ContactsPanel { x -> onPost("text", SpecialMsg.contactBody(AppModel.aliases[x.id] ?: x.name, x.id), null, org.json.JSONObject()); onDismiss() }
+                else if (!granted) {
                     Column(Modifier.fillMaxSize().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                         Icon(Icons.Filled.PhotoLibrary, null, tint = p.muted, modifier = Modifier.size(46.dp))
                         Spacer(Modifier.height(10.dp))
@@ -207,7 +215,7 @@ fun AttachSheet(
             }
             // низ: вкладки или подпись + отправка
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(horizontal = 10.dp, vertical = 8.dp)) {
-                if (picked.isEmpty()) {
+                if (picked.isEmpty() || tabSel != "Галерея") {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(36.dp)).background(p.panel).horizontalScroll(rememberScrollState()).padding(6.dp)) {
                         @Composable fun tab(icon: ImageVector, t: String, on: Boolean = false, f: () -> Unit) {
                             Column(Modifier.width(84.dp).clip(RoundedCornerShape(30.dp)).background(if (on) p.a1.copy(alpha = 0.14f) else Color.Transparent).clickable(onClick = f).padding(vertical = 8.dp),
@@ -216,12 +224,12 @@ fun AttachSheet(
                                 Text(t, color = if (on) p.a1 else p.text, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
-                        tab(Icons.Filled.PhotoLibrary, "Галерея", true) {}
-                        tab(Icons.Filled.Description, "Файл") { onDismiss(); onFile() }
-                        tab(Icons.Filled.LocationOn, "Геопозиция") { AppModel.say("Геопозиция: в разработке") }
+                        tab(Icons.Filled.PhotoLibrary, "Галерея", tabSel == "Галерея") { picked.clear(); tabSel = "Галерея" }
+                        tab(Icons.Filled.Description, "Файл", tabSel == "Файл") { picked.clear(); tabSel = "Файл" }
+                        tab(Icons.Filled.LocationOn, "Геопозиция", tabSel == "Геопозиция") { picked.clear(); tabSel = "Геопозиция" }
                         tab(Icons.Filled.BarChart, "Опрос") { AppModel.say("Опрос: в разработке") }
-                        tab(Icons.Filled.PlayCircle, "Звук") { onDismiss(); onAudio() }
-                        tab(Icons.Filled.AccountCircle, "Контакт") { AppModel.say("Контакт: в разработке") }
+                        tab(Icons.Filled.PlayCircle, "Звук", tabSel == "Звук") { picked.clear(); tabSel = "Звук" }
+                        tab(Icons.Filled.AccountCircle, "Контакт", tabSel == "Контакт") { picked.clear(); tabSel = "Контакт" }
                         tab(Icons.Filled.CameraAlt, "Камера") { onDismiss(); onCamera() }
                         tab(Icons.Filled.SlowMotionVideo, "Кружок") { onDismiss(); onNote() }
                         if (canLumens) tab(Icons.Filled.Diamond, "Люмены") { onDismiss(); onLumens() }

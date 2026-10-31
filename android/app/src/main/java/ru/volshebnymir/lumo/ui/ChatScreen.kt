@@ -758,7 +758,9 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
         }
         if (!m.deleted && !m.body.isNullOrEmpty() && m.kind != "sticker" && m.kind != "system") {
             val cmdChat = if (!mine && m.senderId?.let { AppModel.profiles[it] }?.isBot == true) m.chatId else null
-            if (m.kind == "text") RichText(m.body, fg, mine, cmdChat = cmdChat) else RichText(m.body, fg, mine, Modifier.padding(horizontal = 6.dp, vertical = 3.dp), cmdChat)
+            val special = if (m.kind == "text") SpecialMsg.parse(m.body) else null
+            if (special != null) SpecialCard(special, fg, mine)
+            else if (m.kind == "text") RichText(m.body, fg, mine, cmdChat = cmdChat) else RichText(m.body, fg, mine, Modifier.padding(horizontal = 6.dp, vertical = 3.dp), cmdChat)
         }
         BotButtons(m, mine)
         val grp = if (chat?.isChannel == true) Lumens.linked(chat.id) else null
@@ -1072,6 +1074,7 @@ private fun Composer(
                         },
                         onNote = { onVideoNote(true) },
                         onLumens = { sendLumensTo = chat?.peerId },
+                        onPost = { kind, body, media, meta -> val r = takeReply(); scope.launch { AppModel.send(chatId, kind, body, media, meta, replyTo = r) } },
                     )
                 }
                 Row(Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).background(p.panel2), verticalAlignment = Alignment.Bottom) {
