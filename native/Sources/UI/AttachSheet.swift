@@ -91,11 +91,11 @@ struct AttachSheet: View {
     let canLumens: Bool
     var onSend: ([AppModel.AlbumPart], String?) -> Void
     var onFile: (URL) -> Void
-    /// "camera" · "note" · "lumens"
-    var onAction: (String) -> Void
     /// отправка готового сообщения: (вид, текст, ссылка на файл, meta)
     var onPost: (String, String?, String?, JSON) -> Void = { _, _, _, _ in }
     var onData: (Data, String, String) -> Void = { _, _, _ in }
+    /// "camera" · "note" · "lumens"
+    var onAction: (String) -> Void
 
     @StateObject private var gal = GalleryModel()
     @State private var picked: [String] = []

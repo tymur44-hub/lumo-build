@@ -263,7 +263,7 @@ struct ContactsPanel: View {
 }
 
 /// Файлы, которые уже отправлялись в чатах (для «Недавно отправленные» и «Ваши чаты»)
-enum RecentFiles {
+@MainActor enum RecentFiles {
     static func list(_ model: AppModel, audio: Bool) -> [Message] {
         var out: [Message] = []
         for (_, msgs) in model.messages {
