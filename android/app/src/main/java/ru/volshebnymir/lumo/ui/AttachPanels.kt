@@ -134,7 +134,7 @@ fun LocationPanel(onPick: (Double, Double) -> Unit) {
         val last: Location? = provs.mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }.maxByOrNull { it.time }
         if (last != null && System.currentTimeMillis() - last.time < 120_000) { busy = false; onPick(last.latitude, last.longitude); return }
         val prov = if (provs.contains(LocationManager.GPS_PROVIDER)) LocationManager.GPS_PROVIDER else provs.first()
-        androidx.core.location.LocationManagerCompat.getCurrentLocation(lm, prov, null, ContextCompat.getMainExecutor(ctx),
+        androidx.core.location.LocationManagerCompat.getCurrentLocation(lm, prov, null as android.os.CancellationSignal?, ContextCompat.getMainExecutor(ctx),
             androidx.core.util.Consumer<Location?> { loc ->
                 busy = false
                 val l = loc ?: last
