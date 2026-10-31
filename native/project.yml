@@ -50,6 +50,7 @@ targets:
         NSSpeechRecognitionUsageDescription: "Распознавание речи нужно для расшифровки голосовых сообщений и кружков"
         NSMicrophoneUsageDescription: "Микрофон нужен для звонков и голосовых сообщений"
         NSPhotoLibraryUsageDescription: "Доступ к фото нужен, чтобы отправлять фото и видео и ставить аватарку"
+        NSLocationWhenInUseUsageDescription: "Геопозиция нужна, чтобы отправлять своё местоположение и находить места рядом"
         NSContactsUsageDescription: "Контакты нужны, чтобы найти друзей, которые уже в Lumo, и пригласить остальных"
         NSPhotoLibraryAddUsageDescription: "Чтобы сохранять фото и видео из чатов"
         NSAppTransportSecurity:
@@ -58,8 +59,8 @@ targets:
       base:
         PRODUCT_NAME: Lumo
         PRODUCT_BUNDLE_IDENTIFIER: ru.volshebnymir.lumo.native
-        MARKETING_VERSION: "4.18"
-        CURRENT_PROJECT_VERSION: "43"
+        MARKETING_VERSION: "4.19"
+        CURRENT_PROJECT_VERSION: "44"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "5.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

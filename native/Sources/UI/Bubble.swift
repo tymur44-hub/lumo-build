@@ -329,7 +329,15 @@ struct MessageRow: View {
                         .foregroundColor(.white.opacity(0.85))
                     }
                     if let r = m.replyTo { replyQuote(r) }
-                    if let b = m.body, !b.isEmpty, m.kind != "call" {
+                    if m.kind == "text", let sp = SpecialMsg.parse(m.body) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            switch sp {
+                            case .location(let t, let la, let lo): LocationCard(title: t, lat: la, lng: lo, mine: mine)
+                            case .contact(let n, let id): ContactCard(name: n, id: id, mine: mine)
+                            }
+                            HStack { Spacer(minLength: 0); timeLine(onMedia: false) }
+                        }
+                    } else if let b = m.body, !b.isEmpty, m.kind != "call" {
                         media
                         // время — в одной строке с концом текста (как на сайте), без лишней строки снизу
                         (Text(richText(b, cmds: !mine && (m.senderId.flatMap { model.profiles[$0]?.isBot } ?? false))).foregroundColor(mine ? .white : Theme.text)

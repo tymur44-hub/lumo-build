@@ -905,6 +905,15 @@ struct ComposerView: View {
                                             model.sendAlbum(chatId: chatId, parts: parts, caption: cap, replyTo: r)
                                         },
                                         onFile: { sendFile($0) },
+                                        onPost: { kind, body, media, meta in
+                                            let r = reply?.id
+                                            reply = nil
+                                            Task { _ = await model.send(chatId: chatId, kind: kind, body: body, media: media, meta: meta, replyTo: r) }
+                                        },
+                                        onData: { d, ext, name in
+                                            model.sendMedia(chatId: chatId, kind: "file", data: d, ext: ext, contentType: "application/pdf",
+                                                            meta: ["name": name, "size": d.count])
+                                        },
                                         onAction: { a in
                                             switch a {
                                             case "camera": showCamera = true

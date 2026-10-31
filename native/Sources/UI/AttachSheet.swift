@@ -93,6 +93,9 @@ struct AttachSheet: View {
     var onFile: (URL) -> Void
     /// "camera" · "note" · "lumens"
     var onAction: (String) -> Void
+    /// отправка готового сообщения: (вид, текст, ссылка на файл, meta)
+    var onPost: (String, String?, String?, JSON) -> Void = { _, _, _, _ in }
+    var onData: (Data, String, String) -> Void = { _, _, _ in }
 
     @StateObject private var gal = GalleryModel()
     @State private var picked: [String] = []
@@ -100,6 +103,8 @@ struct AttachSheet: View {
     @State private var sending = false
     @State private var importFile = false
     @State private var importAudio = false
+    @State private var tab = "Галерея"
+    @State private var scanning = false
     @FocusState private var capFocus: Bool
 
     private let maxPick = 10
@@ -115,7 +120,7 @@ struct AttachSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                Text(picked.isEmpty ? "Недавние" : "Выбрано: \(picked.count)").font(.system(size: 19, weight: .bold)).foregroundColor(Theme.text)
+                Text(picked.isEmpty ? (tab == "Галерея" ? "Недавние" : tab == "Контакт" ? "Контакты" : tab) : "Выбрано: \(picked.count)").font(.system(size: 19, weight: .bold)).foregroundColor(Theme.text)
                 HStack {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text)
@@ -126,7 +131,21 @@ struct AttachSheet: View {
             }
             .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 8)
 
-            if gal.status == .denied || gal.status == .restricted {
+            if tab == "Файл" {
+                FilesPanel(audio: false, onGallery: { tab = "Галерея" }, onPickFile: { importFile = true }, onScan: { scanning = true },
+                           onResend: { resend($0) })
+            } else if tab == "Звук" {
+                FilesPanel(audio: true, onGallery: { tab = "Галерея" }, onPickFile: { importAudio = true }, onScan: {},
+                           onResend: { resend($0) })
+            } else if tab == "Геопозиция" {
+                LocationPanel(onPick: { t, la, lo in
+                    onPost("text", SpecialMsg.locationBody(title: t, lat: la, lng: lo), nil, [:]); dismiss()
+                }, onSoon: { model.say($0 + ": в разработке") })
+            } else if tab == "Контакт" {
+                ContactsPanel(onPick: { p in
+                    onPost("text", SpecialMsg.contactBody(name: model.aliases[p.id] ?? p.name, id: p.id), nil, [:]); dismiss()
+                })
+            } else if gal.status == .denied || gal.status == .restricted {
                 VStack(spacing: 12) {
                     Image(systemName: "photo.on.rectangle.angled").font(.system(size: 44)).foregroundColor(Theme.muted)
                     Text("Нет доступа к фото").font(.headline)
@@ -151,6 +170,12 @@ struct AttachSheet: View {
         .task { await gal.load() }
         .presentationDetents([.fraction(0.72), .large])
         .presentationDragIndicator(.visible)
+        .fullScreenCover(isPresented: $scanning) {
+            DocScanner { d in
+                scanning = false
+                if let d { onData(d, "pdf", "Скан \(Fmt.day(Date())).pdf"); dismiss() }
+            }.ignoresSafeArea()
+        }
         .fileImporter(isPresented: $importFile, allowedContentTypes: [.item], allowsMultipleSelection: false) { r in
             if case .success(let urls) = r, let u = urls.first { onFile(u); dismiss() }
         }
@@ -199,7 +224,7 @@ struct AttachSheet: View {
     // MARK: низ: вкладки или подпись + отправка
 
     @ViewBuilder private var bottomBar: some View {
-        if picked.isEmpty {
+        if picked.isEmpty || tab != "Галерея" {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
                     ForEach(tabs, id: \.0) { t in
@@ -208,9 +233,9 @@ struct AttachSheet: View {
                                 Image(systemName: t.1).font(.system(size: 26)).frame(height: 32)
                                 Text(t.0).font(.system(size: 13, weight: .medium)).lineLimit(1)
                             }
-                            .foregroundColor(t.0 == "Галерея" ? Theme.a1 : Theme.text)
+                            .foregroundColor(t.0 == tab ? Theme.a1 : Theme.text)
                             .frame(width: 84, height: 62)
-                            .background(Capsule().fill(t.0 == "Галерея" ? Theme.a1.opacity(0.14) : Color.clear))
+                            .background(Capsule().fill(t.0 == tab ? Theme.a1.opacity(0.14) : Color.clear))
                         }
                         .buttonStyle(BouncyButtonStyle())
                     }
@@ -248,14 +273,17 @@ struct AttachSheet: View {
 
     private func tap(_ t: String) {
         switch t {
-        case "Файл": importFile = true
-        case "Звук": importAudio = true
-        case "Геопозиция", "Опрос", "Контакт": model.say("\(t): в разработке")
+        case "Галерея", "Файл", "Звук", "Геопозиция", "Контакт": picked = []; tab = t
+        case "Опрос": model.say("Опрос: в разработке")
         case "Камера": close(); after { onAction("camera") }
         case "Кружок": close(); after { onAction("note") }
         case "Люмены": close(); after { onAction("lumens") }
         default: break
         }
+    }
+
+    private func resend(_ m: Message) {
+        onPost("file", nil, m.mediaURL, m.meta); dismiss()
     }
 
     private func close() { dismiss() }
