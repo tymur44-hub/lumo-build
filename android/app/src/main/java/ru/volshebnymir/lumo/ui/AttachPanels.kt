@@ -134,11 +134,12 @@ fun LocationPanel(onPick: (Double, Double) -> Unit) {
         val last: Location? = provs.mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }.maxByOrNull { it.time }
         if (last != null && System.currentTimeMillis() - last.time < 120_000) { busy = false; onPick(last.latitude, last.longitude); return }
         val prov = if (provs.contains(LocationManager.GPS_PROVIDER)) LocationManager.GPS_PROVIDER else provs.first()
-        androidx.core.location.LocationManagerCompat.getCurrentLocation(lm, prov, null, ContextCompat.getMainExecutor(ctx)) { loc ->
-            busy = false
-            val l = loc ?: last
-            if (l != null) onPick(l.latitude, l.longitude) else AppModel.say("Не удалось определить положение")
-        }
+        androidx.core.location.LocationManagerCompat.getCurrentLocation(lm, prov, null, ContextCompat.getMainExecutor(ctx),
+            androidx.core.util.Consumer<Location?> { loc ->
+                busy = false
+                val l = loc ?: last
+                if (l != null) onPick(l.latitude, l.longitude) else AppModel.say("Не удалось определить положение")
+            })
     }
 
     val perm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
