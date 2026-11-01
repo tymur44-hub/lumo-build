@@ -55,6 +55,8 @@ object Gifts {
     val catalog = mutableStateListOf<Gift>()
     val mine = mutableStateListOf<OwnedGift>()
     val of = mutableStateMapOf<String, List<OwnedGift>>()
+    /** Рисунки подарков с сервера (SVG): новые подарки появляются без обновления приложения */
+    val art = mutableStateMapOf<String, String>()
 
     private fun parse(a: JSONArray?, owner: String?) = a.objects().map {
         OwnedGift(it.optLong("id"), it.optString("gift_id"), it.optString("name"), it.optString("rarity"), it.optInt("serial"), it.optInt("supply"), it.str("from_user"), it.str("at"), owner)
@@ -64,6 +66,7 @@ object Gifts {
         val a = runCatching { Api.rpc("lm_gift_list") as? JSONArray }.getOrNull() ?: return
         val l = a.objects().map { Gift(it.optString("id"), it.optString("name"), it.optString("rarity"), it.optInt("price"), it.optInt("supply"), it.optInt("sold")) }
         catalog.clear(); catalog.addAll(l)
+        runCatching { (Api.rpc("lm_gift_art") as? org.json.JSONObject)?.let { o -> o.keys().forEach { k -> val v = o.optString(k); if (v.contains("<svg")) art[k] = v } } }
         loadUser(null)
     }
 
@@ -82,17 +85,36 @@ object Gifts {
     }
 }
 
+/** Рисунок подарка из SVG, пришедшего с сервера */
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun GiftSvg(svg: String, modifier: Modifier = Modifier) {
+    AndroidView(factory = { c ->
+        WebView(c).apply {
+            setBackgroundColor(0)
+            isVerticalScrollBarEnabled = false; isHorizontalScrollBarEnabled = false; isClickable = false
+            loadDataWithBaseURL(null, "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}svg{width:100%;height:100%;display:block}</style></head><body>" + svg + "</body></html>", "text/html", "utf-8", null)
+        }
+    }, modifier = modifier)
+}
+
 @Composable
 fun GiftThumb(id: String, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     val bmp = remember(id) { runCatching { ctx.assets.open("gifts/$id.png").use { BitmapFactory.decodeStream(it) }?.asImageBitmap() }.getOrNull() }
+    val srv = Gifts.art[id]
     if (bmp != null) Image(bmp, null, modifier.clip(RoundedCornerShape(20.dp)), contentScale = ContentScale.Crop)
+    else if (srv != null) GiftSvg(srv, modifier.clip(RoundedCornerShape(20.dp)))
     else Box(modifier.clip(RoundedCornerShape(20.dp)).background(Color.Gray.copy(alpha = 0.3f)))
 }
 
 /** Анимированный подарок: заранее отрисованная зацикленная WebP-анимация (на Android 9+), иначе статичная картинка */
 @Composable
 fun GiftAnimated(id: String, modifier: Modifier = Modifier) {
+    val ctx0 = LocalContext.current
+    val hasBundled = remember(id) { runCatching { ctx0.assets.open("gifts/$id.webp").close(); true }.getOrDefault(false) }
+    val srv = Gifts.art[id]
+    if (!hasBundled && srv != null) { GiftSvg(srv, modifier.clip(RoundedCornerShape(26.dp))); return }
     if (android.os.Build.VERSION.SDK_INT < 28) { GiftThumb(id, modifier); return }
     Box(modifier.clip(RoundedCornerShape(26.dp))) {
         GiftThumb(id, Modifier.fillMaxSize())

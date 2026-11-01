@@ -19,6 +19,8 @@ final class GiftStore: ObservableObject {
     @Published var catalog: [Gift] = []
     @Published var mine: [OwnedGift] = []
     @Published var of: [String: [OwnedGift]] = [:]
+    /// Рисунки подарков с сервера (SVG): новые подарки появляются без обновления приложения
+    @Published var art: [String: String] = [:]
 
     private func parse(_ a: [JSON], owner: String?) -> [OwnedGift] {
         a.map { OwnedGift(id: $0.int("id") ?? 0, giftId: $0.str("gift_id") ?? "", name: $0.str("name") ?? "", rarity: $0.str("rarity") ?? "",
@@ -28,6 +30,11 @@ final class GiftStore: ObservableObject {
     func load() async {
         guard let a = (try? await API.shared.rpc("lm_gift_list")) as? [JSON] else { return }
         catalog = a.map { Gift(id: $0.str("id") ?? "", name: $0.str("name") ?? "", rarity: $0.str("rarity") ?? "", price: $0.int("price") ?? 0, supply: $0.int("supply") ?? 0, sold: $0.int("sold") ?? 0) }
+        if let o = (try? await API.shared.rpc("lm_gift_art")) as? JSON {
+            var m: [String: String] = [:]
+            for (k, v) in o { if let sv = v as? String, sv.contains("<svg") { m[k] = sv } }
+            art = m
+        }
         await loadUser(nil)
     }
 
@@ -52,10 +59,13 @@ final class GiftStore: ObservableObject {
 
 struct GiftThumb: View {
     let id: String
+    @ObservedObject private var store = GiftStore.shared
     var body: some View {
         Group {
             if let u = Bundle.main.url(forResource: "gift_" + id, withExtension: "png"), let img = UIImage(contentsOfFile: u.path) {
                 Image(uiImage: img).resizable().scaledToFill()
+            } else if store.art[id] != nil {
+                GiftWebView(id: id)
             } else { Color.gray.opacity(0.3) }
         }
         .aspectRatio(1, contentMode: .fit)
@@ -71,6 +81,7 @@ struct GiftWebView: UIViewRepresentable {
         w.scrollView.isScrollEnabled = false; w.isUserInteractionEnabled = false
         var svg = ""
         if let u = Bundle.main.url(forResource: "gift_" + id, withExtension: "svg"), let s = try? String(contentsOf: u, encoding: .utf8) { svg = s }
+        else if let s = GiftStore.shared.art[id] { svg = s }
         let html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}svg{width:100%;height:100%;display:block}</style></head><body>\(svg)</body></html>"
         w.loadHTMLString(html, baseURL: nil)
         return w
