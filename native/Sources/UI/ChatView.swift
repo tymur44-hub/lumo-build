@@ -133,8 +133,10 @@ struct ChatView: View {
         }
         .background(ChatWallpaper(index: look.wall, custom: model.chatWalls[chatId]).ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
-            if selecting { selectionBar } else {
-                VStack(spacing: 0) {
+            // панель выбора лежит поверх поля ввода (оно остаётся на месте и невидимо),
+            // чтобы высота снизу не менялась и лента не дёргалась
+            VStack(spacing: 0) {
+                Group {
                     if isBotChat, let pid = chat?.peerId, let mb = model.botMenus[pid], mb.count == 2 {
                         HStack {
                             Button { model.miniApp = MiniAppReq(botId: pid, url: nil) } label: {
@@ -151,6 +153,9 @@ struct ChatView: View {
                     ComposerView(chatId: chatId, text: $text, reply: $reply, editing: $editing, blockedText: blockedText, onSendMenu: { sendMenu = true })
                 }
             }
+            .opacity(selecting ? 0 : 1)
+            .allowsHitTesting(!selecting)
+            .overlay(alignment: .bottom) { if selecting { selectionBar } }
         }
         .overlay {
             if confirmDelete { deleteOverlay }
@@ -472,7 +477,8 @@ struct ChatView: View {
         }
         a.append(MsgAction(title: "Удалить", icon: "trash", destructive: true) { askDelete([m]) })
         a.append(MsgAction(title: "Выбрать", icon: "checkmark.circle", separated: true) {
-            withAnimation { selecting = true; selected = [m.id] }
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            withAnimation(.easeOut(duration: 0.18)) { selecting = true; selected = [m.id] }
         })
         return a
     }

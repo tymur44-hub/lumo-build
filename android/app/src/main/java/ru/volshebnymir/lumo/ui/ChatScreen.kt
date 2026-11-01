@@ -661,7 +661,7 @@ private fun MessageRow(
         verticalAlignment = Alignment.Bottom,
     ) {
         if (selecting) {
-            Box(Modifier.padding(end = 6.dp, bottom = 6.dp).size(24.dp).clip(CircleShape).background(if (isSelected) p.accent else SolidColor(p.muted.copy(alpha = 0.3f))), contentAlignment = Alignment.Center) {
+            Box(Modifier.width(0.dp).wrapContentWidth(Alignment.Start, unbounded = true).padding(bottom = 6.dp).size(24.dp).clip(CircleShape).background(if (isSelected) p.accent else SolidColor(p.muted.copy(alpha = 0.3f))), contentAlignment = Alignment.Center) {
                 if (isSelected) Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
             }
         }
@@ -672,7 +672,7 @@ private fun MessageRow(
             }
             Spacer(Modifier.width(6.dp))
         }
-        Box(Modifier.offset { IntOffset(dx.value.roundToInt(), 0) }.widthIn(max = 310.dp)) {
+        Box(Modifier.offset { IntOffset(dx.value.roundToInt() + (if (selecting && !mine) 32.dp.roundToPx() else 0), 0) }.widthIn(max = 310.dp)) {
             Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
                 Bubble(m, chat, mine, group && !mine && first, last, onReplyTap, album, onOpen)
                 Reactions(m, mine)

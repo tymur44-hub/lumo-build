@@ -113,14 +113,6 @@ struct MessageRow: View {
                 .padding(.vertical, 4)
         } else {
             HStack(alignment: .bottom, spacing: 6) {
-                if selecting {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 23))
-                        .foregroundStyle(isSelected ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.muted))
-                        .frame(width: 28)
-                        .padding(.bottom, 6)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                }
                 if mine { Spacer(minLength: 44) }
                 if isGroup && !mine {
                     if last {
@@ -156,7 +148,20 @@ struct MessageRow: View {
                 }
                 if !mine { Spacer(minLength: 44) }
             }
-            .offset(x: swipe)
+            // режим выбора не меняет размеры строк (иначе текст пересчитывается и всё мерцает):
+            // чужие сообщения просто сдвигаются вправо, а кружок рисуется поверх слева
+            .offset(x: swipe + (selecting && !mine ? 32 : 0))
+            .overlay(alignment: .leading) {
+                if selecting {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 23))
+                        .foregroundStyle(isSelected ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.muted))
+                        .frame(width: 28)
+                        .padding(.leading, 2).padding(.bottom, 6)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                        .transition(.opacity)
+                }
+            }
             .overlay(alignment: .trailing) {
                 if swipe < 0 {
                     Image(systemName: "arrowshape.turn.up.left.fill")
