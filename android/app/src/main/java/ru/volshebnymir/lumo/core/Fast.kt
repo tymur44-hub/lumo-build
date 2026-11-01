@@ -182,14 +182,79 @@ object Fast {
         return String(c.doFinal(ct), Charsets.UTF_8)
     }
 
+    // ---- несколько узлов, автовыбор по скорости ----
+    @Volatile var prefs: android.content.SharedPreferences? = null
+    private const val NK = "nodes_enc"
+
+    private fun cachedNodes(): List<JSONObject> = runCatching {
+        val b = prefs?.getString(NK, null) ?: return emptyList()
+        val raw = Base64.decode(b, Base64.DEFAULT)
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.DECRYPT_MODE, SecretKeySpec(key(), "AES"), GCMParameterSpec(128, raw.copyOfRange(0, 12)))
+        val a = org.json.JSONArray(String(c.doFinal(raw.copyOfRange(12, raw.size)), Charsets.UTF_8))
+        (0 until a.length()).map { a.getJSONObject(it) }
+    }.getOrDefault(emptyList())
+
+    private fun merged(base: String): String? {
+        val extra = cachedNodes()
+        if (extra.isEmpty()) return null
+        val c = JSONObject(base)
+        val outs = c.getJSONArray("outbounds")
+        val all = org.json.JSONArray()
+        val rest = org.json.JSONArray()
+        var n = 0
+        for (i in 0 until outs.length()) {
+            val o = outs.getJSONObject(i)
+            if (o.optString("tag") == "proxy") { o.put("tag", "proxy-" + n++); all.put(o) } else rest.put(o)
+        }
+        for (o in extra) { o.put("tag", "proxy-" + n++); all.put(o) }
+        for (i in 0 until rest.length()) all.put(rest.get(i))
+        c.put("outbounds", all)
+        val routing = c.getJSONObject("routing")
+        val rules = routing.optJSONArray("rules") ?: org.json.JSONArray()
+        for (i in 0 until rules.length()) {
+            val r = rules.getJSONObject(i)
+            if (r.optString("outboundTag") == "proxy") { r.remove("outboundTag"); r.put("balancerTag", "bal") }
+        }
+        rules.put(JSONObject().put("type", "field").put("network", "tcp,udp").put("balancerTag", "bal"))
+        routing.put("rules", rules)
+        routing.put("balancers", org.json.JSONArray().put(JSONObject().put("tag", "bal")
+            .put("selector", org.json.JSONArray().put("proxy-")).put("strategy", JSONObject().put("type", "leastPing"))))
+        c.put("observatory", JSONObject().put("subjectSelector", org.json.JSONArray().put("proxy-"))
+            .put("probeUrl", "https://www.gstatic.com/generate_204").put("probeInterval", "30s").put("enableConcurrency", true))
+        return c.toString()
+    }
+
+    /** Скачать актуальный список узлов (нужен вход) и сохранить зашифрованным. Применится при следующем запуске. */
+    suspend fun refreshNodes() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val tok = Api.token()
+            val u = java.net.URL(Net.base + "/functions/v1/lumo-nodes")
+            val h = u.openConnection() as java.net.HttpURLConnection
+            h.connectTimeout = 15000; h.readTimeout = 15000
+            h.setRequestProperty("apikey", Config.ANON); h.setRequestProperty("Authorization", "Bearer $tok")
+            if (h.responseCode != 200) return@runCatching
+            val a = JSONObject(h.inputStream.bufferedReader().readText()).getJSONArray("nodes")
+            val iv = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
+            val c = Cipher.getInstance("AES/GCM/NoPadding")
+            c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key(), "AES"), GCMParameterSpec(128, iv))
+            val ct = c.doFinal(a.toString().toByteArray(Charsets.UTF_8))
+            prefs?.edit()?.putString(NK, Base64.encodeToString(iv + ct, Base64.NO_WRAP))?.apply()
+        }
+        Unit
+    }
+
     @Synchronized
     fun ensure(): Boolean {
         if (running) return true
         return try {
             var ok = false
-            // сначала новый набор параметров, при неудаче — прежний
-            for (b in arrayOf(bd, bd0)) {
-                val cfg = conf(b)
+            // сначала набор из нескольких узлов с автовыбором по скорости, затем встроенные
+            val cands = ArrayList<String>()
+            runCatching { merged(conf(bd)) }.getOrNull()?.let { cands.add(it) }
+            cands.add(conf(bd))
+            runCatching { conf(bd0) }.getOrNull()?.let { cands.add(it) }
+            for (cfg in cands) {
                 // версия интерфейса ядра зависит от сборки — подбираем
                 for (v in intArrayOf(1, 2, 3, 4, 5, 6)) {
                     val req = JSONObject().put("apiVersion", v).put("method", "runXrayFromJson")

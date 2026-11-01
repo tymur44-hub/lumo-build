@@ -183,6 +183,62 @@ enum Fast {
         return String(data: dec, encoding: .utf8)
     }
 
+    // MARK: несколько узлов, автовыбор по скорости
+
+    private static let nodesKey = "lm_nodes_enc"
+
+    private static func cachedNodes() -> [[String: Any]] {
+        guard let b = UserDefaults.standard.string(forKey: nodesKey), let raw = Data(base64Encoded: b),
+              let box = try? AES.GCM.SealedBox(combined: raw),
+              let dec = try? AES.GCM.open(box, using: SymmetricKey(data: key())),
+              let arr = try? JSONSerialization.jsonObject(with: dec) as? [[String: Any]] else { return [] }
+        return arr
+    }
+
+    /// Собирает общий конфиг: все узлы + проверка скорости + выбор самого быстрого
+    private static func merged(_ base: String) -> String? {
+        let extra = cachedNodes()
+        guard !extra.isEmpty,
+              var c = (try? JSONSerialization.jsonObject(with: Data(base.utf8))) as? [String: Any],
+              var outs = c["outbounds"] as? [[String: Any]],
+              var routing = c["routing"] as? [String: Any] else { return nil }
+        var all: [[String: Any]] = []
+        var n = 0
+        for var o in outs where (o["tag"] as? String) == "proxy" { o["tag"] = "proxy-\(n)"; n += 1; all.append(o) }
+        for var o in extra { o["tag"] = "proxy-\(n)"; n += 1; all.append(o) }
+        outs.removeAll { ($0["tag"] as? String) == "proxy" }
+        c["outbounds"] = all + outs
+        var rules = (routing["rules"] as? [[String: Any]]) ?? []
+        for i in rules.indices where (rules[i]["outboundTag"] as? String) == "proxy" {
+            rules[i].removeValue(forKey: "outboundTag"); rules[i]["balancerTag"] = "bal"
+        }
+        rules.append(["type": "field", "network": "tcp,udp", "balancerTag": "bal"])
+        routing["rules"] = rules
+        routing["balancers"] = [["tag": "bal", "selector": ["proxy-"], "strategy": ["type": "leastPing"]]]
+        c["routing"] = routing
+        c["observatory"] = ["subjectSelector": ["proxy-"], "probeUrl": "https://www.gstatic.com/generate_204",
+                            "probeInterval": "30s", "enableConcurrency": true]
+        guard let d = try? JSONSerialization.data(withJSONObject: c) else { return nil }
+        return String(data: d, encoding: .utf8)
+    }
+
+    /// Скачать актуальный список узлов (нужен вход в аккаунт) и сохранить зашифрованным. Применится при следующем запуске.
+    static func refreshNodes() async {
+        guard let tok = try? await API.shared.validToken(),
+              let url = URL(string: Net.base + "/functions/v1/lumo-nodes") else { return }
+        var r = URLRequest(url: url, timeoutInterval: 15)
+        r.setValue(Config.anonKey, forHTTPHeaderField: "apikey")
+        r.setValue("Bearer " + tok, forHTTPHeaderField: "Authorization")
+        guard let (d, resp) = try? await URLSession.shared.data(for: r),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let nodes = j["nodes"] as? [[String: Any]],
+              let raw = try? JSONSerialization.data(withJSONObject: nodes),
+              let box = try? AES.GCM.seal(raw, using: SymmetricKey(data: key())),
+              let comb = box.combined else { return }
+        UserDefaults.standard.set(comb.base64EncodedString(), forKey: nodesKey)
+    }
+
     private static func call(_ request: String) -> String {
         guard let cin = strdup(request) else { return "" }
         defer { free(cin) }
@@ -196,11 +252,14 @@ enum Fast {
         lock.lock(); defer { lock.unlock() }
         if _running { return true }
         var ok = false
-        // сначала новый набор параметров, при неудаче — прежний
-        for b in [bd, bd0] {
-            guard let cfg = conf(b),
-                  let payload = try? JSONSerialization.data(withJSONObject: ["configJSON": cfg]),
-                  let pStr = String(data: payload, encoding: .utf8) else { lastMsg = "конфиг не расшифрован"; continue }
+        // сначала набор из нескольких узлов с автовыбором по скорости, затем встроенные
+        var cands: [String] = []
+        if let b0 = conf(bd), let m = merged(b0) { cands.append(m) }
+        if let b0 = conf(bd) { cands.append(b0) }
+        if let b0 = conf(bd0) { cands.append(b0) }
+        for cfg in cands {
+            guard let payload = try? JSONSerialization.data(withJSONObject: ["configJSON": cfg]),
+                  let pStr = String(data: payload, encoding: .utf8) else { lastMsg = "конфиг не собран"; continue }
             // версия интерфейса ядра зависит от сборки — подбираем
             for v in [1, 2, 3, 4, 5, 6] {
                 let req = "{\"apiVersion\":\(v),\"method\":\"runXrayFromJson\",\"payload\":" + pStr + "}"

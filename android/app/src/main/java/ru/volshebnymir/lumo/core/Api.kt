@@ -56,6 +56,7 @@ object Net {
 
     fun init(c: Context) {
         prefs = c.getSharedPreferences("lumo_net", Context.MODE_PRIVATE)
+        Fast.prefs = prefs
         base = prefs.getString("base", Config.SUPABASE) ?: Config.SUPABASE
         // в прошлый раз работал только локальный узел — поднимаем его сразу, не дожидаясь отказов
         if (prefs.getString("mode", "") == "TUNNEL") {
