@@ -219,35 +219,6 @@ struct VideoNoteView: View {
     }
 }
 
-struct VideoScreen: View {
-    let url: URL
-    @Environment(\.dismiss) private var dismiss
-    @State private var player: AVPlayer?
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            Color.black.ignoresSafeArea()
-            if let p = player { VideoPlayer(player: p).ignoresSafeArea() }
-            Button { dismiss() } label: {
-                Image(systemName: "xmark").font(.headline).foregroundColor(.white)
-                    .frame(width: 42, height: 42).background(Circle().fill(Color.white.opacity(0.15)))
-            }
-            .padding(16)
-        }
-        .onAppear {
-            AudioPlayer.shared.stop()
-            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [])
-            let p = AVPlayer(url: url.px)
-            player = p
-            p.play()
-        }
-        .onDisappear {
-            player?.pause()
-            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
-        }
-    }
-}
-
 /// Сохранение фото и видео прямо в галерею
 @MainActor
 enum Gallery {

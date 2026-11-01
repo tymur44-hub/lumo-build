@@ -370,20 +370,18 @@ fun MediaViewer(m: Message, onClose: () -> Unit) {
     val src = m.localPath ?: m.mediaUrl
     Box(Modifier.fillMaxSize().background(Color.Black).clickable(enabled = false) {}) {
         if (m.kind == "video" && src != null) {
-            val player = remember { ExoPlayer.Builder(ctx).build().apply { setMediaItem(MediaItem.fromUri(ru.volshebnymir.lumo.core.Net.px(src) ?: src)); prepare(); playWhenReady = true } }
-            DisposableEffect(Unit) { onDispose { player.release() } }
-            AndroidView({ PlayerView(it).apply { this.player = player } }, Modifier.fillMaxSize())
+            LumoVideoPlayer(ru.volshebnymir.lumo.core.Net.px(src) ?: src, onClose, onSave = { MediaUtil.save(ctx, m.mediaUrl, m.kind) })
         } else {
             AsyncImage(src, null, Modifier.fillMaxSize().transformable(tr)
                 .pointerInput(Unit) { detectTapGestures(onDoubleTap = { if (scale > 1f) { scale = 1f; off = Offset.Zero } else scale = 2.5f }) }
                 .graphicsLayer { scaleX = scale; scaleY = scale; translationX = off.x; translationY = off.y },
                 contentScale = ContentScale.Fit, alignment = Alignment.Center)
         }
-        Row(Modifier.statusBarsPadding().fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        if (m.kind != "video") Row(Modifier.statusBarsPadding().fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             RoundIcon(Icons.Filled.Close, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { onClose() }
             RoundIcon(Icons.Filled.Download, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { MediaUtil.save(ctx, m.mediaUrl, m.kind) }
         }
-        if (!m.body.isNullOrEmpty()) Text(m.body, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+        if (m.kind != "video" && !m.body.isNullOrEmpty()) Text(m.body, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium,
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = 0.5f)).padding(18.dp).padding(bottom = 24.dp))
     }
 }
