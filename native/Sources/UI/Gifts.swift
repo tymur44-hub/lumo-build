@@ -3,7 +3,12 @@ import WebKit
 
 struct Gift: Identifiable { let id: String; let name: String; let rarity: String; let price: Int; let supply: Int; let sold: Int
     var left: Int { max(0, supply - sold) } }
-struct OwnedGift: Identifiable { let id: Int; let giftId: String; let name: String; let rarity: String; let serial: Int; let supply: Int; let from: String?; var at: String? = nil; var to: String? = nil }
+struct OwnedGift: Identifiable { let id: Int; let giftId: String; let name: String; let rarity: String; let serial: Int; let supply: Int; let from: String?; var at: String? = nil; var to: String? = nil; var hidden: Bool = false; var price: Int? = nil }
+
+func isoUtc(_ d: Date) -> String {
+    let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "UTC"); f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+    return f.string(from: d)
+}
 struct GiftTarget: Identifiable { let id: String }
 
 func rarityName(_ r: String) -> String {
@@ -24,7 +29,8 @@ final class GiftStore: ObservableObject {
 
     private func parse(_ a: [JSON], owner: String?) -> [OwnedGift] {
         a.map { OwnedGift(id: $0.int("id") ?? 0, giftId: $0.str("gift_id") ?? "", name: $0.str("name") ?? "", rarity: $0.str("rarity") ?? "",
-                          serial: $0.int("serial") ?? 0, supply: $0.int("supply") ?? 0, from: $0.str("from_user"), at: $0.str("at"), to: owner) }
+                          serial: $0.int("serial") ?? 0, supply: $0.int("supply") ?? 0, from: $0.str("from_user"), at: $0.str("at"), to: owner,
+                          hidden: $0.bool("hidden"), price: $0.int("price")) }
     }
 
     func load() async {
@@ -54,6 +60,18 @@ final class GiftStore: ObservableObject {
         await load()
         if let t = to { await loadUser(t) }
         return r?.int("serial") ?? 0
+    }
+
+    func hide(_ id: Int, _ hidden: Bool) async throws {
+        _ = try await API.shared.rpc("lm_gift_hide", ["p_owned_id": id, "p_hidden": hidden])
+        await loadUser(nil)
+    }
+
+    func sell(_ id: Int) async throws -> Int {
+        let r = try await API.shared.rpc("lm_gift_sell", ["p_owned_id": id]) as? JSON
+        await Lumens.shared.load()
+        await loadUser(nil)
+        return r?.int("refund") ?? 0
     }
 }
 
@@ -194,12 +212,16 @@ struct GiftDetailSheet: View {
 struct OwnedGiftSheet: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
-    let o: OwnedGift
+    @State var o: OwnedGift
     @ObservedObject private var store = GiftStore.shared
-    private var price: Int? { store.catalog.first { $0.id == o.giftId }?.price }
+    @State private var busy = false
+    @State private var confirmSell = false
+    private var price: Int? { o.price ?? store.catalog.first { $0.id == o.giftId }?.price }
+    private var refund: Int { max(1, Int(Double(price ?? 0) * 0.5)) }
     private var toId: String? { o.to ?? model.myId }
     private var fromId: String? { o.from ?? toId }
     private var isMine: Bool { toId == model.myId }
+    private var canManage: Bool { o.id > 0 && isMine }
     private var titleText: String { isMine ? (fromId == model.myId ? "Ваш подарок" : "Подарок Вам") : "Подарок для " + model.displayName(toId) }
     private var dateText: String {
         guard let s = o.at else { return "—" }
@@ -250,6 +272,23 @@ struct OwnedGiftSheet: View {
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line, lineWidth: 1))
             .padding(.top, 6)
+            if o.hidden { Text("Скрыт из профиля").font(.system(size: 13)).foregroundColor(Theme.muted).padding(.top, 4) }
+            if canManage {
+                HStack(spacing: 10) {
+                    Button {
+                        guard !busy else { return }; busy = true
+                        Task { do { try await store.hide(o.id, !o.hidden); o.hidden.toggle() } catch { model.say(error.localizedDescription) }; busy = false }
+                    } label: {
+                        Text(o.hidden ? "Показать" : "Скрыть").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.text)
+                            .frame(maxWidth: .infinity).frame(height: 48).background(Theme.panel2, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                    Button { if !busy { confirmSell = true } } label: {
+                        Text("Обменять").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.danger)
+                            .frame(maxWidth: .infinity).frame(height: 48).background(Theme.panel2, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                }
+                .padding(.top, 10)
+            }
             Button { dismiss() } label: {
                 Text("OK").font(.system(size: 17, weight: .black)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 54)
@@ -262,6 +301,15 @@ struct OwnedGiftSheet: View {
         .background(Theme.panel.ignoresSafeArea())
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .alert("Обменять подарок?", isPresented: $confirmSell) {
+            Button("Отмена", role: .cancel) {}
+            Button("Обменять", role: .destructive) {
+                busy = true
+                Task { do { let r = try await store.sell(o.id); model.say("Получено: \(r) \(lumenWord(r))"); dismiss() } catch { model.say(error.localizedDescription); busy = false } }
+            }
+        } message: {
+            Text("«\(o.name)» пропадёт из профиля. Вы получите \(refund) \(lumenWord(refund)) — это меньше цены подарка.")
+        }
     }
 }
 
@@ -275,8 +323,10 @@ struct OwnedGrid: View {
                     VStack(spacing: 4) {
                         GiftThumb(id: o.giftId)
                         Text("№\(o.serial)").font(.system(size: 12, weight: .bold)).foregroundColor(rarityColor(o.rarity))
+                        if o.hidden { Text("Скрыт").font(.system(size: 10)).foregroundColor(Theme.muted) }
                     }
                     .padding(6).background(Theme.panel, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .opacity(o.hidden ? 0.5 : 1)
                 }.buttonStyle(BouncyButtonStyle())
             }
         }
@@ -535,7 +585,7 @@ struct GiftMessageCard: View {
                 Text("\(name) №\(serial) из \(supply)").font(.system(size: 14, weight: .bold)).foregroundColor(c).multilineTextAlignment(.center)
                 Text(mine ? "Подарок появится в профиле получателя." : "Подарок добавлен в ваш профиль.")
                     .font(.system(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
-                Button { open = OwnedGift(id: 0, giftId: gid, name: name, rarity: rarity, serial: serial, supply: supply, from: m.senderId, to: mine ? chat?.peerId : model.myId) } label: {
+                Button { open = OwnedGift(id: 0, giftId: gid, name: name, rarity: rarity, serial: serial, supply: supply, from: m.senderId, at: isoUtc(m.createdAt), to: mine ? chat?.peerId : model.myId, price: price) } label: {
                     Text("Посмотреть").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
                         .padding(.horizontal, 26).padding(.vertical, 10).background(Capsule().fill(c.opacity(0.3)))
                 }.padding(.top, 6)

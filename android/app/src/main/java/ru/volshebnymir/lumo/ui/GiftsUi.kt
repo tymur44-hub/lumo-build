@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -46,7 +47,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 data class Gift(val id: String, val name: String, val rarity: String, val price: Int, val supply: Int, val sold: Int) {
     val left get() = (supply - sold).coerceAtLeast(0)
 }
-data class OwnedGift(val id: Long, val giftId: String, val name: String, val rarity: String, val serial: Int, val supply: Int, val from: String?, val at: String? = null, val to: String? = null)
+data class OwnedGift(val id: Long, val giftId: String, val name: String, val rarity: String, val serial: Int, val supply: Int, val from: String?, val at: String? = null, val to: String? = null, val hidden: Boolean = false, val price: Int? = null)
+
+fun isoUtc(d: java.util.Date): String = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(d)
 
 fun rarityName(r: String) = when (r) { "rare" -> "Редкий"; "epic" -> "Эпический"; "legendary" -> "Легендарный"; "mythic" -> "Мифический"; else -> r }
 fun rarityColor(r: String) = when (r) { "rare" -> Color(0xFF22C7E0); "epic" -> Color(0xFFFF8A3D); "legendary" -> Color(0xFFB069FF); "mythic" -> Color(0xFFFFC247); else -> Color.Gray }
@@ -59,7 +62,7 @@ object Gifts {
     val art = mutableStateMapOf<String, String>()
 
     private fun parse(a: JSONArray?, owner: String?) = a.objects().map {
-        OwnedGift(it.optLong("id"), it.optString("gift_id"), it.optString("name"), it.optString("rarity"), it.optInt("serial"), it.optInt("supply"), it.str("from_user"), it.str("at"), owner)
+        OwnedGift(it.optLong("id"), it.optString("gift_id"), it.optString("name"), it.optString("rarity"), it.optInt("serial"), it.optInt("supply"), it.str("from_user"), it.str("at"), owner, it.optBoolean("hidden"), if (it.has("price")) it.optInt("price") else null)
     }
 
     suspend fun load() {
@@ -82,6 +85,17 @@ object Gifts {
         Lumens.load(); load()
         if (to != null) loadUser(to)
         return (r as? org.json.JSONObject)?.optInt("serial")?.toString() ?: ""
+    }
+
+    suspend fun hide(id: Long, hidden: Boolean) {
+        Api.rpc("lm_gift_hide", jsonOf("p_owned_id" to id, "p_hidden" to hidden))
+        loadUser(null)
+    }
+
+    suspend fun sell(id: Long): Int {
+        val r = Api.rpc("lm_gift_sell", jsonOf("p_owned_id" to id)) as? org.json.JSONObject
+        Lumens.load(); loadUser(null)
+        return r?.optInt("refund") ?: 0
     }
 }
 
@@ -207,13 +221,19 @@ fun GiftDetailDialog(g: Gift, to: String?, onClose: () -> Unit) {
 
 /** Просмотр полученного подарка: нижняя шторка с данными */
 @Composable
-fun OwnedGiftDialog(o: OwnedGift, onClose: () -> Unit) {
+fun OwnedGiftDialog(o0: OwnedGift, onClose: () -> Unit) {
     val p = P
+    val scope = rememberCoroutineScope()
+    var o by remember { mutableStateOf(o0) }
+    var busy by remember { mutableStateOf(false) }
+    var confirmSell by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (Gifts.catalog.isEmpty()) Gifts.load() }
-    val price = Gifts.catalog.firstOrNull { it.id == o.giftId }?.price
+    val price = o.price ?: Gifts.catalog.firstOrNull { it.id == o.giftId }?.price
+    val refund = ((price ?: 0) * 0.5).toInt().coerceAtLeast(1)
     val me = AppModel.myId
     val toId = o.to ?: me
     val fromId = o.from ?: toId
+    val canManage = o.id > 0 && toId == me
     val title = if (toId == me) (if (fromId == me) "Ваш подарок" else "Подарок Вам") else "Подарок для " + AppModel.displayName(toId)
     val sub = if (toId == me) "Подарок хранится в вашем профиле." else "Подарок хранится в профиле получателя."
     val date = remember(o.at) {
@@ -256,13 +276,32 @@ fun OwnedGiftDialog(o: OwnedGift, onClose: () -> Unit) {
                         else Text("—", color = p.text, fontSize = 16.sp)
                     }
                 }
+                if (o.hidden) { Spacer(Modifier.height(6.dp)); Text("Скрыт из профиля", color = p.muted, fontSize = 13.sp) }
                 Spacer(Modifier.height(14.dp))
+                if (canManage) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(18.dp)).background(p.panel2).bouncy {
+                            if (busy) return@bouncy; busy = true
+                            scope.launch { try { Gifts.hide(o.id, !o.hidden); o = o.copy(hidden = !o.hidden) } catch (e: Exception) { AppModel.say(e.message ?: "Ошибка") }; busy = false }
+                        }, contentAlignment = Alignment.Center) {
+                            Text(if (o.hidden) "Показать" else "Скрыть", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        }
+                        Box(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(18.dp)).background(p.panel2).bouncy { if (!busy) confirmSell = true }, contentAlignment = Alignment.Center) {
+                            Text("Обменять", color = p.danger, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
                 Box(Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(20.dp)).background(p.accent).bouncy { onClose() }, contentAlignment = Alignment.Center) {
                     Text("OK", color = Color.White, fontWeight = FontWeight.Black, fontSize = 17.sp)
                 }
             }
         }
     }
+    if (confirmSell) AlertDialog(onDismissRequest = { confirmSell = false }, title = { Text("Обменять подарок?") },
+        text = { Text("«${o.name}» пропадёт из профиля. Вы получите $refund ${lumenWord(refund.toLong())} — это меньше цены подарка.") },
+        confirmButton = { TextButton({ confirmSell = false; busy = true; scope.launch { try { val r = Gifts.sell(o.id); AppModel.say("Получено: $r ${lumenWord(r.toLong())}"); onClose() } catch (e: Exception) { AppModel.say(e.message ?: "Ошибка"); busy = false } } }) { Text("Обменять", color = p.danger) } },
+        dismissButton = { TextButton({ confirmSell = false }) { Text("Отмена") } })
 }
 
 @Composable
@@ -280,9 +319,10 @@ fun OwnedGrid(list: List<OwnedGift>, onTap: (OwnedGift) -> Unit) {
     list.chunked(3).forEach { row ->
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             row.forEach { o ->
-                Column(Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(p.panel).bouncy { onTap(o) }.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(p.panel).bouncy { onTap(o) }.padding(6.dp).let { if (o.hidden) it.alpha(0.5f) else it }, horizontalAlignment = Alignment.CenterHorizontally) {
                     GiftThumb(o.giftId, Modifier.fillMaxWidth().aspectRatio(1f))
                     Text("№${o.serial}", color = rarityColor(o.rarity), fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                    if (o.hidden) Text("Скрыт", color = p.muted, fontSize = 10.sp)
                 }
             }
             repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -464,7 +504,7 @@ fun GiftMessageCard(m: Message, chat: ChatItem?) {
     val price = m.meta.optInt("price")
     val c = rarityColor(rarity)
     val who = if (mine) "Вы отправили подарок: ${AppModel.displayName(chat?.peerId)}" else "${AppModel.displayName(m.senderId)} отправил(а) Вам подарок"
-    if (open) OwnedGiftDialog(OwnedGift(0, gid, name, rarity, serial, supply, m.senderId, null, if (mine) chat?.peerId else AppModel.myId)) { open = false }
+    if (open) OwnedGiftDialog(OwnedGift(0, gid, name, rarity, serial, supply, m.senderId, isoUtc(m.createdAt), if (mine) chat?.peerId else AppModel.myId, price = price)) { open = false }
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("$who стоимостью $price ${lumenWord(price.toLong())}", color = p.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 24.dp).clip(RoundedCornerShape(16.dp)).background(p.panel.copy(alpha = 0.85f)).padding(horizontal = 14.dp, vertical = 6.dp))
