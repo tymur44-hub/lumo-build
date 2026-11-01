@@ -225,6 +225,7 @@ struct PhoneAuthView: View {
     private func fail(_ j: JSON) {
         let c = j.str("error") ?? ""
         error = PhoneStore.message(c, j)
+        if ["sms_off", "sms_fail", "busy", "too_many", "server", "link"].contains(c) { store.authFailed = true }
         if c == "username_taken" || c == "bad_username" { UINotificationFeedbackGenerator().notificationOccurred(.error); return }
         if c == "bad_code" || c == "expired" || c == "locked" { UINotificationFeedbackGenerator().notificationOccurred(.error); code = "" }
         if c == "bad_tfa" { UINotificationFeedbackGenerator().notificationOccurred(.error); tfaPwd = "" }
@@ -243,7 +244,7 @@ struct PhoneAuthView: View {
                 code = ""; resend = 45; step = .code; focus = true
                 chan = j.str("channel") ?? "sms"; tgLink = j.str("link"); tgDirect = (j["direct"] as? Bool) == true
                 if chan == "telegram", !tgDirect, let l = tgLink, let u = URL(string: l) { openURL(u) }
-            } catch { self.error = "Нет соединения. Попробуйте ещё раз" }
+            } catch { self.error = "Нет соединения. Попробуйте ещё раз"; store.authFailed = true }
         }
     }
 

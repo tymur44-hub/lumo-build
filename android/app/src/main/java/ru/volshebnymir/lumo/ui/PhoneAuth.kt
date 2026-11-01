@@ -95,6 +95,7 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
     fun fail(j: JSONObject) {
         val c = j.str("error") ?: ""
         err = PhoneStore.message(c)
+        if (c in listOf("sms_off", "sms_fail", "busy", "too_many", "server", "link")) PhoneStore.authFailed = true
         if (c == "username_taken" || c == "bad_username") return
         if (c == "bad_code" || c == "expired" || c == "locked") code = ""
         if (c == "bad_tfa") tfaPwd = ""

@@ -23,6 +23,7 @@ object PhoneStore {
     var tfa by mutableStateOf(false)
     var hint by mutableStateOf("")
     var loaded by mutableStateOf(false)
+    var authFailed by mutableStateOf(false)   // вход по номеру не получился — показываем запасной вход
     var reminderShown by mutableStateOf(false)
     var skipUntil by mutableStateOf<String?>(null)
     val matched = mutableStateListOf<MatchedContact>()

@@ -22,6 +22,7 @@ final class PhoneStore: ObservableObject {
     @Published var tfa = false
     @Published var hint = ""
     @Published var loaded = false
+    @Published var authFailed = false   // вход по номеру не получился — показываем запасной вход
     @Published var matched: [MatchedContact] = []
     @Published var invites: [InviteContact] = []
     @Published var contactsState = "unknown"   // unknown | denied | ok

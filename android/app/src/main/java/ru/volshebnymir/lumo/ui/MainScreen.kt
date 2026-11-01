@@ -127,8 +127,9 @@ fun Root() {
             var legacy by remember { mutableStateOf(false) }
             if (legacy) LoginScreen { legacy = false } else {
                 PhoneAuthScreen(bind = false, required = true) {}
-                Box(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 12.dp), contentAlignment = Alignment.BottomCenter) {
-                    androidx.compose.material3.Text("Войти по логину и паролю", color = p.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy { legacy = true })
+                // до 6 ноября 2026 (по Москве) вход по паролю доступен всем, дальше — только после сбоя входа по номеру
+                if (System.currentTimeMillis() < 1793912400000L || PhoneStore.authFailed) Box(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 12.dp), contentAlignment = Alignment.BottomCenter) {
+                    androidx.compose.material3.Text("Войти по юзернейму и паролю", color = p.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy { legacy = true })
                 }
             }
             if (ru.volshebnymir.lumo.core.Accounts.list.isNotEmpty()) Box(Modifier.fillMaxWidth().statusBarsPadding().padding(10.dp)) {
