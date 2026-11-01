@@ -88,6 +88,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -124,13 +125,22 @@ fun Root() {
         var permsDone by remember { mutableStateOf(prefs.getBoolean("lm_perms_done", false)) }
         if (!permsDone) PermissionsScreen { prefs.edit().putBoolean("lm_perms_done", true).apply(); permsDone = true }
         else if (AppModel.loggedIn) MainScreen() else {
-            var legacy by remember { mutableStateOf(false) }
-            if (legacy) LoginScreen { legacy = false } else {
-                PhoneAuthScreen(bind = false, required = true) {}
-                // до 6 ноября 2026 (по Москве) вход по паролю доступен всем, дальше — только после сбоя входа по номеру
-                if (System.currentTimeMillis() < 1793912400000L || PhoneStore.authFailed) Box(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 12.dp), contentAlignment = Alignment.BottomCenter) {
-                    androidx.compose.material3.Text("Войти по юзернейму и паролю", color = p.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy { legacy = true })
+            var stage by remember { mutableIntStateOf(0) } // 0 приветствие, 1 номер, 2 вход по паролю
+            androidx.compose.animation.AnimatedContent(stage, transitionSpec = {
+                (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(420)) +
+                    androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(450)) { it / 4 }) togetherWith
+                    (androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(250)) +
+                        androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(450)) { -it / 6 })
+            }, label = "login") { st ->
+                when (st) {
+                    0 -> WelcomeScreen { stage = 1 }
+                    1 -> PhoneAuthScreen(bind = false, required = true) {}
+                    else -> LoginScreen { stage = 1 }
                 }
+            }
+            // до 6 ноября 2026 (по Москве) вход по паролю доступен всем, дальше — только после сбоя входа по номеру
+            if (stage != 2 && (System.currentTimeMillis() < 1793912400000L || PhoneStore.authFailed)) Box(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 12.dp), contentAlignment = Alignment.BottomCenter) {
+                androidx.compose.material3.Text("Войти по юзернейму и паролю", color = p.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy { stage = 2 })
             }
             if (ru.volshebnymir.lumo.core.Accounts.list.isNotEmpty()) Box(Modifier.fillMaxWidth().statusBarsPadding().padding(10.dp)) {
                 androidx.compose.material3.TextButton({ AppModel.switchAccount(ru.volshebnymir.lumo.core.Accounts.list.first().id) }) { androidx.compose.material3.Text("‹ Вернуться в аккаунт", color = p.a1) }

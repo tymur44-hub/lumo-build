@@ -3,18 +3,23 @@ import SwiftUI
 /// Экран входа: по умолчанию номер телефона → код. Вход по паролю — только для старых аккаунтов.
 struct LoginGate: View {
     @State private var legacy = false
+    @State private var welcomed = false
     @ObservedObject private var phones = PhoneStore.shared
     /// до 6 ноября 2026 (по Москве) вход по паролю доступен всем, дальше — только если вход по номеру не получился
     private var showLegacy: Bool { Date().timeIntervalSince1970 < 1793912400 || phones.authFailed }
     var body: some View {
         ZStack(alignment: .bottom) {
             if legacy { LoginView(onPhone: { legacy = false }) }
-            else {
+            else if !welcomed {
+                WelcomeView { withAnimation(.easeInOut(duration: 0.45)) { welcomed = true } }
+                    .transition(.asymmetric(insertion: .opacity, removal: .opacity.combined(with: .move(edge: .leading))))
+            } else {
                 PhoneAuthView(mode: .login, required: true)
-                if showLegacy {
-                    Button("Войти по юзернейму и паролю") { legacy = true }
-                        .font(.footnote.weight(.semibold)).foregroundColor(Theme.muted).padding(.bottom, 14)
-                }
+                    .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .trailing)), removal: .opacity))
+            }
+            if !legacy && showLegacy {
+                Button("Войти по юзернейму и паролю") { legacy = true }
+                    .font(.footnote.weight(.semibold)).foregroundColor(Theme.muted).padding(.bottom, 14)
             }
         }
     }
