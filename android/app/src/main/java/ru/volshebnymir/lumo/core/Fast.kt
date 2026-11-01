@@ -228,7 +228,7 @@ object Fast {
     /** Скачать актуальный список узлов (нужен вход) и сохранить зашифрованным. Применится при следующем запуске. */
     suspend fun refreshNodes() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         runCatching {
-            val tok = Api.token()
+            val tok = runCatching { Api.token() }.getOrDefault(Config.ANON)
             val u = java.net.URL(Net.base + "/functions/v1/lumo-nodes")
             val h = u.openConnection() as java.net.HttpURLConnection
             h.connectTimeout = 15000; h.readTimeout = 15000

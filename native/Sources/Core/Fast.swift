@@ -224,8 +224,8 @@ enum Fast {
 
     /// Скачать актуальный список узлов (нужен вход в аккаунт) и сохранить зашифрованным. Применится при следующем запуске.
     static func refreshNodes() async {
-        guard let tok = try? await API.shared.validToken(),
-              let url = URL(string: Net.base + "/functions/v1/lumo-nodes") else { return }
+        let tok = (try? await API.shared.validToken()) ?? Config.anonKey
+        guard let url = URL(string: Net.base + "/functions/v1/lumo-nodes") else { return }
         var r = URLRequest(url: url, timeoutInterval: 15)
         r.setValue(Config.anonKey, forHTTPHeaderField: "apikey")
         r.setValue("Bearer " + tok, forHTTPHeaderField: "Authorization")

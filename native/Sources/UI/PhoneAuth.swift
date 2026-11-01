@@ -25,11 +25,13 @@ struct PhoneAuthView: View {
     var required = false
     var onClose: (() -> Void)?
 
-    private enum Step { case phone, code, name, tfa, done }
+    private enum Step { case phone, code, name, username, tfa, done }
     @State private var step: Step = .phone
     @State private var digits = ""          // 10 цифр после +7
     @State private var code = ""
     @State private var name = ""
+    @State private var lastName = ""
+    @State private var username = ""
     @State private var tfaPwd = ""
     @State private var tfaHint = ""
     @State private var error: String?
@@ -90,13 +92,14 @@ struct PhoneAuthView: View {
     }
 
     private var icon: String {
-        switch step { case .phone: return "phone.fill"; case .code: return "message.fill"; case .name: return "person.fill"; case .tfa: return "lock.fill"; case .done: return "checkmark" }
+        switch step { case .phone: return "phone.fill"; case .code: return "message.fill"; case .name: return "person.fill"; case .username: return "at"; case .tfa: return "lock.fill"; case .done: return "checkmark" }
     }
     private var title: String {
         switch step {
         case .phone: return mode == .bind ? "Привяжите номер телефона" : "Ваш номер телефона"
         case .code: return "Введите код"
         case .name: return "Как вас зовут?"
+        case .username: return "Придумайте юзернейм"
         case .tfa: return "Пароль защиты"
         case .done: return ""
         }
@@ -107,7 +110,8 @@ struct PhoneAuthView: View {
         case .code:
             if chan == "telegram" { return tgDirect ? "Код отправлен вам в Telegram (бот Lumo)" : "Откройте бота Lumo в Telegram, нажмите «Старт» и поделитесь номером — код придёт в чат" }
             return "Код отправлен на " + PhoneStore.pretty(full)
-        case .name: return "Это имя увидят ваши контакты. Его можно поменять позже."
+        case .name: return "Имя и фамилия по желанию — их увидят ваши контакты. Можно пропустить."
+        case .username: return "По юзернейму вас смогут найти. Латиница, цифры и _, от 3 символов."
         case .tfa: return "Для аккаунта включена двухэтапная аутентификация. Введите пароль." + (tfaHint.isEmpty ? "" : "\nПодсказка: " + tfaHint)
         case .done: return ""
         }
@@ -172,9 +176,19 @@ struct PhoneAuthView: View {
             }
         case .name:
             VStack(spacing: 14) {
-                TextField("Имя", text: $name).textContentType(.name).lumoField().focused($focus)
-                GradientButton(title: "Продолжить", loading: busy) { verify() }
-                    .opacity(name.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1).disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                TextField("Имя", text: $name).textContentType(.givenName).lumoField().focused($focus)
+                TextField("Фамилия", text: $lastName).textContentType(.familyName).lumoField()
+                GradientButton(title: "Продолжить", loading: false) { error = nil; step = .username }
+                Button("Пропустить") { name = ""; lastName = ""; error = nil; step = .username }.font(.footnote.weight(.semibold))
+            }
+        case .username:
+            VStack(spacing: 14) {
+                TextField("Юзернейм", text: Binding(get: { username }, set: { v in
+                    username = String(v.lowercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }.prefix(32)); error = nil
+                }))
+                .textInputAutocapitalization(.never).autocorrectionDisabled().textContentType(.username).lumoField().focused($focus)
+                GradientButton(title: "Готово", loading: busy) { verify() }
+                    .opacity(username.count < 3 ? 0.5 : 1).disabled(username.count < 3)
             }
         case .tfa:
             VStack(spacing: 14) {
@@ -203,6 +217,7 @@ struct PhoneAuthView: View {
         case .phone: onClose?()
         case .code: code = ""; step = .phone
         case .name, .tfa: code = ""; tfaPwd = ""; step = .code
+        case .username: step = .name
         case .done: break
         }
     }
@@ -210,6 +225,7 @@ struct PhoneAuthView: View {
     private func fail(_ j: JSON) {
         let c = j.str("error") ?? ""
         error = PhoneStore.message(c, j)
+        if c == "username_taken" || c == "bad_username" { UINotificationFeedbackGenerator().notificationOccurred(.error); return }
         if c == "bad_code" || c == "expired" || c == "locked" { UINotificationFeedbackGenerator().notificationOccurred(.error); code = "" }
         if c == "bad_tfa" { UINotificationFeedbackGenerator().notificationOccurred(.error); tfaPwd = "" }
     }
@@ -238,6 +254,8 @@ struct PhoneAuthView: View {
             defer { busy = false }
             var body: JSON = ["phone": full, "code": code, "purpose": mode == .bind ? "bind" : "auth"]
             if !name.trimmingCharacters(in: .whitespaces).isEmpty { body["name"] = name.trimmingCharacters(in: .whitespaces) }
+            if !lastName.trimmingCharacters(in: .whitespaces).isEmpty { body["last_name"] = lastName.trimmingCharacters(in: .whitespaces) }
+            if !username.isEmpty { body["username"] = username }
             if !tfaPwd.isEmpty { body["tfa"] = tfaPwd }
             if reset { body["reset_tfa"] = true }
             do {

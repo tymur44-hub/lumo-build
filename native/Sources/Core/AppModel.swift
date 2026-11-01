@@ -83,6 +83,7 @@ final class AppModel: ObservableObject {
 
     private init() {
         loggedIn = API.shared.session != nil
+        Task.detached { await Fast.refreshNodes() }
         API.shared.onSessionChange = { [weak self] s in
             guard let self = self else { return }
             if let s = s { Realtime.shared.updateToken(s.accessToken) }
@@ -149,7 +150,6 @@ final class AppModel: ObservableObject {
         Task { await Net.pick(force: true) }
         Realtime.shared.onState = { [weak self] ok in self?.netChanged(ok) }
         await loadMe()
-        Task.detached { await Fast.refreshNodes() }
         if let id = myId { await E2E.shared.setup(id) }
         netStatus = "Обновление…"
         await loadContacts()

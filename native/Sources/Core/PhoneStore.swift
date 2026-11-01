@@ -57,6 +57,8 @@ final class PhoneStore: ObservableObject {
         case "phone_taken": return "Этот номер уже привязан к другому аккаунту"
         case "banned": return "Аккаунт заблокирован"
         case "bad_tfa": return "Неверный пароль"
+        case "username_taken": return "Этот юзернейм уже занят"
+        case "bad_username": return "Юзернейм: 3–32 символа, латиница, цифры и _"
         default: return "Не удалось выполнить действие"
         }
     }

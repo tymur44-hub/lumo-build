@@ -46,7 +46,7 @@ import ru.volshebnymir.lumo.core.AppModel
 import java.util.UUID
 
 @Composable
-fun LoginScreen() {
+fun LoginScreen(onPhone: () -> Unit = {}) {
     val p = P
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -140,8 +140,8 @@ fun LoginScreen() {
                 Spacer(Modifier.size(10.dp))
                 Text("Войти по номеру телефона", color = Color.White, fontWeight = FontWeight.Bold)
             }
-            Text(if (reg) "Уже есть аккаунт? Войти" else "Нет аккаунта? Зарегистрироваться", color = p.a1, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 4.dp).bouncy { reg = !reg; err = null })
+            Text("Войти по номеру телефона", color = p.a1, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 4.dp).bouncy { onPhone() })
             Spacer(Modifier.height(40.dp))
         }
         if (showPhone) PhoneAuthScreen(bind = false) { showPhone = false }

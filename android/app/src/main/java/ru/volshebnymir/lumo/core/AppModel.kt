@@ -101,6 +101,7 @@ object AppModel {
         Notifier.setup(ctx)
         Calls.init(ctx)
         Api.init(ctx)
+        scope.launch { Fast.refreshNodes() }
         E2E.init(ctx)
         loggedIn = Api.session != null
         Api.onSession = { s ->
@@ -181,7 +182,6 @@ object AppModel {
             netStatus = "Соединение…"
             Realtime.onState = { ok -> netChanged(ok) }
             loadMe()
-            launch { Fast.refreshNodes() }
             launch { Lumens.load(); Lumens.loadCfg() }
             launch { PhoneStore.load(); if (PhoneStore.hasContactsAccess()) PhoneStore.syncContacts() }
             myId?.let { E2E.setup(it) }

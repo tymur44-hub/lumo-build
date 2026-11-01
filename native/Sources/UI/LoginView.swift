@@ -1,6 +1,22 @@
 import SwiftUI
 
+/// Экран входа: по умолчанию номер телефона → код. Вход по паролю — только для старых аккаунтов.
+struct LoginGate: View {
+    @State private var legacy = false
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            if legacy { LoginView(onPhone: { legacy = false }) }
+            else {
+                PhoneAuthView(mode: .login, required: true)
+                Button("Войти по логину и паролю") { legacy = true }
+                    .font(.footnote.weight(.semibold)).foregroundColor(Theme.muted).padding(.bottom, 14)
+            }
+        }
+    }
+}
+
 struct LoginView: View {
+    var onPhone: () -> Void = {}
     @EnvironmentObject var model: AppModel
     @State private var register = false
     @State private var username = ""
@@ -82,9 +98,7 @@ struct LoginView: View {
                     Button("Открыть Telegram ещё раз") { openBot() }.font(.footnote.weight(.semibold))
                 }
 
-                Button(register ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться") {
-                    withAnimation { register.toggle(); error = nil }
-                }
+                Button("Войти по номеру телефона") { onPhone() }
                 .font(.subheadline.weight(.semibold))
                 .padding(.top, 4)
             }

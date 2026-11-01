@@ -54,7 +54,7 @@ import kotlin.math.sin
 
 object PhoneUi { var bind by mutableStateOf(false) }
 
-private enum class PStep { Phone, Code, Name, Tfa, Done }
+private enum class PStep { Phone, Code, Name, Username, Tfa, Done }
 
 /** Номер → код → (имя) → (пароль двухэтапной защиты) → анимация успеха */
 @Composable
@@ -65,6 +65,8 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
     var digits by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
+    var lastName by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
     var tfaPwd by remember { mutableStateOf("") }
     var tfaHint by remember { mutableStateOf("") }
     var err by remember { mutableStateOf<String?>(null) }
@@ -84,6 +86,7 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
             PStep.Phone -> if (!required) onClose()
             PStep.Code -> { code = ""; step = PStep.Phone }
             PStep.Name, PStep.Tfa -> { code = ""; tfaPwd = ""; step = PStep.Code }
+            PStep.Username -> step = PStep.Name
             PStep.Done -> {}
         }
     }
@@ -92,6 +95,7 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
     fun fail(j: JSONObject) {
         val c = j.str("error") ?: ""
         err = PhoneStore.message(c)
+        if (c == "username_taken" || c == "bad_username") return
         if (c == "bad_code" || c == "expired" || c == "locked") code = ""
         if (c == "bad_tfa") tfaPwd = ""
     }
@@ -127,6 +131,8 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
             try {
                 val body = jsonOf("phone" to full, "code" to codeNow, "purpose" to purpose)
                 if (name.isNotBlank()) body.put("name", name.trim())
+                if (lastName.isNotBlank()) body.put("last_name", lastName.trim())
+                if (username.isNotEmpty()) body.put("username", username)
                 if (tfaPwd.isNotEmpty()) body.put("tfa", tfaPwd)
                 if (reset) body.put("reset_tfa", true)
                 val j = PhoneStore.call("verify", body, auth = bind)
@@ -164,16 +170,17 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Spacer(Modifier.height(16.dp))
-                val ic: ImageVector = when (step) { PStep.Phone -> Icons.Filled.Phone; PStep.Code -> Icons.Filled.Sms; PStep.Name -> Icons.Filled.Person; else -> Icons.Filled.Lock }
+                val ic: ImageVector = when (step) { PStep.Phone -> Icons.Filled.Phone; PStep.Code -> Icons.Filled.Sms; PStep.Name -> Icons.Filled.Person; PStep.Username -> Icons.Filled.AlternateEmail; else -> Icons.Filled.Lock }
                 Box(Modifier.size(84.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) { Icon(ic, null, tint = Color.White, modifier = Modifier.size(38.dp)) }
                 Text(when (step) {
                     PStep.Phone -> if (bind) "Привяжите номер телефона" else "Ваш номер телефона"
-                    PStep.Code -> "Введите код"; PStep.Name -> "Как вас зовут?"; else -> "Пароль защиты"
+                    PStep.Code -> "Введите код"; PStep.Name -> "Как вас зовут?"; PStep.Username -> "Придумайте юзернейм"; else -> "Пароль защиты"
                 }, color = p.text, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
                 Text(when (step) {
                     PStep.Phone -> if (bind) "Номер нужен для входа и защиты аккаунта. Видеть его можно ограничить в настройках." else "Мы отправим код в SMS или в Telegram. Если аккаунта с этим номером нет, он будет создан."
                     PStep.Code -> if (chan == "telegram") (if (tgDirect) "Код отправлен вам в Telegram (бот Lumo)" else "Откройте бота Lumo в Telegram, нажмите «Старт» и поделитесь номером — код придёт в чат") else "Код отправлен на " + PhoneStore.pretty(full)
-                    PStep.Name -> "Это имя увидят ваши контакты. Его можно поменять позже."
+                    PStep.Name -> "Имя и фамилия по желанию — их увидят ваши контакты. Можно пропустить."
+                    PStep.Username -> "По юзернейму вас смогут найти. Латиница, цифры и _, от 3 символов."
                     else -> "Для аккаунта включена двухэтапная аутентификация. Введите пароль." + (if (tfaHint.isEmpty()) "" else "\nПодсказка: $tfaHint")
                 }, color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 12.dp))
                 Spacer(Modifier.height(4.dp))
@@ -221,7 +228,15 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
                     }
                     PStep.Name -> {
                         Box(Modifier.focusRequester(focus)) { LumoField(name, { name = it }, "Имя") }
-                        GradientButton("Продолжить", busy, name.isNotBlank()) { verify() }
+                        LumoField(lastName, { lastName = it }, "Фамилия")
+                        GradientButton("Продолжить", false, true) { err = null; step = PStep.Username }
+                        Text("Пропустить", color = p.a1, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy { name = ""; lastName = ""; err = null; step = PStep.Username })
+                    }
+                    PStep.Username -> {
+                        Box(Modifier.focusRequester(focus)) {
+                            LumoField(username, { v -> username = v.lowercase().filter { it.code < 128 && (it.isLetterOrDigit() || it == '_') }.take(32); err = null }, "Юзернейм")
+                        }
+                        GradientButton("Готово", busy, username.length >= 3) { verify() }
                     }
                     PStep.Tfa -> {
                         Box(Modifier.focusRequester(focus)) { LumoField(tfaPwd, { tfaPwd = it }, "Пароль", password = true) }

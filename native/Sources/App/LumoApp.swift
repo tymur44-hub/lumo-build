@@ -94,7 +94,7 @@ struct RootView: View {
         ZStack {
             Theme.bg.ignoresSafeArea()
             if model.loggedIn { MainView() } else {
-                LoginView()
+                LoginGate()
                 if let a = savedAccounts.list.first {
                     VStack { HStack { Button { Task { await model.switchAccount(a.id) } } label: { Text("‹ Вернуться в аккаунт").font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.a1) }.padding(14); Spacer() }; Spacer() }
                 }
