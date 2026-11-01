@@ -122,7 +122,7 @@ final class AppModel: ObservableObject {
     /// Имя человека, как его видит пользователь (своё имя для контакта — если задано)
     func displayName(_ uid: String?) -> String {
         guard let uid = uid else { return "Пользователь" }
-        if let a = aliases[uid], !a.isEmpty { return a }
+        if profiles[uid]?.isBot != true, let a = aliases[uid], !a.isEmpty { return a }
         return profiles[uid]?.name ?? "Пользователь"
     }
 

@@ -311,7 +311,7 @@ fun PersonScreen(userId: String) {
                 InfoLine("@" + (pr?.username ?: ""), "Юзернейм") { copy(ctx, "@" + (pr?.username ?: "")) }
                 if (!pr?.bio.isNullOrEmpty()) { Divider(); InfoLine(pr!!.bio, "О себе") }
                 ru.volshebnymir.lumo.core.Birthday.text(pr?.birthday, withAge = true)?.let { Divider(); InfoLine(it, "День рождения") }
-                if (AppModel.isContact(userId)) { Divider(); InfoLine(AppModel.aliases[userId]?.takeIf { it.isNotEmpty() } ?: "Не задано", "Имя в контактах · видите только вы") { alias = AppModel.aliases[userId] ?: "" } }
+                if (AppModel.isContact(userId) && pr?.isBot != true) { Divider(); InfoLine(AppModel.aliases[userId]?.takeIf { it.isNotEmpty() } ?: "Не задано", "Имя в контактах · видите только вы") { alias = AppModel.aliases[userId] ?: "" } }
             }
             Spacer(Modifier.height(14.dp))
             if (pr?.premium == true && pr.isBot != true) ProfileLinks(userId)

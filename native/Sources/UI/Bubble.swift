@@ -83,6 +83,8 @@ struct MessageRow: View {
     var isSelected = false
     var onToggle: (Message) -> Void = { _ in }
     var onComments: (Message) -> Void = { _ in }
+    /// Тап по цитате ответа — перейти к исходному сообщению
+    var onJump: (Int) -> Void = { _ in }
     @ObservedObject private var lumens = Lumens.shared
     @State private var lumenSheet = false
     @State private var swipe: CGFloat = 0
@@ -345,7 +347,6 @@ struct MessageRow: View {
                             .font(.system(size: look.fontSize))
                             .tint(mine ? .white : Theme.a2)
                             .fixedSize(horizontal: false, vertical: true)
-                            .overlay(alignment: .bottomTrailing) { timeLine(onMedia: false).offset(y: 2) }
                     } else if m.kind == "image" || m.kind == "video" {
                         media.overlay(alignment: .bottomTrailing) {
                             timeLine(onMedia: false)
@@ -367,8 +368,17 @@ struct MessageRow: View {
                         }
                     }
                 }
+                // время и галочка — у правого нижнего угла всего пузыря (а не у конца короткого текста под цитатой)
+                .overlay(alignment: .bottomTrailing) {
+                    if timeOnBubble { timeLine(onMedia: false).offset(y: 2) }
+                }
             }
         }
+    }
+
+    private var timeOnBubble: Bool {
+        guard m.kind != "call", let b = m.body, !b.isEmpty else { return false }
+        return !(m.kind == "text" && SpecialMsg.parse(b) != nil)
     }
 
     private func bubble<C: View>(@ViewBuilder _ c: () -> C) -> some View {
@@ -427,6 +437,8 @@ struct MessageRow: View {
         .padding(.vertical, 4).padding(.horizontal, 8)
         .background(RoundedRectangle(cornerRadius: 10).fill(mine ? Color.white.opacity(0.14) : Theme.a2.opacity(0.1)))
         .fixedSize(horizontal: false, vertical: true)
+        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .onTapGesture { onJump(id) }
     }
 
     @ViewBuilder private var media: some View {

@@ -118,7 +118,7 @@ struct ChatInfoView: View {
     }
 
     private func canEdit(_ c: ChatItem) -> Bool {
-        c.isPrivate ? (c.peerId != nil && !saved) : c.isAdmin
+        c.isPrivate ? (c.peerId != nil && !saved && !(c.peerBot || (c.peerId.flatMap { model.profiles[$0]?.isBot } ?? false))) : c.isAdmin
     }
 
     // MARK: шапка: большая аватарка (нажатие — на весь экран), имя, статус

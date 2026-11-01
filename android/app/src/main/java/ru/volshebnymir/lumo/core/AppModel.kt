@@ -159,7 +159,7 @@ object AppModel {
     fun displayName(uid: String?): String {
         if (uid == null) return "Lumo"
         if (uid == myId) return me?.name ?: "Вы"
-        aliases[uid]?.takeIf { it.isNotEmpty() }?.let { return it }
+        if (profiles[uid]?.isBot != true) aliases[uid]?.takeIf { it.isNotEmpty() }?.let { return it }
         return profiles[uid]?.name ?: "Пользователь"
     }
 

@@ -623,7 +623,11 @@ struct ChatView: View {
                                        onReport: { m in reporting = ReportTarget(user: m.senderId, chat: chatId, message: m.id) },
                                        onMenu: { m in withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) { menuMsg = m } },
                                        selecting: selecting, isSelected: selected.contains(f.id), onToggle: { toggle($0) },
-                                       onComments: { commentsFor = $0 })
+                                       onComments: { commentsFor = $0 },
+                                       onJump: { id in
+                                           if (model.messages[chatId] ?? []).contains(where: { $0.id == id }) { highlight = id }
+                                           else { model.say("Сообщение не найдено в загруженной истории") }
+                                       })
                                 .background(RoundedRectangle(cornerRadius: 12).fill(highlight == f.id ? Theme.a1.opacity(0.25) : Color.clear))
                         }
                         .rotationEffect(.degrees(180))
