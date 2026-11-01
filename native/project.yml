@@ -59,8 +59,8 @@ targets:
       base:
         PRODUCT_NAME: Lumo
         PRODUCT_BUNDLE_IDENTIFIER: ru.volshebnymir.lumo.native
-        MARKETING_VERSION: "4.25"
-        CURRENT_PROJECT_VERSION: "50"
+        MARKETING_VERSION: "4.26"
+        CURRENT_PROJECT_VERSION: "51"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "5.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
