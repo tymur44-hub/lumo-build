@@ -222,7 +222,7 @@ final class AudioPlayer: NSObject, ObservableObject, WKScriptMessageHandler {
         a.play().catch(function(){});
         </script></body></html>
         """
-        web?.loadHTMLString(html, baseURL: URL(string: "https://volshebny-mir.ru/"))
+        web?.loadHTMLString(html, baseURL: URL(string: "https://lumomess.ru/"))
         playing = true
     }
 

@@ -34,7 +34,7 @@ object Demo {
         AppModel.messages["c1"] = listOf(
             m(1, "u1", "text", "Привет! 👋", 1500),
             m(2, me, "text", "Привет! Смотри, **Lumo** теперь есть на Android", 1490),
-            m(3, "u1", "text", "Ого, круто! https://volshebny-mir.ru", 1480),
+            m(3, "u1", "text", "Ого, круто! https://lumomess.ru", 1480),
             m(4, me, "voice", null, 30, jsonOf("dur" to 7, "wave" to JSONArray((0 until 40).map { (it * 7) % 31 }))),
             m(5, "u1", "text", "Привет! Как дела? 😊", 2, reply = 2),
             m(6, me, "text", "Отлично! 🔥", 1),

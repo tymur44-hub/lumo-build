@@ -204,7 +204,7 @@ struct UserQRSheet: View {
     @State private var copied = false
     @State private var appear = false
 
-    private var link: String { "https://volshebny-mir.ru/page322172009.html#@" + username }
+    private var link: String { "https://lumomess.ru/#@" + username }
 
     var body: some View {
         NavigationStack {

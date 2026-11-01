@@ -5,10 +5,10 @@ import ObjectiveC
 
 final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, UIScrollViewDelegate {
 
-    // адрес мессенджера (страница на Тильде)
-    static let startURL = URL(string: "https://volshebny-mir.ru/page322172009.html")!
+    // адрес мессенджера
+    static let startURL = URL(string: "https://lumomess.ru/")!
     // адреса, которые открываются внутри приложения; всё остальное — во встроенном браузере / Telegram
-    static let internalSuffixes = ["volshebny-mir.ru", "supabase.co", "tilda.ws", "tildacdn.com", "tilda.cc"]
+    static let internalSuffixes = ["lumomess.ru", "volshebny-mir.ru", "supabase.co"]
     static let background = UIColor(red: 15 / 255, green: 16 / 255, blue: 32 / 255, alpha: 1)
 
     private var webView: WKWebView!
@@ -131,7 +131,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     // MARK: - уведомления
 
     func syncDevice() {
-        guard loadedOnce, let host = webView.url?.host?.lowercased(), host.hasSuffix("volshebny-mir.ru") else { return }
+        guard loadedOnce, let host = webView.url?.host?.lowercased(), (host.hasSuffix("lumomess.ru") || host.hasSuffix("volshebny-mir.ru")) else { return }
         LumoNotifier.shared.sync(from: webView)
     }
 

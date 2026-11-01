@@ -52,7 +52,7 @@ struct SettingsView: View {
                     if let r = model.staffRole {
                         SettingsGroup {
                             Button {
-                                if let u = URL(string: "https://volshebny-mir.ru/page322172009.html") { UIApplication.shared.open(u) }
+                                if let u = URL(string: "https://lumomess.ru/") { UIApplication.shared.open(u) }
                             } label: {
                                 SettingsRow(icon: "shield.fill", color: Color(hex: 0xff8a3d), title: "Админ-панель",
                                             subtitle: (r == "owner" ? "Вы владелец Lumo" : "Вы администратор Lumo") + " · открывается на сайте")
@@ -767,7 +767,7 @@ struct UsernameEditView: View {
                     .font(.system(size: 17)).padding(.horizontal, 20).frame(height: 58)
                 }
                 .padding(.top, 16)
-                TGHint(text: "Латинские буквы, цифры и _, от 3 до 32 символов. По этому имени вас смогут найти в Lumo.\nСсылка: " + "https://volshebny-mir.ru/page322172009.html#@" + u.lowercased())
+                TGHint(text: "Латинские буквы, цифры и _, от 3 до 32 символов. По этому имени вас смогут найти в Lumo.\nСсылка: " + "https://lumomess.ru/#@" + u.lowercased())
             }
         }
         .background(Theme.bg.ignoresSafeArea())

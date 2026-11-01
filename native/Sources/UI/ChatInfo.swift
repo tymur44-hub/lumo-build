@@ -345,7 +345,7 @@ struct ChatInfoView: View {
                 Button {
                     Task {
                         if let code = await model.inviteCode(c.id) {
-                            let l = "https://volshebny-mir.ru/page322172009.html#+" + code
+                            let l = "https://lumomess.ru/#+" + code
                             UIPasteboard.general.string = l
                             model.say("Ссылка-приглашение скопирована")
                         }
@@ -432,7 +432,7 @@ struct EditChatView: View {
     private var isChannel: Bool { chat?.isChannel == true }
     private var kind: String { isChannel ? "канала" : "группы" }
     private var owner: Bool { chat?.role == "owner" }
-    private var link: String { "https://volshebny-mir.ru/page322172009.html#@" + uname }
+    private var link: String { "https://lumomess.ru/#@" + uname }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -949,8 +949,8 @@ struct NewChatView: View {
     private var noun: String { isChannel ? "канал" : "группу" }
     private var nounOf: String { isChannel ? "канала" : "группы" }
     private var cleanName: String { username.replacingOccurrences(of: "@", with: "").trimmingCharacters(in: .whitespaces) }
-    private var link: String { "https://volshebny-mir.ru/page322172009.html#+" + invite }
-    private var linkShown: String { "volshebny-mir.ru/…#+" + invite }
+    private var link: String { "https://lumomess.ru/#+" + invite }
+    private var linkShown: String { "lumomess.ru/…#+" + invite }
 
     var body: some View {
         ZStack {

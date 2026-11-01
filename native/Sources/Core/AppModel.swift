@@ -571,7 +571,7 @@ final class AppModel: ObservableObject {
     }
 
     var profileLink: String {
-        "https://volshebny-mir.ru/page322172009.html#@" + (me?.username ?? "")
+        "https://lumomess.ru/#@" + (me?.username ?? "")
     }
 
     // MARK: - контакты и блокировки

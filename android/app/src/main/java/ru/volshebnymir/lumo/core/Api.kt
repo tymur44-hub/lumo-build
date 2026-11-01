@@ -22,7 +22,7 @@ object Config {
     const val ANON = "sb_publishable_cE72E1dUPnfaVn8mPnc9sA_U2HO-mxN"
     const val EMAIL_DOMAIN = "@lumo.app"
     const val BUCKET = "lm-media"
-    const val SITE = "https://volshebny-mir.ru/page322172009.html"
+    const val SITE = "https://lumomess.ru/"
     /** Свой адрес сервера (прокси к Supabase) — чтобы Lumo работал в России без VPN */
     const val PROXY = "https://api.volshebny-mir.ru"
     val realtimeUrl get() = Net.base.replace("https://", "wss://") + "/realtime/v1/websocket?apikey=$ANON&vsn=1.0.0"

@@ -1,7 +1,7 @@
 const { app, BrowserWindow, session, shell, Menu, protocol, net, Tray } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
-const SHARE = 'https://volshebny-mir.ru/page322172009.html';
+const SHARE = 'https://lumomess.ru/';
 protocol.registerSchemesAsPrivileged([{ scheme: 'lumo', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 if (!app.requestSingleInstanceLock()) app.quit();
 let win;
