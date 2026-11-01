@@ -24,7 +24,7 @@ object Config {
     const val BUCKET = "lm-media"
     const val SITE = "https://lumomess.ru/"
     /** Свой адрес сервера (прокси к Supabase) — чтобы Lumo работал в России без VPN */
-    const val PROXY = "https://api.volshebny-mir.ru"
+    const val PROXY = "https://api.lumomess.ru"
     val realtimeUrl get() = Net.base.replace("https://", "wss://") + "/realtime/v1/websocket?apikey=$ANON&vsn=1.0.0"
 }
 
@@ -33,7 +33,7 @@ class ApiError(message: String, val status: Int) : Exception(message)
 data class Session(val access: String, val refresh: String, val expiresAt: Long, val userId: String)
 
 /**
- * Выбор адреса сервера: напрямую (supabase.co) или через свой прокси (api.volshebny-mir.ru).
+ * Выбор адреса сервера: напрямую (supabase.co) или через свой прокси (api.lumomess.ru).
  * В России supabase.co работает плохо (замедление Cloudflare), поэтому пробуем оба и берём тот, что отвечает.
  */
 object Net {

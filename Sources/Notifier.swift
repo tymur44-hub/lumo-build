@@ -9,7 +9,7 @@ final class LumoNotifier: NSObject, UNUserNotificationCenterDelegate {
     static let shared = LumoNotifier()
     static let refreshID = "ru.volshebnymir.lumo.refresh"
     // основной сервер и сервер-посредник в России (если основной недоступен)
-    static let bases = ["https://foniukmpiukuwpcdvdhp.supabase.co", "https://api.volshebny-mir.ru"]
+    static let bases = ["https://foniukmpiukuwpcdvdhp.supabase.co", "https://api.lumomess.ru"]
     static let anonKey = "sb_publishable_cE72E1dUPnfaVn8mPnc9sA_U2HO-mxN"
     static let sessionKey = "sb-foniukmpiukuwpcdvdhp-auth-token"
 

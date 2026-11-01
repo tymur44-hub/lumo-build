@@ -5,7 +5,7 @@ import UIKit
 enum Config {
     static let supabaseURL = "https://foniukmpiukuwpcdvdhp.supabase.co"
     /// Свой адрес сервера (прокси к Supabase) — чтобы Lumo работал в России без VPN
-    static let proxyURL = "https://api.volshebny-mir.ru"
+    static let proxyURL = "https://api.lumomess.ru"
     static let anonKey = "sb_publishable_cE72E1dUPnfaVn8mPnc9sA_U2HO-mxN"
     static let emailDomain = "@lumo.app"
     static let bucket = "lm-media"
