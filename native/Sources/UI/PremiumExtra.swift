@@ -181,6 +181,37 @@ struct LockOverlayView: View {
     }
 }
 
+/// Баннер входящего сообщения из другого чата, когда приложение открыто (как в Telegram).
+/// Не зависит от системного разрешения на уведомления — показывается всегда.
+struct IncomingBannerView: View {
+    @EnvironmentObject var model: AppModel
+    let banner: IncomingBanner
+    @State private var drag: CGFloat = 0
+
+    var body: some View {
+        HStack(spacing: 12) {
+            AvatarView(name: banner.title, url: banner.avatarURL, color: banner.color, size: 42)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(banner.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                Text(banner.body).font(.system(size: 14)).foregroundColor(Theme.muted).lineLimit(2)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .lumoGlass(RoundedRectangle(cornerRadius: 20))
+        .padding(.horizontal, 10)
+        .offset(y: min(drag, 0))
+        .gesture(DragGesture().onChanged { v in if v.translation.height < 0 { drag = v.translation.height } }
+            .onEnded { v in if v.translation.height < -20 { model.banner = nil } else { withAnimation { drag = 0 } } })
+        .onTapGesture {
+            let chatId = banner.chatId
+            model.banner = nil
+            model.open(chatId)
+        }
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+}
+
 struct LockSettingsSheet: View {
     @ObservedObject private var ex = ExtraStore.shared
     @EnvironmentObject var model: AppModel

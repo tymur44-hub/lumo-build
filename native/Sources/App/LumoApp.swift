@@ -25,6 +25,14 @@ struct LumoApp: App {
                 .fullScreenCover(item: $model.miniApp) { MiniAppView(req: $0).environmentObject(model).environmentObject(look) }
                 .onOpenURL { url in handle(url) }
                 .overlay { LockOverlayView() }
+                .overlay(alignment: .top) {
+                    if let b = model.banner {
+                        IncomingBannerView(banner: b).environmentObject(model)
+                            .padding(.top, 6)
+                            .id(b.id)
+                    }
+                }
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.banner)
         }
         .onChange(of: phase) { p in
             if p == .active { model.scenePhase(true); ExtraStore.shared.scene(active: true) }

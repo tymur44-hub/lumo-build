@@ -25,6 +25,18 @@ final class AppModel: ObservableObject {
     @Published var settingsPath: [SettingsPage] = []
     @Published var tab: AppTab = .chats
     @Published var toast: String?
+    /// Баннер нового сообщения внутри приложения (как в Telegram): показывается, даже если
+    /// системные уведомления не разрешены — не зависит от разрешения на Notification
+    @Published var banner: IncomingBanner?
+    private var bannerTask: Task<Void, Never>?
+    func showBanner(_ b: IncomingBanner) {
+        bannerTask?.cancel()
+        banner = b
+        bannerTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            if !Task.isCancelled { self.banner = nil }
+        }
+    }
     /// Открытое мини-приложение бота
     @Published var miniApp: MiniAppReq?
     /// Кнопка мини-приложения у бота: id бота → [текст, адрес] (пустой массив — нет кнопки)
@@ -1511,9 +1523,26 @@ final class AppModel: ObservableObject {
             if c?.isPrivate ?? true { title = senderName }
             else if c?.isChannel == true { title = c?.displayName ?? "Канал" }
             else { title = c?.displayName ?? "Группа"; body = senderName + ": " + body }
+            // Баннер внутри приложения — показываем всегда, пока Lumo открыт, независимо
+            // от того, разрешены ли системные уведомления (их могли и не разрешить)
+            if self.isActive {
+                let av = (c?.isPrivate ?? true) ? c?.peerAvatar : c?.avatarURL
+                let col = (c?.isPrivate ?? true) ? (c?.peerColor ?? 0) : (c?.color ?? 0)
+                self.showBanner(IncomingBanner(id: "m\(m.id)", chatId: m.chatId, title: title, body: body, avatarURL: av, color: col))
+            }
             Notifier.show(id: "m\(m.id)", title: title, body: body, chatId: m.chatId)
         }
     }
+}
+
+/// Баннер нового сообщения внутри приложения (отдельный чат от открытого сейчас)
+struct IncomingBanner: Identifiable, Equatable {
+    let id: String
+    let chatId: String
+    let title: String
+    let body: String
+    let avatarURL: String?
+    let color: Int
 }
 
 extension AppModel {
