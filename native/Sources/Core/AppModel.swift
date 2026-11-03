@@ -705,29 +705,38 @@ final class AppModel: ObservableObject {
         guard loggedIn else { return }
         do {
             let rows = try await API.shared.rpc("lm_chats_v2") as? [JSON] ?? []
-            var list = rows.map { ChatItem(json: $0) }
-            await E2E.shared.prefetch(list.filter { $0.isPrivate }.compactMap { $0.peerId })
-            for i in list.indices {
-                if let p = list[i].peerId, let a = aliases[p], !a.isEmpty { list[i].peerName = a }
-                if let p = list[i].peerId, let ph = contactPhotos[p] { list[i].peerAvatar = ph }
-                if list[i].isPrivate, E2E.isEnc(list[i].lastBody) {
-                    await E2E.shared.prepare(list[i].id, peer: list[i].peerId)
-                    list[i].lastBody = E2E.shared.decrypt(list[i].id, list[i].lastBody)
-                }
-            }
-            list.sort { a, b in
-                if a.pinned != b.pinned { return a.pinned }
-                return (a.lastAt ?? .distantPast) > (b.lastAt ?? .distantPast)
-            }
-            chats = list
-            syncTypingChannels()
-            Task { await self.loadProfiles(self.chats.compactMap { $0.peerId }) }
-            chatsLoaded = true
-            if list.contains(where: { $0.isChannel }) { Task { await Lumens.shared.loadCfg() } }
-            Notifier.setBadge(list.filter { !$0.muted }.reduce(0) { $0 + $1.unread })
+            LocalCache.saveChats(rows)
+            await applyChats(rows)
         } catch {
             if (error as? APIError)?.status == 401 { API.shared.forgetSession() }
+            // нет сети и список чатов ещё не загружен — показываем последний сохранённый
+            if chats.isEmpty, let cached = LocalCache.loadChats() {
+                await applyChats(cached)
+            }
         }
+    }
+
+    private func applyChats(_ rows: [JSON]) async {
+        var list = rows.map { ChatItem(json: $0) }
+        await E2E.shared.prefetch(list.filter { $0.isPrivate }.compactMap { $0.peerId })
+        for i in list.indices {
+            if let p = list[i].peerId, let a = aliases[p], !a.isEmpty { list[i].peerName = a }
+            if let p = list[i].peerId, let ph = contactPhotos[p] { list[i].peerAvatar = ph }
+            if list[i].isPrivate, E2E.isEnc(list[i].lastBody) {
+                await E2E.shared.prepare(list[i].id, peer: list[i].peerId)
+                list[i].lastBody = E2E.shared.decrypt(list[i].id, list[i].lastBody)
+            }
+        }
+        list.sort { a, b in
+            if a.pinned != b.pinned { return a.pinned }
+            return (a.lastAt ?? .distantPast) > (b.lastAt ?? .distantPast)
+        }
+        chats = list
+        syncTypingChannels()
+        Task { await self.loadProfiles(self.chats.compactMap { $0.peerId }) }
+        chatsLoaded = true
+        if list.contains(where: { $0.isChannel }) { Task { await Lumens.shared.loadCfg() } }
+        Notifier.setBadge(list.filter { !$0.muted }.reduce(0) { $0 + $1.unread })
     }
 
     func scheduleReload() {
@@ -1083,7 +1092,18 @@ final class AppModel: ObservableObject {
         if let c = cleared[chatId], c != .distantPast { q["created_at"] = "gt." + DateParser.string(c) }
         let current = messages[chatId] ?? []
         if older, let first = current.first(where: { $0.id > 0 }) { q["id"] = "lt.\(first.id)" }
-        guard let rows = try? await API.shared.select("lm_messages", q) else { return }
+        let rows: [JSON]
+        do { rows = try await API.shared.select("lm_messages", q) }
+        catch {
+            // нет сети — показываем последнюю сохранённую переписку этого чата
+            if !older, current.isEmpty, let cached = LocalCache.loadMessages(chatId) {
+                let arr = Array(cached.map { dec(Message(json: $0)) }.reversed()).filter { !hidden.contains($0.id) }
+                messages[chatId] = arr
+                hasMore[chatId] = false
+            }
+            return
+        }
+        if !older { LocalCache.saveMessages(chatId, rows) }
         // сообщения, которые я удалил только у себя
         if let hr = try? await API.shared.select("lm_hidden", ["select": "message_id", "chat_id": "eq." + chatId]) {
             for r in hr { if let id = r.int("message_id") { hidden.insert(id) } }

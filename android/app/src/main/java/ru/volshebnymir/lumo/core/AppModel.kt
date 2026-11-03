@@ -497,23 +497,32 @@ object AppModel {
         if (!loggedIn) return
         try {
             val rows = (Api.rpc("lm_chats_v2") as? JSONArray).objects()
-            val raw = rows.map { ChatItem.from(it) }
-            E2E.prefetch(raw.filter { it.isPrivate }.mapNotNull { it.peerId })
-            val list = raw.map { c ->
-                val a = c.peerId?.let { aliases[it] }
-                if (!a.isNullOrEmpty()) c.copy(peerName = a) else c
-            }.map { c ->
-                if (c.isPrivate && E2E.isEnc(c.lastBody)) { E2E.prepare(c.id, c.peerId); c.copy(lastBody = E2E.decrypt(c.id, c.lastBody)) } else c
-            }.sortedWith(compareByDescending<ChatItem> { it.pinned }.thenByDescending { it.lastAt?.time ?: 0 })
-            chats.clear(); chats.addAll(list)
-            chatsLoaded = true
-            unreadTotal = list.filter { !it.muted }.sumOf { it.unread }
-            syncTyping()
-            loadProfiles(list.mapNotNull { it.peerId })
-            if (list.any { it.isChannel }) scope.launch { Lumens.loadCfg() }
+            LocalCache.saveChats(ctx, rows)
+            applyChats(rows)
         } catch (e: ApiError) {
             if (e.status == 401) Api.forget()
-        } catch (_: Exception) {}
+            if (chats.isEmpty()) LocalCache.loadChats(ctx)?.let { applyChats(it) }
+        } catch (_: Exception) {
+            // нет сети и список чатов ещё не загружен — показываем последний сохранённый
+            if (chats.isEmpty()) LocalCache.loadChats(ctx)?.let { applyChats(it) }
+        }
+    }
+
+    private suspend fun applyChats(rows: List<JSONObject>) {
+        val raw = rows.map { ChatItem.from(it) }
+        E2E.prefetch(raw.filter { it.isPrivate }.mapNotNull { it.peerId })
+        val list = raw.map { c ->
+            val a = c.peerId?.let { aliases[it] }
+            if (!a.isNullOrEmpty()) c.copy(peerName = a) else c
+        }.map { c ->
+            if (c.isPrivate && E2E.isEnc(c.lastBody)) { E2E.prepare(c.id, c.peerId); c.copy(lastBody = E2E.decrypt(c.id, c.lastBody)) } else c
+        }.sortedWith(compareByDescending<ChatItem> { it.pinned }.thenByDescending { it.lastAt?.time ?: 0 })
+        chats.clear(); chats.addAll(list)
+        chatsLoaded = true
+        unreadTotal = list.filter { !it.muted }.sumOf { it.unread }
+        syncTyping()
+        loadProfiles(list.mapNotNull { it.peerId })
+        if (list.any { it.isChannel }) scope.launch { Lumens.loadCfg() }
     }
 
     fun scheduleReload() {
@@ -569,7 +578,18 @@ object AppModel {
         cleared[chatId]?.takeIf { it.time > 0 }?.let { q["created_at"] = "gt." + Dates.string(it) }
         val current = messages[chatId] ?: emptyList()
         if (older) current.firstOrNull { it.id > 0 }?.let { q["id"] = "lt.${it.id}" }
-        val rows = runCatching { Api.select("lm_messages", q) }.getOrNull() ?: return
+        val rows = runCatching { Api.select("lm_messages", q) }.getOrNull() ?: run {
+            // нет сети — показываем последнюю сохранённую переписку этого чата
+            if (!older && current.isEmpty()) {
+                LocalCache.loadMessages(ctx, chatId)?.let { cached ->
+                    val arr = cached.map { dec(Message.from(it)) }.reversed().filter { it.id !in hidden }
+                    messages[chatId] = arr
+                    hasMore[chatId] = false
+                }
+            }
+            return
+        }
+        if (!older) LocalCache.saveMessages(ctx, chatId, rows)
         // удалённые только у меня
         runCatching { Api.select("lm_hidden", mapOf("select" to "message_id", "chat_id" to "eq.$chatId")) }.getOrNull()
             ?.forEach { r -> r.int("message_id")?.let { hidden.add(it) } }
