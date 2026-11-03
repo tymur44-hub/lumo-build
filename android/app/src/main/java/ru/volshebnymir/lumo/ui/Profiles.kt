@@ -1134,7 +1134,7 @@ fun EditChatScreen(chatId: String) {
                         val cand = AppModel.chats.filter { it.type == "group" && it.role == "owner" && Lumens.cfg.values.none { v -> v.linked == it.id } }
                         GroupCard {
                             Row(Modifier.fillMaxWidth().bouncy {
-                                scope.launch { AppModel.createChat("group", "Обсуждение: " + title.ifBlank { c.displayName }, "", emptyList())?.let { gid -> AppModel.linkDiscussion(chatId, gid) } }
+                                scope.launch { AppModel.createChat("group", "Обсуждение: " + title.ifBlank { c.displayName }, "", emptyList(), navigate = false)?.let { gid -> AppModel.linkDiscussion(chatId, gid) } }
                             }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.Add, null, tint = p.a1); Spacer(Modifier.width(14.dp))
                                 Text("Создать новую группу", color = p.a1, fontSize = 17.sp)

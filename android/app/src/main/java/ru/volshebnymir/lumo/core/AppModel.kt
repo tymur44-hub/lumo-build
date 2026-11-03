@@ -1139,7 +1139,7 @@ object AppModel {
 
     suspend fun createChat(type: String, title: String, description: String, members: List<String>,
                            username: String? = null, protectedChat: Boolean = false, requests: Boolean = false, invite: String? = null,
-                           avatar: ByteArray? = null): String? = try {
+                           avatar: ByteArray? = null, navigate: Boolean = true): String? = try {
         val p = jsonOf("p_type" to type, "p_title" to title, "p_members" to JSONArray(members), "p_description" to description,
             "p_protected" to protectedChat, "p_requests" to requests)
         if (!username.isNullOrBlank()) p.put("p_username", username.lowercase())
@@ -1149,7 +1149,7 @@ object AppModel {
             val url = Api.upload(avatar, "jpg", "image/jpeg")
             Api.update("lm_chats", mapOf("id" to cid), jsonOf("avatar_url" to url))
         }
-        loadChats(); cid?.let { open(it) }; cid
+        loadChats(); if (navigate) cid?.let { open(it) }; cid
     } catch (e: Exception) { say(e.message ?: "Ошибка"); null }
 
     /** Удалить чат: «у себя» (выйти; в личных ещё очистить историю) или «у всех» (владелец; в личном — у обоих) */
