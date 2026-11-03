@@ -886,7 +886,7 @@ object AppModel {
         scope.launch {
             if (chat(m.chatId) == null) loadChats()
             val ch = chat(m.chatId)
-            if (ch?.muted == true || isActive) return@launch
+            if (ch?.muted == true) return@launch
             m.senderId?.let { loadProfiles(listOf(it)) }
             val sender = displayName(m.senderId)
             var body = m.preview
