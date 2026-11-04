@@ -21,6 +21,8 @@ struct ChatListView: View {
     @State private var folder: ChatFolder = .all
     @State private var showNew = false
     @State private var deleting: ChatItem?
+    @State private var swipeOpen: String?
+    @ObservedObject private var marks = UnreadMarks.shared
     @State private var storyStart: String?
     @State private var addStory = false
     @FocusState private var searchFocused: Bool
@@ -158,8 +160,9 @@ struct ChatListView: View {
                     .padding(.top, 60)
                 } else {
                     ForEach(filtered) { c in
-                        chatLink(c)
-                            .buttonStyle(RowButtonStyle())
+                        SwipeChatRow(id: c.id, openId: $swipeOpen, leading: leadingSwipes(c), trailing: trailingSwipes(c)) {
+                            chatLink(c).buttonStyle(RowButtonStyle())
+                        }
                             .contextMenu {
                                 Button { Task { await model.setPinned(c.id, !c.pinned) } } label: {
                                     Label(c.pinned ? "Открепить" : "Закрепить", systemImage: c.pinned ? "pin.slash" : "pin")
@@ -194,6 +197,30 @@ struct ChatListView: View {
             await model.loadChats()
             await model.loadStories()
         }
+    }
+
+    /// свайп вправо: «Не прочитан» (крайняя, синяя) и «Закрепить» (зелёная)
+    private func leadingSwipes(_ c: ChatItem) -> [SwipeAction] {
+        let unread = c.unread > 0 || marks.has(c.id)
+        return [
+            SwipeAction(icon: unread ? "checkmark.message.fill" : "message.badge.filled.fill", title: unread ? "Прочитан" : "Не прочитан", color: Color(hex: 0x0A84FF)) {
+                if c.unread > 0 { Task { await model.loadMessages(c.id); model.markRead(c.id) } }
+                marks.set(c.id, !unread)
+            },
+            SwipeAction(icon: c.pinned ? "pin.slash.fill" : "pin.fill", title: c.pinned ? "Открепить" : "Закрепить", color: Color(hex: 0x34C759)) {
+                Task { await model.setPinned(c.id, !c.pinned) }
+            },
+        ]
+    }
+
+    /// свайп влево: «Убрать звук» (оранжевая) и «Удалить» (крайняя, красная)
+    private func trailingSwipes(_ c: ChatItem) -> [SwipeAction] {
+        [
+            SwipeAction(icon: c.muted ? "speaker.wave.2.fill" : "speaker.slash.fill", title: c.muted ? "Вкл. звук" : "Убрать звук", color: Color(hex: 0xFF9F0A)) {
+                Task { await model.setMuted(c.id, !c.muted) }
+            },
+            SwipeAction(icon: "trash.fill", title: "Удалить", color: Color(hex: 0xFF3B30)) { deleting = c },
+        ]
     }
 
     private var searchList: some View {
@@ -280,6 +307,7 @@ struct RowButtonStyle: ButtonStyle {
 
 struct ChatRow: View {
     @EnvironmentObject var model: AppModel
+    @ObservedObject private var marks = UnreadMarks.shared
     let chat: ChatItem
 
     var body: some View {
@@ -323,6 +351,8 @@ struct ChatRow: View {
                             .padding(.horizontal, 7).frame(minWidth: 22, minHeight: 22)
                             .background(Capsule().fill(chat.muted ? Color(hex: 0xa3a6c2) : Theme.a1))
                             .foregroundColor(.white)
+                    } else if marks.has(chat.id) {
+                        Circle().fill(chat.muted ? Color(hex: 0xa3a6c2) : Theme.a1).frame(width: 22, height: 22)
                     } else if chat.pinned {
                         Image(systemName: "pin.fill").font(.caption).foregroundColor(Theme.muted)
                     }

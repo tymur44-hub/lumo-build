@@ -1181,6 +1181,7 @@ final class AppModel: ObservableObject {
     }
 
     func markRead(_ chatId: String) {
+        UnreadMarks.shared.set(chatId, false)   // ручная отметка «не прочитан» снимается, как только чат открыт
         guard let me = myId, isActive, let list = messages[chatId], let last = list.last(where: { $0.id > 0 }) else { return }
         if let c = chat(chatId), c.unread == 0, let lr = c.lastReadAt, lr >= last.createdAt { return }
         let ts = DateParser.string(last.createdAt.addingTimeInterval(0.001))
