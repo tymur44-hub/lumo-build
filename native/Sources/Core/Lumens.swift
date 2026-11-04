@@ -126,7 +126,8 @@ final class Lumens: ObservableObject {
         if !c.isEmpty {
             // число комментариев и последние комментаторы; на старом сервере — только число
             let withHeads = (try? await API.shared.rpc("lm_comment_heads", ["p_posts": c])) as? [JSON]
-            let a = withHeads ?? (((try? await API.shared.rpc("lm_comment_counts", ["p_posts": c])) as? [JSON]) ?? [])
+            var a: [JSON] = withHeads ?? []
+            if withHeads == nil { a = ((try? await API.shared.rpc("lm_comment_counts", ["p_posts": c])) as? [JSON]) ?? [] }
             var got: [Int: Int] = [:], hs: [Int: [String]] = [:]
             for o in a { if let p = o.int("post") { got[p] = o.int("n") ?? 0; hs[p] = (o["heads"] as? [String]) ?? [] } }
             for id in c { comments[id] = got[id] ?? 0; heads[id] = hs[id] ?? [] }

@@ -52,7 +52,7 @@ struct SwipeChatRow<Content: View>: View {
                 .background(
                     RoundedRectangle(cornerRadius: 26, style: .continuous)
                         .fill(Theme.panel2)
-                        .opacity(min(1, abs(x) / 24))
+                        .opacity(Double(min(CGFloat(1), abs(x) / CGFloat(24))))
                 )
                 .offset(x: x)
                 .overlay {
