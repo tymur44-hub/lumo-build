@@ -444,3 +444,30 @@ fun StarEmitter(size: Dp = 130.dp, modifier: Modifier = Modifier) {
 
 private fun Modifier.graphicsLayerSpin(deg: Float, density: Float): Modifier =
     this.then(Modifier.graphicsLayer { rotationY = deg; cameraDistance = 14f * density })
+
+/** Иллюстрация пустой переписки с человеком: дружелюбный персонаж машет рукой */
+@Composable
+fun EmptyChatMascot(size: Dp, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(size)) {
+        val s = this.size.minDimension / 100f
+        scale(s, Offset.Zero) {
+            val body = dg(0xFF9B7BFF, 0xFF4FC3F7)
+            drawOval(body, Offset(17f, 30f), Size(66f, 60f))
+            drawCircle(Color(0xFFFFB3C6).copy(alpha = 0.55f), 7f, Offset(28f, 60f))
+            drawCircle(Color(0xFFFFB3C6).copy(alpha = 0.55f), 7f, Offset(72f, 60f))
+            drawCircle(Color(0xFF2A2240), 4.2f, Offset(40f, 54f))
+            drawCircle(Color(0xFF2A2240), 4.2f, Offset(60f, 54f))
+            drawCircle(Color.White, 1.3f, Offset(41.4f, 52.6f))
+            drawCircle(Color.White, 1.3f, Offset(61.4f, 52.6f))
+            val smile = Path().apply { moveTo(39f, 66f); quadraticBezierTo(50f, 75f, 61f, 66f) }
+            drawPath(smile, Color(0xFF2A2240), style = Stroke(2.6f, cap = StrokeCap.Round))
+            val arm = Path().apply { moveTo(78f, 42f); cubicTo(86f, 32f, 98f, 34f, 96f, 44f); cubicTo(95f, 50f, 87f, 53f, 82f, 50f); close() }
+            drawPath(arm, body)
+            drawCircle(body, 7f, Offset(90f, 34f))
+            val fs = Stroke(2f, cap = StrokeCap.Round)
+            drawLine(Color(0xFF2A2240), Offset(85f, 28f), Offset(82f, 23f), 2f, StrokeCap.Round)
+            drawLine(Color(0xFF2A2240), Offset(90f, 26f), Offset(89f, 20f), 2f, StrokeCap.Round)
+            drawLine(Color(0xFF2A2240), Offset(95f, 28f), Offset(98f, 23f), 2f, StrokeCap.Round)
+        }
+    }
+}

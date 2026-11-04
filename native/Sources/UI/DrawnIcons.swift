@@ -440,3 +440,34 @@ struct SparkleFieldView: View {
         .allowsHitTesting(false)
     }
 }
+
+/// Иллюстрация пустой переписки с человеком: дружелюбный персонаж машет рукой
+struct EmptyChatMascotView: View {
+    var size: CGFloat = 104
+    var body: some View {
+        Canvas { ctx, sz in
+            let s = min(sz.width, sz.height) / 100
+            var g = ctx
+            g.scaleBy(x: s, y: s)
+            let bodyShading = dg([0x9B7BFF, 0x4FC3F7])
+            g.fill(Path(ellipseIn: CGRect(x: 17, y: 30, width: 66, height: 60)), with: bodyShading)
+            g.fill(Path(ellipseIn: CGRect(x: 21, y: 53, width: 14, height: 14)), with: .color(C(0xFFB3C6).opacity(0.55)))
+            g.fill(Path(ellipseIn: CGRect(x: 65, y: 53, width: 14, height: 14)), with: .color(C(0xFFB3C6).opacity(0.55)))
+            g.fill(Path(ellipseIn: CGRect(x: 35.8, y: 49.8, width: 8.4, height: 8.4)), with: .color(C(0x2A2240)))
+            g.fill(Path(ellipseIn: CGRect(x: 55.8, y: 49.8, width: 8.4, height: 8.4)), with: .color(C(0x2A2240)))
+            g.fill(Path(ellipseIn: CGRect(x: 40.1, y: 51.3, width: 2.6, height: 2.6)), with: .color(.white))
+            g.fill(Path(ellipseIn: CGRect(x: 60.1, y: 51.3, width: 2.6, height: 2.6)), with: .color(.white))
+            g.stroke(P { p in p.move(to: pt(39, 66)); p.addQuadCurve(to: pt(61, 66), control: pt(50, 75)) }, with: .color(C(0x2A2240)), style: StrokeStyle(lineWidth: 2.6, lineCap: .round))
+            let arm = P { p in
+                p.move(to: pt(78, 42)); p.addCurve(to: pt(96, 44), control1: pt(86, 32), control2: pt(98, 34))
+                p.addCurve(to: pt(82, 50), control1: pt(95, 50), control2: pt(87, 53)); p.closeSubpath()
+            }
+            g.fill(arm, with: bodyShading)
+            g.fill(Path(ellipseIn: CGRect(x: 83, y: 27, width: 14, height: 14)), with: bodyShading)
+            for (a, b) in [(pt(85, 28), pt(82, 23)), (pt(90, 26), pt(89, 20)), (pt(95, 28), pt(98, 23))] {
+                g.stroke(P { p in p.move(to: a); p.addLine(to: b) }, with: .color(C(0x2A2240)), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}

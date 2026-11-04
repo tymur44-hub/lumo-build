@@ -379,6 +379,7 @@ object AppModel {
             onlineChannel?.let { Realtime.track(it, jsonOf("at" to System.currentTimeMillis())) }
             presence(true)
             scope.launch {
+                loadMe() // статус (Premium, эмодзи-статус и т.п.) мог поменяться, пока приложение было в фоне
                 loadChats()
                 openChatId?.let { loadMessages(it); markRead(it) }
             }

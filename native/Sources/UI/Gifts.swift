@@ -12,10 +12,10 @@ func isoUtc(_ d: Date) -> String {
 struct GiftTarget: Identifiable { let id: String }
 
 func rarityName(_ r: String) -> String {
-    switch r { case "rare": return "Редкий"; case "epic": return "Эпический"; case "legendary": return "Легендарный"; case "mythic": return "Мифический"; default: return r }
+    switch r { case "rare": return "Редкий"; case "epic": return "Эпический"; case "legendary": return "Легендарный"; case "mythic": return "Мифический"; case "ultra": return "Божественный"; default: return r }
 }
 func rarityColor(_ r: String) -> Color {
-    switch r { case "rare": return Color(hex: 0x22c7e0); case "epic": return Color(hex: 0xff8a3d); case "legendary": return Color(hex: 0xb069ff); case "mythic": return Color(hex: 0xffc247); default: return .gray }
+    switch r { case "rare": return Color(hex: 0x22c7e0); case "epic": return Color(hex: 0xff8a3d); case "legendary": return Color(hex: 0xb069ff); case "mythic": return Color(hex: 0xffc247); case "ultra": return Color(hex: 0xff2ec4); default: return .gray }
 }
 
 @MainActor

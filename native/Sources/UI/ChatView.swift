@@ -617,6 +617,23 @@ struct ChatView: View {
                     Color.clear.frame(height: 6).id("bottom")
                         .onAppear { atBottom = true; newBelow = 0 }
                         .onDisappear { atBottom = false }
+                    if feed.isEmpty, model.hasMore[chatId] != nil {
+                        VStack(spacing: 14) {
+                            if chat?.isPrivate == true {
+                                EmptyChatMascotView(size: 104)
+                                Text("Сообщений пока нет").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text)
+                                Text("Отправьте сообщение или напишите первым").font(.system(size: 13.5)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+                            } else {
+                                Text("👋").font(.system(size: 54))
+                                Text("Сообщений пока нет").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text)
+                                Text("Напишите что-нибудь!").font(.system(size: 14)).foregroundColor(Theme.muted)
+                            }
+                        }
+                        .padding(50)
+                        .frame(maxWidth: .infinity)
+                        .rotationEffect(.degrees(180))
+                        .scaleEffect(x: -1, y: 1)
+                    }
                     ForEach(feed) { f in
                         VStack(spacing: 2) {
                             if f.showDay { DayLabel(date: f.message.createdAt) }

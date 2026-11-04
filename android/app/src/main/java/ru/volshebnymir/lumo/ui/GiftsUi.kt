@@ -53,8 +53,8 @@ data class OwnedGift(val id: Long, val giftId: String, val name: String, val rar
 
 fun isoUtc(d: java.util.Date): String = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(d)
 
-fun rarityName(r: String) = when (r) { "rare" -> "Редкий"; "epic" -> "Эпический"; "legendary" -> "Легендарный"; "mythic" -> "Мифический"; else -> r }
-fun rarityColor(r: String) = when (r) { "rare" -> Color(0xFF22C7E0); "epic" -> Color(0xFFFF8A3D); "legendary" -> Color(0xFFB069FF); "mythic" -> Color(0xFFFFC247); else -> Color.Gray }
+fun rarityName(r: String) = when (r) { "rare" -> "Редкий"; "epic" -> "Эпический"; "legendary" -> "Легендарный"; "mythic" -> "Мифический"; "ultra" -> "Божественный"; else -> r }
+fun rarityColor(r: String) = when (r) { "rare" -> Color(0xFF22C7E0); "epic" -> Color(0xFFFF8A3D); "legendary" -> Color(0xFFB069FF); "mythic" -> Color(0xFFFFC247); "ultra" -> Color(0xFFFF2EC4); else -> Color.Gray }
 
 object Gifts {
     val catalog = mutableStateListOf<Gift>()

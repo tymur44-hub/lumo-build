@@ -206,6 +206,7 @@ fun PremiumScreen() {
     var emo by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(Unit) {
+        AppModel.loadMe() // статус Premium мог измениться (например, админ выдал подарок), пока экран был закрыт — обновляем перед показом
         val r = runCatching { Api.rpc("lm_my_premium") }.getOrNull()
         val o = (r as? JSONObject) ?: (r as? JSONArray)?.optJSONObject(0)
         if (o != null) { owner = o.optBoolean("owner"); until = o.optString("until").takeIf { it.isNotEmpty() && it != "null" } }

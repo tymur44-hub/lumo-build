@@ -259,9 +259,16 @@ fun ChatScreen(chatId: String) {
                     if (!loaded && msgs.isEmpty()) item { Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { androidx.compose.material3.CircularProgressIndicator(color = p.a1) } }
                     if (loaded && msgs.isEmpty()) item {
                         Column(Modifier.fillMaxWidth().padding(50.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("👋", fontSize = 54.sp)
-                            Text("Сообщений пока нет", color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                            Text("Напишите что-нибудь!", color = p.muted, fontSize = 14.sp)
+                            if (chat?.isPrivate == true) {
+                                EmptyChatMascot(104.dp)
+                                Spacer(Modifier.height(14.dp))
+                                Text("Сообщений пока нет", color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                                Text("Отправьте сообщение или напишите первым", color = p.muted, fontSize = 13.5.sp, textAlign = TextAlign.Center)
+                            } else {
+                                Text("👋", fontSize = 54.sp)
+                                Text("Сообщений пока нет", color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                                Text("Напишите что-нибудь!", color = p.muted, fontSize = 14.sp)
+                            }
                         }
                     }
                 }
