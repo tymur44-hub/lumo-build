@@ -394,6 +394,8 @@ struct MessageRow: View {
                         }
                     }
                 }
+                // в посте с комментариями пузырь во всю ширину — время и просмотры прижимаем к правому краю
+                .frame(maxWidth: showComments ? .infinity : nil, alignment: .leading)
                 // время и галочка — у правого нижнего угла всего пузыря (а не у конца короткого текста под цитатой)
                 .overlay(alignment: .bottomTrailing) {
                     if timeOnBubble { timeLine(onMedia: false).offset(y: 2) }

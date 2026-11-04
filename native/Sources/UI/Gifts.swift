@@ -556,7 +556,9 @@ struct ProfileGiftsRow: View {
     let userId: String
     @State private var view: OwnedGift?
     var body: some View {
-        Group {
+        // контейнер не должен быть пустым: у пустой группы .task не запускается — подарки так и не загружались
+        VStack(spacing: 0) {
+            Color.clear.frame(height: 0)
             let l = store.of[userId] ?? []
             if !l.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {

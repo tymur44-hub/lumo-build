@@ -45,7 +45,7 @@ struct SwipeChatRow<Content: View>: View {
     private let spring = Animation.spring(response: 0.34, dampingFraction: 0.82)
 
     var body: some View {
-        ZStack {
+        attachSwipe(ZStack {
             if x > 0 { actions(leading, leadingSide: true).frame(maxWidth: .infinity, alignment: .leading) }
             if x < 0 { actions(trailing, leadingSide: false).frame(maxWidth: .infinity, alignment: .trailing) }
             content()
@@ -61,8 +61,7 @@ struct SwipeChatRow<Content: View>: View {
                         Color.clear.contentShape(Rectangle()).onTapGesture { close() }
                     }
                 }
-        }
-        .simultaneousGesture(drag)
+        })
         .onChange(of: openId) { v in
             if v != id && x != 0 { withAnimation(spring) { x = 0 }; full = false }
         }
@@ -109,43 +108,102 @@ struct SwipeChatRow<Content: View>: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.78), value: full)
     }
 
-    private var drag: some Gesture {
-        DragGesture(minimumDistance: 14, coordinateSpace: .local)
-            .onChanged { v in
-                if tracking == nil {
-                    tracking = abs(v.translation.width) > abs(v.translation.height) * 1.3
-                    if tracking == true { start = x; openId = id }
-                }
-                guard tracking == true else { return }
-                var nx = start + v.translation.width
-                if leading.isEmpty { nx = min(nx, 0) }
-                if trailing.isEmpty { nx = max(nx, 0) }
-                // за пределом крайней позиции строка идёт туже
-                let edge = UIScreen.main.bounds.width * 0.9
-                if abs(nx) > edge { nx = (nx > 0 ? 1 : -1) * (edge + (abs(nx) - edge) * 0.3) }
-                x = nx
-                let f = abs(nx) > fullAt
-                if f != full {
-                    full = f
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                }
-            }
-            .onEnded { v in
-                defer { tracking = nil }
-                guard tracking == true else { return }
-                if full {
-                    let a = x > 0 ? leading.first : trailing.last
-                    close()
-                    a?.run()
-                    return
-                }
-                let vx = v.predictedEndTranslation.width - v.translation.width
-                withAnimation(spring) {
-                    if x > lw * 0.5 || (x > 24 && vx > 160) { x = lw }
-                    else if x < -rw * 0.5 || (x < -24 && vx < -160) { x = -rw }
-                    else { x = 0 }
-                }
-                if x == 0 && openId == id { openId = nil }
-            }
+    // MARK: жест
+
+    private func began() {
+        start = x
+        openId = id
+    }
+
+    private func changed(_ tx: CGFloat) {
+        var nx = start + tx
+        if leading.isEmpty { nx = min(nx, 0) }
+        if trailing.isEmpty { nx = max(nx, 0) }
+        // за пределом крайней позиции строка идёт туже
+        let edge = UIScreen.main.bounds.width * 0.9
+        if abs(nx) > edge { nx = (nx > 0 ? 1 : -1) * (edge + (abs(nx) - edge) * 0.3) }
+        x = nx
+        let f = abs(nx) > fullAt
+        if f != full {
+            full = f
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        }
+    }
+
+    private func ended(_ vx: CGFloat) {
+        if full {
+            let a = x > 0 ? leading.first : trailing.last
+            close()
+            a?.run()
+            return
+        }
+        withAnimation(spring) {
+            if x > lw * 0.5 || (x > 24 && vx > 400) { x = lw }
+            else if x < -rw * 0.5 || (x < -24 && vx < -400) { x = -rw }
+            else { x = 0 }
+        }
+        if x == 0 && openId == id { openId = nil }
+    }
+
+    /// iOS 18+: системный жест, который начинается только при горизонтальном движении —
+    /// не мешает прокрутке списка и отменяет нажатие по строке (чат после свайпа не открывается)
+    @ViewBuilder private func attachSwipe<V: View>(_ v: V) -> some View {
+        if #available(iOS 18.0, *) {
+            v.gesture(HorizontalPan(began: { tracking = true; began() },
+                                    changed: { changed($0) },
+                                    ended: { vx in tracking = nil; ended(vx) }))
+        } else {
+            v.simultaneousGesture(
+                DragGesture(minimumDistance: 14, coordinateSpace: .local)
+                    .onChanged { g in
+                        if tracking == nil {
+                            tracking = abs(g.translation.width) > abs(g.translation.height) * 1.3
+                            if tracking == true { began() }
+                        }
+                        if tracking == true { changed(g.translation.width) }
+                    }
+                    .onEnded { g in
+                        let was = tracking
+                        tracking = nil
+                        if was == true { ended((g.predictedEndTranslation.width - g.translation.width) * 4) }
+                    }
+            )
+        }
+    }
+}
+
+
+/// Горизонтальный свайп через UIKit (iOS 18+): начинается, только если движение явно горизонтальное
+@available(iOS 18.0, *)
+struct HorizontalPan: UIGestureRecognizerRepresentable {
+    var began: () -> Void
+    var changed: (CGFloat) -> Void
+    var ended: (CGFloat) -> Void
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+            guard let p = g as? UIPanGestureRecognizer else { return false }
+            let v = p.velocity(in: p.view)
+            return abs(v.x) > abs(v.y) * 1.2
+        }
+    }
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let g = UIPanGestureRecognizer()
+        g.delegate = context.coordinator
+        g.cancelsTouchesInView = true
+        return g
+    }
+
+    func handleUIGestureRecognizerAction(_ g: UIPanGestureRecognizer, context: Context) {
+        let tx = g.translation(in: g.view).x
+        switch g.state {
+        case .began: began(); changed(tx)
+        case .changed: changed(tx)
+        case .ended, .cancelled, .failed: ended(g.velocity(in: g.view).x)
+        default: break
+        }
     }
 }

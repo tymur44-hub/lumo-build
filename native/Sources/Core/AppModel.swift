@@ -1506,7 +1506,8 @@ final class AppModel: ObservableObject {
         scheduleReload()
         guard m.senderId != myId, m.kind != "system" else { return }
         if let sid = m.senderId, profiles[sid] == nil { Task { _ = await profile(sid) } }
-        let visible = isActive && openChatId == m.chatId
+        // чат открыт (в том числе если поверх него открыт профиль собеседника) — баннер не нужен
+        let visible = isActive && (openChatId == m.chatId || path.last == m.chatId)
         if isActive && m.kind != "call" && chat(m.chatId)?.muted != true { playIncomingSound() }
         if visible {
             Task { @MainActor [weak self] in
@@ -1533,7 +1534,8 @@ final class AppModel: ObservableObject {
             else { title = c?.displayName ?? "Группа"; body = senderName + ": " + body }
             // Баннер внутри приложения — показываем всегда, пока Lumo открыт, независимо
             // от того, разрешены ли системные уведомления (их могли и не разрешить)
-            if self.isActive {
+            // пока грузились данные, этот чат могли открыть — тогда баннер не показываем
+            if self.isActive && self.openChatId != m.chatId && self.path.last != m.chatId {
                 let av = (c?.isPrivate ?? true) ? c?.peerAvatar : c?.avatarURL
                 let col = (c?.isPrivate ?? true) ? (c?.peerColor ?? 0) : (c?.color ?? 0)
                 self.showBanner(IncomingBanner(id: "m\(m.id)", chatId: m.chatId, title: title, body: body, avatarURL: av, color: col))

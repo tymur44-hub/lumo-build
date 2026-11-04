@@ -1005,6 +1005,9 @@ struct ComposerView: View {
         }
         .lumoBarBackground()
         .onChange(of: focused) { f in if f { showStickers = false } }
+        // ответ (свайпом или из меню) или редактирование — сразу открываем клавиатуру
+        .onChange(of: reply?.id) { id in if id != nil { focused = true } }
+        .onChange(of: editing?.id) { id in if id != nil { focused = true } }
         // меню сообщения: клавиатура прячется, а после закрытия меню возвращается, если была открыта
         .onReceive(NotificationCenter.default.publisher(for: .lumoMenuOpen)) { _ in
             kbRestore = focused
