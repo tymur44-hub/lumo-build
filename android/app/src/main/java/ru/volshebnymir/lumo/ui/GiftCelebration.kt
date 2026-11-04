@@ -32,7 +32,7 @@ import kotlin.random.Random
 
 private fun giftGlow(id: String) = when (id) {
     "pearl" -> Color(0xFF35D6E8); "comet" -> Color(0xFFFF8A3D); "crystal" -> Color(0xFF7D8DFF)
-    "key" -> Color(0xFFFFC247); "flower" -> Color(0xFFC066FF); else -> Color(0xFFB069FF)
+    "key" -> Color(0xFFFFC247); "flower" -> Color(0xFFC066FF); "pumpkin" -> Color(0xFFFF8A21); "crown" -> Color(0xFFFF2EC4); else -> Color(0xFFB069FF)
 }
 
 private class Spark(val a: Float, val r: Float, val s: Float, val d: Float)

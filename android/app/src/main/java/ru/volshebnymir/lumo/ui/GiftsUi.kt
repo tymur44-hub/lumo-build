@@ -75,6 +75,15 @@ object Gifts {
         loadUser(null)
     }
 
+    private var artLoadedAt = 0L
+    /** Рисунки подарков с сервера — не чаще раза в минуту */
+    suspend fun ensureArt() {
+        val now = System.currentTimeMillis()
+        if (now - artLoadedAt < 60_000) return
+        artLoadedAt = now
+        runCatching { (Api.rpc("lm_gift_art") as? org.json.JSONObject)?.let { o -> o.keys().forEach { k -> val v = o.optString(k); if (v.contains("<svg")) art[k] = v } } }
+    }
+
     suspend fun loadUser(user: String?) {
         val a = runCatching { Api.rpc("lm_gift_mine", if (user == null) jsonOf() else jsonOf("p_user" to user)) as? JSONArray }.getOrNull() ?: return
         val l = parse(a, user ?: AppModel.myId)
@@ -108,6 +117,8 @@ fun GiftSvg(svg: String, modifier: Modifier = Modifier) {
     AndroidView(factory = { c ->
         WebView(c).apply {
             setBackgroundColor(0)
+            // без аппаратного слоя прозрачный WebView внутри Compose на части устройств рисуется пустым
+            setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
             isVerticalScrollBarEnabled = false; isHorizontalScrollBarEnabled = false; isClickable = false
             loadDataWithBaseURL(null, "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}svg{width:100%;height:100%;display:block}</style></head><body>" + svg + "</body></html>", "text/html", "utf-8", null)
         }
@@ -119,6 +130,8 @@ fun GiftThumb(id: String, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     val bmp = remember(id) { runCatching { ctx.assets.open("gifts/$id.png").use { BitmapFactory.decodeStream(it) }?.asImageBitmap() }.getOrNull() }
     val srv = Gifts.art[id]
+    // подарок, которого нет в сборке: рисунок приходит с сервера — подгружаем, если ещё не загружен (чат, профиль)
+    if (bmp == null && srv == null) LaunchedEffect(id) { Gifts.ensureArt() }
     if (bmp != null) Image(bmp, null, modifier.clip(RoundedCornerShape(20.dp)), contentScale = ContentScale.Crop)
     else if (srv != null) GiftSvg(srv, modifier.clip(RoundedCornerShape(20.dp)))
     else Box(modifier.clip(RoundedCornerShape(20.dp)).background(Color.Gray.copy(alpha = 0.3f)))
