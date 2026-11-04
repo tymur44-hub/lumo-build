@@ -53,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.foundation.border
+import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.automirrored.filled.Forward
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -772,16 +773,6 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
         BotButtons(m, mine)
         val grp = if (chat?.isChannel == true) Lumens.linked(chat.id) else null
         LaunchedEffect(m.id) { if (m.id > 0 && !m.deleted) Lumens.request(m.id, grp != null) }
-        if (grp != null && m.id > 0 && !m.deleted && m.kind != "system") {
-            val n = Lumens.comments[m.id] ?: 0
-            Row(Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (mine) Color.White.copy(alpha = 0.16f) else p.a1.copy(alpha = 0.1f))
-                .bouncy { AppModel.push(Screen.Comments(m.chatId, m.id)) }.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.ChatBubbleOutline, null, tint = if (mine) Color.White else p.a1, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(if (n == 0) "Оставить комментарий" else "$n ${lumenCommentWord(n)}", color = if (mine) Color.White else p.a1, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                Icon(Icons.Filled.ChevronRight, null, tint = if (mine) Color.White else p.a1, modifier = Modifier.size(18.dp))
-            }
-        }
         // время и галочки
         val read = mine && chat != null && chat.othersReadAt != null && !chat.othersReadAt.before(m.createdAt)
         Row(Modifier.align(Alignment.End).then(if (bare) Modifier.padding(top = 3.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = 0.35f)).padding(horizontal = 7.dp, vertical = 1.dp) else pad),
@@ -796,6 +787,29 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
                 Spacer(Modifier.width(3.dp))
                 Icon(when { m.pending -> Icons.Filled.Schedule; read -> Icons.Filled.DoneAll; else -> Icons.Filled.Done }, null,
                     tint = if (bare) Color.White else sub, modifier = Modifier.size(14.dp))
+            }
+        }
+        // комментарии внизу поста, как в Telegram: линия, аватарки последних комментаторов, «N комментариев», стрелка
+        if (grp != null && m.id > 0 && !m.deleted && m.kind != "system" && !bare) {
+            val n = Lumens.comments[m.id] ?: 0
+            val hs = (Lumens.heads[m.id] ?: emptyList()).take(3)
+            val tint = if (mine) Color.White else p.a2
+            val ring = if (mine) p.a1 else p.bubble
+            Box(Modifier.padding(top = 6.dp).fillMaxWidth().widthIn(min = 220.dp).height(0.7.dp).background(if (mine) Color.White.copy(alpha = 0.3f) else p.line))
+            Row(Modifier.fillMaxWidth().widthIn(min = 220.dp).bouncy { AppModel.push(Screen.Comments(m.chatId, m.id)) }.padding(top = 8.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                if (n > 0 && hs.isNotEmpty()) {
+                    Box(Modifier.width((30 + 20 * (hs.size - 1)).dp).height(30.dp)) {
+                        hs.forEachIndexed { i, uid ->
+                            val pr = AppModel.profiles[uid]
+                            Avatar(AppModel.displayName(uid), pr?.avatarUrl, pr?.color ?: 0, 30.dp,
+                                modifier = Modifier.offset(x = (20 * i).dp).zIndex((3 - i).toFloat()).border(2.dp, ring, CircleShape))
+                        }
+                    }
+                } else Icon(Icons.Filled.ChatBubbleOutline, null, tint = tint, modifier = Modifier.size(21.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(if (n == 0) "Оставить комментарий" else "$n ${lumenCommentWord(n)}", color = tint, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                Icon(Icons.Filled.ChevronRight, null, tint = tint, modifier = Modifier.size(22.dp))
             }
         }
     }

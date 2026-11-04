@@ -26,13 +26,15 @@ final class Lumens: ObservableObject {
     @Published var canClaim = false
     @Published var tips: [Int: Int] = [:]
     @Published var comments: [Int: Int] = [:]
+    /// последние комментаторы поста (до трёх) — аватарки в плашке комментариев
+    @Published var heads: [Int: [String]] = [:]
     @Published var cfg: [String: ChatCfg] = [:]
     private var askedTips = Set<Int>(), askedComments = Set<Int>()
     private var pendTips = Set<Int>(), pendComments = Set<Int>()
     private var flushTask: Task<Void, Never>?
 
     func reset() {
-        balance = 0; streak = 0; canClaim = false; tips = [:]; comments = [:]; cfg = [:]
+        balance = 0; streak = 0; canClaim = false; tips = [:]; comments = [:]; heads = [:]; cfg = [:]
         askedTips = []; askedComments = []; pendTips = []; pendComments = []
     }
 
@@ -122,10 +124,14 @@ final class Lumens: ObservableObject {
             for o in a { if let id = o.int("message_id") { tips[id] = o.int("total") ?? 0 } }
         }
         if !c.isEmpty {
-            let a = ((try? await API.shared.rpc("lm_comment_counts", ["p_posts": c])) as? [JSON]) ?? []
-            var got: [Int: Int] = [:]
-            for o in a { if let p = o.int("post") { got[p] = o.int("n") ?? 0 } }
-            for id in c { comments[id] = got[id] ?? 0 }
+            // число комментариев и последние комментаторы; на старом сервере — только число
+            let withHeads = (try? await API.shared.rpc("lm_comment_heads", ["p_posts": c])) as? [JSON]
+            let a = withHeads ?? (((try? await API.shared.rpc("lm_comment_counts", ["p_posts": c])) as? [JSON]) ?? [])
+            var got: [Int: Int] = [:], hs: [Int: [String]] = [:]
+            for o in a { if let p = o.int("post") { got[p] = o.int("n") ?? 0; hs[p] = (o["heads"] as? [String]) ?? [] } }
+            for id in c { comments[id] = got[id] ?? 0; heads[id] = hs[id] ?? [] }
+            let ids = Array(Set(hs.values.flatMap { $0 }))
+            if !ids.isEmpty { await AppModel.shared.loadProfiles(ids) }
         }
     }
 }

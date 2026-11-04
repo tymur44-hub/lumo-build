@@ -21,6 +21,8 @@ object Lumens {
     var canClaim by mutableStateOf(false)
     val tips = mutableStateMapOf<Int, Long>()
     val comments = mutableStateMapOf<Int, Int>()
+    /** последние комментаторы поста (до трёх) — аватарки в плашке комментариев */
+    val heads = mutableStateMapOf<Int, List<String>>()
     val cfg = mutableStateMapOf<String, ChatCfg>()
     private val askedTips = HashSet<Int>()
     private val askedComments = HashSet<Int>()
@@ -95,9 +97,13 @@ object Lumens {
             for (o in a) tips[o.optInt("message_id")] = o.optLong("total")
         }
         if (c.isNotEmpty()) {
-            val a = runCatching { Api.rpc("lm_comment_counts", jsonOf("p_posts" to JSONArray(c))) as? JSONArray }.getOrNull().objects()
+            // число комментариев и последние комментаторы; на старом сервере — только число
+            val a = (runCatching { Api.rpc("lm_comment_heads", jsonOf("p_posts" to JSONArray(c))) as? JSONArray }.getOrNull()
+                ?: runCatching { Api.rpc("lm_comment_counts", jsonOf("p_posts" to JSONArray(c))) as? JSONArray }.getOrNull()).objects()
             val got = a.associate { it.optInt("post") to it.optInt("n") }
-            for (id in c) comments[id] = got[id] ?: 0
+            val hs = a.associate { o -> o.optInt("post") to (o.optJSONArray("heads")?.let { h -> (0 until h.length()).mapNotNull { h.optString(it).takeIf { s -> s.isNotEmpty() } } } ?: emptyList()) }
+            for (id in c) { comments[id] = got[id] ?: 0; heads[id] = hs[id] ?: emptyList() }
+            hs.values.flatten().distinct().takeIf { it.isNotEmpty() }?.let { AppModel.loadProfiles(it) }
         }
     }
 }

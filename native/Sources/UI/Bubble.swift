@@ -143,7 +143,6 @@ struct MessageRow: View {
                     } else {
                         TipPill(id: m.id)
                     }
-                    commentsButton
                     botButtons
                 }
                 if !mine { Spacer(minLength: 44) }
@@ -243,21 +242,37 @@ struct MessageRow: View {
         }
     }
 
-    @ViewBuilder private var commentsButton: some View {
-        if chat?.isChannel == true, lumens.linked(chat?.id) != nil, m.id > 0, !m.deleted {
-            let n = lumens.comments[m.id] ?? 0
-            Button { onComments(m) } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "bubble.left").font(.system(size: 14, weight: .semibold))
-                    Text(n == 0 ? "Оставить комментарий" : "\(n) \(commentWord(n))").font(.system(size: 14, weight: .semibold))
-                    Spacer(minLength: 20)
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold))
+    private var showComments: Bool { chat?.isChannel == true && lumens.linked(chat?.id) != nil && m.id > 0 && !m.deleted }
+
+    /// Плашка комментариев внизу пузыря поста, как в Telegram: линия, аватарки последних комментаторов, «N комментариев», стрелка
+    private var commentsFooter: some View {
+        let n = lumens.comments[m.id] ?? 0
+        let hs = Array((lumens.heads[m.id] ?? []).prefix(3))
+        return Button { onComments(m) } label: {
+            VStack(spacing: 0) {
+                Rectangle().fill(Theme.line).frame(height: 0.7)
+                HStack(spacing: 10) {
+                    if n > 0, !hs.isEmpty {
+                        HStack(spacing: -10) {
+                            ForEach(Array(hs.enumerated()), id: \.offset) { i, uid in
+                                AvatarView(name: model.displayName(uid), url: model.profiles[uid]?.avatarURL, color: model.profiles[uid]?.color ?? 0, size: 30)
+                                    .overlay(Circle().stroke(Theme.bubble, lineWidth: 2))
+                                    .zIndex(Double(3 - i))
+                            }
+                        }
+                    } else {
+                        Image(systemName: "bubble.left").font(.system(size: 19, weight: .regular))
+                    }
+                    Text(n == 0 ? "Оставить комментарий" : "\(n) \(commentWord(n))").font(.system(size: 17, weight: .regular))
+                    Spacer(minLength: 12)
+                    Image(systemName: "chevron.right").font(.system(size: 15, weight: .semibold))
                 }
-                .foregroundColor(Theme.a1).padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Theme.a1.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                .foregroundColor(Theme.a2)
+                .padding(.horizontal, 12).padding(.top, 9).padding(.bottom, 8)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(BouncyButtonStyle())
         }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder private var reactionsRow: some View {
@@ -397,8 +412,10 @@ struct MessageRow: View {
         let shape: BubbleShape = mine
             ? BubbleShape(tl: big, tr: first ? big : small, bl: big, br: last ? tail : small)
             : BubbleShape(tl: first ? big : small, tr: big, bl: last ? tail : small, br: big)
-        return c()
-            .padding(.horizontal, 11).padding(.top, 6).padding(.bottom, 6)
+        return VStack(alignment: .leading, spacing: 0) {
+                c().padding(.horizontal, 11).padding(.top, 6).padding(.bottom, 6)
+                if showComments { commentsFooter.frame(minWidth: 240) }
+            }
             .background(
                 Group {
                     if mine { shape.fill(ex.bubFill(m.chatId)) } else { shape.fill(Theme.bubble) }
