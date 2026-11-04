@@ -150,11 +150,22 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
     private func signed(_ j: JSON, _ typ: String, _ sdp: String) -> JSON {
         var r = j
         if let c = secChat, let a = E2E.shared.encrypt(c, "lumo-call1|\(callId ?? "")|\(typ)|\(CallManager.sdpFp(sdp))") { r["auth"] = a }
+        // Нет ключа на этом устройстве — честно сообщаем, чтобы собеседник не принял это за подмену
+        if r["auth"] == nil { r["nokey"] = 1 }
         return r
+    }
+
+    private var unverifiedCall: String?
+    /// Собеседник без ключа на своём устройстве: звонок идёт, но подлинность не проверена — предупреждаем один раз за звонок
+    private func unverified() {
+        guard unverifiedCall != callId else { return }
+        unverifiedCall = callId
+        AppModel.shared.say("У собеседника нет ключа шифрования на этом устройстве — подлинность звонка не проверена")
     }
 
     private func sdpOk(_ msg: JSON, _ typ: String) -> Bool {
         guard let c = secChat else { return true }
+        if msg["auth"] == nil, msg.int("nokey") == 1 { unverified(); return true }
         guard let a = msg.str("auth"), E2E.isEnc(a) else { return false }
         return E2E.shared.decrypt(c, a) == "lumo-call1|\(callId ?? "")|\(typ)|\(CallManager.sdpFp(msg.dict("sdp").str("sdp") ?? ""))"
     }

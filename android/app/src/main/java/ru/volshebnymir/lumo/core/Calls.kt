@@ -111,11 +111,20 @@ object Calls {
         Regex("a=fingerprint:(\\S+) (\\S+)", RegexOption.IGNORE_CASE).findAll(s).map { it.groupValues[1].lowercase() + " " + it.groupValues[2].uppercase() }.toSet().sorted().joinToString(",")
     private fun signed(j: JSONObject, typ: String, sdp: String): JSONObject {
         secChat?.let { c -> E2E.encrypt(c, "lumo-call1|$callId|$typ|${sdpFp(sdp)}")?.let { j.put("auth", it) } }
+        // Нет ключа на этом устройстве — честно сообщаем, чтобы собеседник не принял это за подмену
+        if (!j.has("auth")) j.put("nokey", 1)
         return j
+    }
+    private var unverifiedCall: String? = null
+    /** Собеседник без ключа на своём устройстве: звонок идёт, но подлинность не проверена — предупреждаем один раз за звонок */
+    private fun unverified() {
+        if (unverifiedCall == callId) return
+        unverifiedCall = callId
+        AppModel.say("У собеседника нет ключа шифрования на этом устройстве — подлинность звонка не проверена")
     }
     private fun sdpOk(msg: JSONObject, typ: String): Boolean {
         val c = secChat ?: return true
-        val a = msg.str("auth") ?: return false
+        val a = msg.str("auth") ?: return if (msg.optInt("nokey") == 1) { unverified(); true } else false
         if (!E2E.isEnc(a)) return false
         return E2E.decrypt(c, a) == "lumo-call1|$callId|$typ|${sdpFp(msg.obj("sdp").str("sdp") ?: "")}"
     }
