@@ -160,22 +160,3 @@ fun ScheduledDialog(chatId: String, onClose: () -> Unit) {
     }, confirmButton = { TextButton(onClose) { Text("Готово") } })
 }
 
-/** Выбор смайлик-статуса */
-@Composable
-fun EmojiStatusDialog(onClose: () -> Unit) {
-    val p = P
-    val scope = rememberCoroutineScope()
-    val list = listOf("⭐", "🔥", "💎", "🚀", "🎧", "📚", "🌴", "☕", "🎮", "💼", "🛠", "🌙", "❤️", "🎯", "🍀", "✈️")
-    AlertDialog(onDismissRequest = onClose, title = { Text("Смайлик-статус") }, text = {
-        Column {
-            Text("Смайлик показывается рядом с вашим именем в чатах и профиле.", color = p.muted, fontSize = 14.sp)
-            Spacer(Modifier.height(10.dp))
-            list.chunked(4).forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    row.forEach { e -> Text(e, fontSize = 30.sp, modifier = Modifier.clip(RoundedCornerShape(12.dp)).bouncy { scope.launch { AppModel.setEmojiStatus(e); onClose() } }.padding(10.dp)) }
-                }
-            }
-        }
-    }, confirmButton = { TextButton({ scope.launch { AppModel.setEmojiStatus(""); onClose() } }) { Text("Убрать статус") } },
-        dismissButton = { TextButton(onClose) { Text("Закрыть") } })
-}

@@ -295,7 +295,8 @@ struct MessageRow: View {
         } else if m.kind == "sticker" || (m.kind == "text" && isOnlyEmoji(m.body) && m.replyTo == nil && m.forwardedFrom == nil) {
             VStack(alignment: mine ? .trailing : .leading, spacing: 2) {
                 if m.kind == "sticker", m.meta["anim"] != nil { AnimatedEmoji(emoji: m.body ?? "", size: 96, tappable: true) }
-                else { Text(m.body ?? "").font(.system(size: m.kind == "sticker" ? 84 : 52)) }
+                else if m.kind == "sticker" { StickerBodyView(body_: m.body, size: 96) }
+                else { Text(m.body ?? "").font(.system(size: 52)) }
                 timeLine(onMedia: true)
             }
         } else if m.kind == "video_note" {
@@ -403,9 +404,16 @@ struct MessageRow: View {
             .frame(maxWidth: min(UIScreen.main.bounds.width * 0.78, 560), alignment: mine ? .trailing : .leading)
     }
 
-    /// Невидимый «запас» под время в конце текста
+    /// Невидимый «запас» под время в конце текста — должен совпадать по ширине
+    /// с реальной timeLine(), иначе счётчик просмотров в каналах налезает на текст
+    /// (т.к. раньше запас не учитывал глаз+число просмотров)
     private var timeReserve: String {
-        "\u{2002}" + (m.editedAt != nil ? "изм. " : "") + Fmt.clock(m.createdAt) + (mine ? "\u{2002}\u{2002}" : "")
+        var s = ""
+        if chat?.isChannel == true, let v = model.msgViews[m.id], v > 0 {
+            s += String(repeating: "\u{2002}", count: viewsText(v).count + 2)
+        }
+        s += "\u{2002}" + (m.editedAt != nil ? "изм. " : "") + Fmt.clock(m.createdAt) + (mine ? "\u{2002}\u{2002}" : "")
+        return s
     }
 
     private func timeLine(onMedia: Bool) -> some View {

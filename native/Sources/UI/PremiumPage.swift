@@ -4,8 +4,8 @@ import SwiftUI
 
 /// Ключ хранится в профиле как «a:ключ»; у остальных клиентов он показывается как обычный эмодзи
 let animEmoji: [(String, String)] = [("fire", "🔥"), ("heart", "❤️"), ("star", "⭐"), ("rocket", "🚀"), ("crown", "👑"), ("gem", "💎"),
-                                      ("bolt", "⚡"), ("ghost", "👻"), ("sun", "☀️"), ("moon", "🌙"), ("clover", "🍀"), ("note", "🎵")]
-let classicEmoji = ["🎧", "📚", "🌴", "☕", "🎮", "💼", "🛠", "🎯", "✈️", "🏆", "🎨", "📷"]
+                                      ("bolt", "⚡"), ("ghost", "👻"), ("sun", "☀️"), ("moon", "🌙"), ("clover", "🍀"), ("note", "🎵"),
+                                      ("snow", "❄️"), ("trophy", "🏆"), ("skull", "💀"), ("pumpkin", "🎃"), ("confetti", "🎊"), ("witch", "🧙")]
 
 func emojiGlyph(_ s: String) -> String {
     if s.hasPrefix("a:") { return animEmoji.first { $0.0 == String(s.dropFirst(2)) }?.1 ?? "⭐" }
@@ -41,15 +41,6 @@ struct EmojiStatusSheet: View {
                         ForEach(animEmoji, id: \.0) { e in
                             Button { Task { await model.setEmojiStatus("a:" + e.0); dismiss() } } label: {
                                 StatusEmojiView(s: "a:" + e.0, size: 32).frame(maxWidth: .infinity).frame(height: 58)
-                                    .background(Theme.panel, in: RoundedRectangle(cornerRadius: 14))
-                            }
-                        }
-                    }
-                    Text("Обычные").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.muted).padding(.top, 6)
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 10) {
-                        ForEach(classicEmoji, id: \.self) { e in
-                            Button { Task { await model.setEmojiStatus(e); dismiss() } } label: {
-                                Text(e).font(.system(size: 30)).frame(maxWidth: .infinity).frame(height: 58)
                                     .background(Theme.panel, in: RoundedRectangle(cornerRadius: 14))
                             }
                         }

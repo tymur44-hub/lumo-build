@@ -96,9 +96,8 @@ import kotlin.random.Random
 
 /** Анимированные значки: ключ хранится в профиле как «a:ключ», у остальных клиентов он показывается как обычный эмодзи */
 val ANIM_EMOJI = listOf("fire" to "🔥", "heart" to "❤️", "star" to "⭐", "rocket" to "🚀", "crown" to "👑", "gem" to "💎",
-    "bolt" to "⚡", "ghost" to "👻", "sun" to "☀️", "moon" to "🌙", "clover" to "🍀", "note" to "🎵")
-
-val CLASSIC_EMOJI = listOf("🎧", "📚", "🌴", "☕", "🎮", "💼", "🛠", "🎯", "✈️", "🏆", "🎨", "📷")
+    "bolt" to "⚡", "ghost" to "👻", "sun" to "☀️", "moon" to "🌙", "clover" to "🍀", "note" to "🎵",
+    "snow" to "❄️", "trophy" to "🏆", "skull" to "💀", "pumpkin" to "🎃", "confetti" to "🎊", "witch" to "🧙")
 
 fun emojiGlyph(s: String): String = if (s.startsWith("a:")) ANIM_EMOJI.firstOrNull { it.first == s.removePrefix("a:") }?.second ?: "⭐" else s
 
@@ -126,16 +125,6 @@ fun EmojiPickerDialog(onClose: () -> Unit) {
                         row.forEach { (k, _) ->
                             Box(Modifier.size(60.dp).clip(RoundedCornerShape(16.dp)).bouncy { scope.launch { AppModel.setEmojiStatus("a:$k"); onClose() } }, contentAlignment = Alignment.Center) {
                                 StatusEmoji("a:$k", 32.sp)
-                            }
-                        }
-                    }
-                }
-                Text("Обычные", color = p.muted, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
-                CLASSIC_EMOJI.chunked(4).forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        row.forEach { e ->
-                            Box(Modifier.size(60.dp).clip(RoundedCornerShape(16.dp)).bouncy { scope.launch { AppModel.setEmojiStatus(e); onClose() } }, contentAlignment = Alignment.Center) {
-                                Text(e, fontSize = 30.sp)
                             }
                         }
                     }

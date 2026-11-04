@@ -178,6 +178,77 @@ private func drawIcon(_ c: GraphicsContext, _ k: String, _ t: Double) {
         }, with: sh)
         g.fill(Path(roundedRect: CGRect(x: 46, y: 14, width: 8, height: 64), cornerRadius: 3), with: sh)
         xf(g, rot: -20, at: pt(32, 78)).fill(Path(ellipseIn: CGRect(x: 14, y: 66, width: 36, height: 26)), with: sh)
+    case "snow":
+        for i in 0..<6 {
+            let g = xf(c, rot: 360 * t + Double(i) * 60, at: pt(50, 50))
+            g.stroke(P { p in p.move(to: pt(50, 50)); p.addLine(to: pt(50, 8)) }, with: .color(C(0xBFEBFF)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+            for b: CGFloat in [22, 34] {
+                g.stroke(P { p in p.move(to: pt(50, 50 - b)); p.addLine(to: pt(42, 44 - b)) }, with: .color(C(0xBFEBFF)), style: StrokeStyle(lineWidth: 3.4, lineCap: .round))
+                g.stroke(P { p in p.move(to: pt(50, 50 - b)); p.addLine(to: pt(58, 44 - b)) }, with: .color(C(0xBFEBFF)), style: StrokeStyle(lineWidth: 3.4, lineCap: .round))
+            }
+        }
+        let s = 1 + 0.08 * sn
+        xf(c, sx: s, sy: s, at: pt(50, 50)).fill(Path(ellipseIn: CGRect(x: 41, y: 41, width: 18, height: 18)), with: .radialGradient(Gradient(colors: [.white, C(0x8FD8FF)]), center: pt(50, 50), startRadius: 0, endRadius: 14))
+    case "trophy":
+        let g = xf(c, dy: -2 * max(0, sn))
+        g.fill(P { p in
+            p.move(to: pt(28, 14)); p.addLine(to: pt(72, 14)); p.addCurve(to: pt(50, 60), control1: pt(72, 46), control2: pt(64, 60))
+            p.addCurve(to: pt(28, 14), control1: pt(36, 60), control2: pt(28, 46)); p.closeSubpath()
+        }, with: vg(14, 60, [0xFFE066, 0xFFB020]))
+        g.stroke(P { p in p.move(to: pt(28, 20)); p.addCurve(to: pt(30, 46), control1: pt(8, 20), control2: pt(8, 48)) }, with: .color(C(0xFFB020)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+        g.stroke(P { p in p.move(to: pt(72, 20)); p.addCurve(to: pt(70, 46), control1: pt(92, 20), control2: pt(92, 48)) }, with: .color(C(0xFFB020)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+        g.fill(Path(CGRect(x: 46, y: 60, width: 8, height: 12)), with: vg(60, 72, [0xFFC94D, 0xFFB020]))
+        g.fill(Path(roundedRect: CGRect(x: 24, y: 72, width: 52, height: 10), cornerRadius: 4), with: .linearGradient(Gradient(colors: [C(0xFFB020), C(0xFFE066), C(0xFFB020)]), startPoint: pt(24, 0), endPoint: pt(76, 0)))
+        g.fill(Path(roundedRect: CGRect(x: 18, y: 82, width: 64, height: 10), cornerRadius: 4), with: .color(C(0xFFB020)))
+        sparkle(c, 66, 22, 6, Double(max(0, cs)))
+    case "skull":
+        let g = xf(c, rot: Double(8 * sn), at: pt(50, 56))
+        let sk = P { p in
+            p.move(to: pt(50, 10)); p.addCurve(to: pt(14, 46), control1: pt(26, 10), control2: pt(14, 28)); p.addCurve(to: pt(28, 74), control1: pt(14, 60), control2: pt(22, 68))
+            p.addLine(to: pt(28, 86)); p.addLine(to: pt(72, 86)); p.addLine(to: pt(72, 74)); p.addCurve(to: pt(86, 46), control1: pt(78, 68), control2: pt(86, 60))
+            p.addCurve(to: pt(50, 10), control1: pt(86, 28), control2: pt(74, 10)); p.closeSubpath()
+        }
+        g.fill(sk, with: vg(10, 86, [0xFFFFFF, 0xD9DEEC]))
+        let eyeH: CGFloat = 13 + 2 * max(0, -sn)
+        g.fill(Path(ellipseIn: CGRect(x: 27, y: 42, width: 16, height: eyeH)), with: .color(C(0x2A2F4A)))
+        g.fill(Path(ellipseIn: CGRect(x: 57, y: 42, width: 16, height: eyeH)), with: .color(C(0x2A2F4A)))
+        g.fill(P { p in p.move(to: pt(50, 58)); p.addLine(to: pt(44, 68)); p.addLine(to: pt(56, 68)); p.closeSubpath() }, with: .color(C(0x2A2F4A)))
+        for i in 0..<4 { g.fill(Path(CGRect(x: 32 + CGFloat(i) * 10, y: 78, width: 7, height: 8)), with: .color(C(0xD9DEEC))) }
+        for i in 0..<3 { g.fill(Path(CGRect(x: 39 + CGFloat(i) * 10, y: 78, width: 3, height: 8)), with: .color(C(0x2A2F4A))) }
+    case "pumpkin":
+        let glow = 0.5 + 0.5 * Double(max(0, sn))
+        c.fill(Path(ellipseIn: CGRect(x: 4, y: 10, width: 92, height: 92)), with: .color(C(0xFF8A1E).opacity(0.22 * glow)))
+        let body = P { p in
+            p.move(to: pt(50, 16)); p.addCurve(to: pt(90, 58), control1: pt(78, 16), control2: pt(90, 36)); p.addCurve(to: pt(50, 94), control1: pt(90, 82), control2: pt(72, 94))
+            p.addCurve(to: pt(10, 58), control1: pt(28, 94), control2: pt(10, 82)); p.addCurve(to: pt(50, 16), control1: pt(10, 36), control2: pt(22, 16)); p.closeSubpath()
+        }
+        c.fill(body, with: vg(16, 94, [0xFFA940, 0xFF7A00]))
+        for x: CGFloat in [30, 50, 70] { c.stroke(P { p in p.move(to: pt(x, 22)); p.addLine(to: pt(x, 90)) }, with: .color(C(0xE8690A).opacity(0.55)), lineWidth: 2.2) }
+        c.fill(Path(roundedRect: CGRect(x: 45, y: 4, width: 10, height: 16), cornerRadius: 4), with: .color(C(0x3A7A3A)))
+        let eyeL = P { p in p.move(to: pt(30, 52)); p.addLine(to: pt(42, 52)); p.addLine(to: pt(36, 64)); p.closeSubpath() }
+        let eyeR = P { p in p.move(to: pt(58, 52)); p.addLine(to: pt(70, 52)); p.addLine(to: pt(64, 64)); p.closeSubpath() }
+        let mouth = P { p in
+            p.move(to: pt(26, 74)); p.addLine(to: pt(74, 74)); p.addLine(to: pt(66, 86)); p.addLine(to: pt(58, 78)); p.addLine(to: pt(50, 86))
+            p.addLine(to: pt(42, 78)); p.addLine(to: pt(34, 86)); p.closeSubpath()
+        }
+        let glowColor = Color(hex: 0xFFF3A0).opacity(0.55 + 0.45 * glow)
+        c.fill(eyeL, with: .color(glowColor)); c.fill(eyeR, with: .color(glowColor)); c.fill(mouth, with: .color(glowColor))
+    case "confetti":
+        let pal: [UInt32] = [0x8A6BFF, 0xFF5B7A, 0xFFC83D, 0x2BD67B, 0x3AC8FF]
+        for i in 0..<10 {
+            let ph = (t + Double(i) / 10).truncatingRemainder(dividingBy: 1)
+            let g = xf(c, rot: Double(i) * 36 + 360 * ph, at: pt(50, 50), dy: -20 - 24 * CGFloat(ph))
+            let col = C(pal[i % pal.count])
+            if i % 2 == 0 { g.fill(Path(CGRect(x: 48, y: 48, width: 8, height: 5)), with: .color(col)) }
+            else { g.fill(Path(ellipseIn: CGRect(x: 46.4, y: 46.4, width: 7.2, height: 7.2)), with: .color(col)) }
+        }
+        c.fill(Path(ellipseIn: CGRect(x: 40, y: 40, width: 20, height: 20)), with: .color(C(0xFFE066).opacity(0.18)))
+    case "witch":
+        let g = xf(c, rot: Double(7 * sn), at: pt(50, 70))
+        g.fill(P { p in p.move(to: pt(50, 4)); p.addLine(to: pt(70, 56)); p.addLine(to: pt(30, 56)); p.closeSubpath() }, with: vg(4, 56, [0x4A3F7A, 0x2A2240]))
+        g.fill(Path(ellipseIn: CGRect(x: 14, y: 54, width: 72, height: 18)), with: .color(C(0x2A2240)))
+        g.fill(Path(roundedRect: CGRect(x: 42, y: 58, width: 16, height: 10), cornerRadius: 3), with: .color(C(0xFFC83D)))
+        sparkle(c, 74, 20, 6, Double(max(0, cs))); sparkle(c, 22, 34, 5, Double(max(0, -sn)))
     default:
         c.fill(starPath(50, 54, 46, 0.48), with: vg(8, 98, [0xFFE066, 0xFFB020]))
     }

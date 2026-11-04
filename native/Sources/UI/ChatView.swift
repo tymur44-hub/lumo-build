@@ -1199,7 +1199,6 @@ struct StickerPanel: View {
     static let animated = ["😂", "🤣", "😍", "🥰", "😎", "🤩", "😜", "🥳", "😱", "😭", "😡", "🤯", "🔥", "❤️", "💖", "💯", "🎉", "✨", "⭐️", "👋", "👍", "👏", "🙏", "💪"]
 
     static let emoji = Array("😀😃😄😁😆😅😂🤣😊😇🙂😉😍🥰😘😋😛😜🤪🤗🤔🤨😐😏😒🙄😬😌😔😴😷🤒🤧🥵🥶😎🤓🧐😕😟😮😲😳🥺😢😭😱😖😣😞😓😩😫🥱😤😡😠🤬😈💀💩🤡👻👽🤖😺😹😻🙈🙉🙊💋💌💘💝💖💗💓💞💕❣️💔❤️🧡💛💚💙💜🤎🖤🤍💯💥💫💦💨🕳💬👋🤚🖐✋🖖👌🤌🤏✌️🤞🤟🤘🤙👈👉👆👇☝️👍👎✊👊🤛🤜👏🙌👐🤲🤝🙏💪🎉🎊🎁🔥⭐️🌟✨⚡️☀️🌙🌈❄️🍀🌹🌸🍕🍔🍟🍩🍰🎂☕️🍺🍷⚽️🏀🎮🎧🎵🚀✈️🚗🏠💡📱💻📷⏰✅❌❓❗️").map(String.init)
-    static let stickers = ["😂", "😍", "🥰", "😎", "🤔", "😭", "😡", "🥳", "😴", "🤯", "👍", "👏", "🙏", "💪", "🔥", "❤️", "💔", "🎉", "💯", "👋", "🐶", "🐱", "🦊", "🐼", "🐸", "🦄", "🌈", "⭐️", "🍕", "☕️"]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1225,9 +1224,9 @@ struct StickerPanel: View {
                     }
                     .padding(10)
                 } else {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 10) {
-                        ForEach(Self.stickers, id: \.self) { e in
-                            Button { onSticker(e) } label: { Text(e).font(.system(size: 50)) }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 10) {
+                        ForEach(stickerIds, id: \.self) { id in
+                            Button { onSticker(stickerArtPrefix + id) } label: { StickerArtView(id: id, size: 54) }
                         }
                     }
                     .padding(10)

@@ -211,6 +211,85 @@ private fun DrawScope.drawStatusIcon(k: String, t: Float) {
                 }
             }
         }
+        "snow" -> {
+            rotate(360f * t, Offset(50f, 50f)) {
+                for (i in 0 until 6) rotate(i * 60f, Offset(50f, 50f)) {
+                    drawLine(Color(0xFFBFEBFF), Offset(50f, 50f), Offset(50f, 8f), 5f, StrokeCap.Round)
+                    for (b in listOf(22f, 34f)) {
+                        drawLine(Color(0xFFBFEBFF), Offset(50f, 50f - b), Offset(42f, 44f - b), 3.4f, StrokeCap.Round)
+                        drawLine(Color(0xFFBFEBFF), Offset(50f, 50f - b), Offset(58f, 44f - b), 3.4f, StrokeCap.Round)
+                    }
+                }
+            }
+            val s = 1f + 0.08f * sn
+            scale(s, s, Offset(50f, 50f)) { drawCircle(Brush.radialGradient(listOf(Color.White, Color(0xFF8FD8FF)), Offset(50f, 50f), 14f), 9f, Offset(50f, 50f)) }
+        }
+        "trophy" -> {
+            val lift = 2f * max(0f, sn)
+            translate(0f, -lift) {
+                val cup = Path().apply { moveTo(28f, 14f); lineTo(72f, 14f); cubicTo(72f, 46f, 64f, 60f, 50f, 60f); cubicTo(36f, 60f, 28f, 46f, 28f, 14f); close() }
+                drawPath(cup, vg(14f, 60f, 0xFFFFE066, 0xFFFFB020))
+                val handleL = Path().apply { moveTo(28f, 20f); cubicTo(8f, 20f, 8f, 48f, 30f, 46f) }
+                val handleR = Path().apply { moveTo(72f, 20f); cubicTo(92f, 20f, 92f, 48f, 70f, 46f) }
+                drawPath(handleL, Color(0xFFFFB020), style = Stroke(6f, cap = StrokeCap.Round))
+                drawPath(handleR, Color(0xFFFFB020), style = Stroke(6f, cap = StrokeCap.Round))
+                drawRect(vg(60f, 72f, 0xFFFFC94D, 0xFFFFB020), Offset(46f, 60f), Size(8f, 12f))
+                drawRoundRect(Brush.horizontalGradient(listOf(Color(0xFFFFB020), Color(0xFFFFE066), Color(0xFFFFB020))), Offset(24f, 72f), Size(52f, 10f), androidx.compose.ui.geometry.CornerRadius(4f, 4f))
+                drawRoundRect(Color(0xFFFFB020), Offset(18f, 82f), Size(64f, 10f), androidx.compose.ui.geometry.CornerRadius(4f, 4f))
+                sparkle(66f, 22f, 6f, max(0f, cs))
+            }
+        }
+        "skull" -> {
+            rotate(8f * sn, Offset(50f, 56f)) {
+                val sk = Path().apply {
+                    moveTo(50f, 10f); cubicTo(26f, 10f, 14f, 28f, 14f, 46f); cubicTo(14f, 60f, 22f, 68f, 28f, 74f); lineTo(28f, 86f); lineTo(72f, 86f); lineTo(72f, 74f)
+                    cubicTo(78f, 68f, 86f, 60f, 86f, 46f); cubicTo(86f, 28f, 74f, 10f, 50f, 10f); close()
+                }
+                drawPath(sk, vg(10f, 86f, 0xFFFFFFFF, 0xFFD9DEEC))
+                val eyeH = 13f + 2f * max(0f, -sn)
+                drawOval(Color(0xFF2A2F4A), Offset(27f, 42f), Size(16f, eyeH)); drawOval(Color(0xFF2A2F4A), Offset(57f, 42f), Size(16f, eyeH))
+                val nose = Path().apply { moveTo(50f, 58f); lineTo(44f, 68f); lineTo(56f, 68f); close() }
+                drawPath(nose, Color(0xFF2A2F4A))
+                for (i in 0 until 4) drawRect(Color(0xFFD9DEEC), Offset(32f + i * 10f, 78f), Size(7f, 8f))
+                for (i in 0 until 3) drawRect(Color(0xFF2A2F4A), Offset(39f + i * 10f, 78f), Size(3f, 8f))
+            }
+        }
+        "pumpkin" -> {
+            val glow = 0.5f + 0.5f * max(0f, sn)
+            drawCircle(Color(0xFFFF8A1E).copy(alpha = 0.22f * glow), 46f, Offset(50f, 56f))
+            val body = Path().apply { moveTo(50f, 16f); cubicTo(78f, 16f, 90f, 36f, 90f, 58f); cubicTo(90f, 82f, 72f, 94f, 50f, 94f); cubicTo(28f, 94f, 10f, 82f, 10f, 58f); cubicTo(10f, 36f, 22f, 16f, 50f, 16f); close() }
+            drawPath(body, vg(16f, 94f, 0xFFFFA940, 0xFFFF7A00))
+            for (x in listOf(30f, 50f, 70f)) drawLine(Color(0xFFE8690A).copy(alpha = 0.55f), Offset(x, 22f), Offset(x, 90f), 2.2f)
+            drawRoundRect(Color(0xFF3A7A3A), Offset(45f, 4f), Size(10f, 16f), androidx.compose.ui.geometry.CornerRadius(4f, 4f))
+            val eyeL = Path().apply { moveTo(30f, 52f); lineTo(42f, 52f); lineTo(36f, 64f); close() }
+            val eyeR = Path().apply { moveTo(58f, 52f); lineTo(70f, 52f); lineTo(64f, 64f); close() }
+            val mouth = Path().apply { moveTo(26f, 74f); lineTo(74f, 74f); lineTo(66f, 86f); lineTo(58f, 78f); lineTo(50f, 86f); lineTo(42f, 78f); lineTo(34f, 86f); close() }
+            val glowColor = Color(0xFFFFF3A0).copy(alpha = 0.55f + 0.45f * glow)
+            drawPath(eyeL, glowColor); drawPath(eyeR, glowColor); drawPath(mouth, glowColor)
+        }
+        "confetti" -> {
+            val pal = listOf(0xFF8A6BFF, 0xFFFF5B7A, 0xFFFFC83D, 0xFF2BD67B, 0xFF3AC8FF)
+            for (i in 0 until 10) {
+                val ph = (t + i / 10f) % 1f
+                val a = i * 36f
+                rotate(a + 360f * ph, Offset(50f, 50f)) {
+                    translate(0f, -20f - 24f * ph) {
+                        val c = Color(pal[i % pal.size])
+                        if (i % 2 == 0) drawRect(c, Offset(48f, 48f), Size(8f, 5f)) else drawCircle(c, 3.6f, Offset(50f, 50f))
+                    }
+                }
+            }
+            drawCircle(Color(0xFFFFE066).copy(alpha = 0.18f), 10f, Offset(50f, 50f))
+        }
+        "witch" -> {
+            rotate(7f * sn, Offset(50f, 70f)) {
+                val hat = Path().apply { moveTo(50f, 4f); lineTo(70f, 56f); lineTo(30f, 56f); close() }
+                drawPath(hat, vg(4f, 56f, 0xFF4A3F7A, 0xFF2A2240))
+                drawOval(Color(0xFF2A2240), Offset(14f, 54f), Size(72f, 18f))
+                drawRoundRect(Color(0xFFFFC83D), Offset(42f, 58f), Size(16f, 10f), androidx.compose.ui.geometry.CornerRadius(3f, 3f))
+                sparkle(74f, 20f, 6f, max(0f, cs)); sparkle(22f, 34f, 5f, max(0f, -sn))
+            }
+        }
         else -> drawPath(starPath(50f, 54f, 46f, 0.48f), vg(8f, 98f, 0xFFFFE066, 0xFFFFB020))
     }
 }

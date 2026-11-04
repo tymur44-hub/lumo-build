@@ -729,7 +729,7 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
             }
             "voice" -> VoiceBubble(m, mine)
             "video_note" -> VideoNoteBubble(m)
-            "sticker" -> if (m.meta.has("anim")) AnimatedEmoji(m.body ?: "", 96.dp) else if (!m.mediaUrl.isNullOrEmpty()) AsyncImage(m.mediaUrl, null, Modifier.size(150.dp)) else Text(m.body ?: "", fontSize = 64.sp)
+            "sticker" -> if (m.meta.has("anim")) AnimatedEmoji(m.body ?: "", 96.dp) else if (!m.mediaUrl.isNullOrEmpty()) AsyncImage(m.mediaUrl, null, Modifier.size(150.dp)) else StickerBody(m.body, 96.dp)
             "file" -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(44.dp).clip(CircleShape).background(if (mine) Color.White.copy(alpha = 0.22f) else p.a1), contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Description, null, tint = Color.White)
@@ -1151,7 +1151,6 @@ private fun Composer(
 }
 
 private val EMOJI = "😀😃😄😁😆😅😂🤣😊😇🙂😉😍🥰😘😋😛😜🤪🤗🤔🤨😐😏😒🙄😬😌😔😴😷🤒🤧🥵🥶😎🤓🧐😕😟😮😲😳🥺😢😭😱😖😣😞😓😩😫🥱😤😡😠🤬😈💀💩🤡👻👽🤖😺😹😻🙈🙉🙊💋💌💘💝💖💗💓💞💕❣️💔❤️🧡💛💚💙💜🤎🖤🤍💯💥💫💦💨💬👋🤚🖐✋🖖👌🤌🤏✌️🤞🤟🤘🤙👈👉👆👇☝️👍👎✊👊🤛🤜👏🙌👐🤲🤝🙏💪🎉🎊🎁🔥⭐️🌟✨⚡️☀️🌙🌈❄️🍀🌹🌸🍕🍔🍟🍩🍰🎂☕️🍺🍷⚽️🏀🎮🎧🎵🚀✈️🚗🏠💡📱💻📷⏰✅❌❓❗️"
-private val STICKERS = listOf("😂", "😍", "🥰", "😎", "🤔", "😭", "😡", "🥳", "😴", "🤯", "👍", "👏", "🙏", "💪", "🔥", "❤️", "💔", "🎉", "💯", "👋", "🐶", "🐱", "🦊", "🐼", "🐸", "🦄", "🌈", "⭐️", "🍕", "☕️")
 
 private fun graphemes(s: String): List<String> {
     val it = java.text.BreakIterator.getCharacterInstance()
@@ -1176,10 +1175,19 @@ private fun StickerPanel(onEmoji: (String) -> Unit, onSticker: (String) -> Unit,
         androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
             androidx.compose.foundation.lazy.grid.GridCells.Adaptive(if (tab == 0) 44.dp else 76.dp), Modifier.fillMaxSize().padding(horizontal = 6.dp),
         ) {
-            val list = if (tab == 0) emoji else if (tab == 1) STICKERS else ANIMATED_EMOJI
-            items(list.size) { i ->
-                Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(10.dp)).bouncy { if (tab == 0) onEmoji(list[i]) else if (tab == 1) onSticker(list[i]) else onAnim(list[i]) }, contentAlignment = Alignment.Center) {
-                    if (tab == 2) AnimatedEmoji(list[i], 40.dp, tappable = false) else Text(list[i], fontSize = if (tab == 0) 26.sp else 46.sp)
+            if (tab == 1) {
+                items(STICKER_IDS.size) { i ->
+                    val id = STICKER_IDS[i]
+                    Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(10.dp)).bouncy { onSticker(STICKER_ART_PREFIX + id) }, contentAlignment = Alignment.Center) {
+                        StickerImage(id, 54.dp)
+                    }
+                }
+            } else {
+                val list = if (tab == 0) emoji else ANIMATED_EMOJI
+                items(list.size) { i ->
+                    Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(10.dp)).bouncy { if (tab == 0) onEmoji(list[i]) else onAnim(list[i]) }, contentAlignment = Alignment.Center) {
+                        if (tab == 2) AnimatedEmoji(list[i], 40.dp, tappable = false) else Text(list[i], fontSize = 26.sp)
+                    }
                 }
             }
         }
