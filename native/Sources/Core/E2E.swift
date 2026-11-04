@@ -247,6 +247,23 @@ final class E2E: ObservableObject {
         ver += 1
     }
 
+    private var checkedAt: [String: Date] = [:]
+    /// Собеседник мог сменить ключ (новое устройство, сброс), пока приложение было открыто —
+    /// тогда старый ключ чата не расшифрует его новые сообщения. Сверяем ключ с сервером (не чаще раза в 20 с)
+    /// и при смене пересчитываем ключ чата. true — ключ обновился.
+    @discardableResult
+    func refresh(_ chatId: String, peer: String?) async -> Bool {
+        guard let pid = peer, pid != me, status == .ready else { return false }
+        if let t = checkedAt[pid], Date().timeIntervalSince(t) < 20 { return false }
+        checkedAt[pid] = Date()
+        guard let s = (try? await API.shared.select("lm_keys", ["select": "pub", "user_id": "eq." + pid]))?.first?.str("pub") else { return false }
+        if let cur = peerPubs[pid], Data(base64Encoded: s) == cur { return false }
+        guard accept(pid, s) else { return false }
+        chatKeys[chatId] = nil
+        await prepare(chatId, peer: pid)
+        return true
+    }
+
     func active(_ chatId: String) -> Bool { chatKeys[chatId] != nil }
 
     func encrypt(_ chatId: String, _ text: String) -> String? {

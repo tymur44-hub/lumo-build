@@ -253,6 +253,28 @@ object E2E {
 
     fun dropCaches() { noKeyAt.clear(); peerPubs.keys.removeAll { it != me }; chatKeys.clear() }
 
+    private val checkedAt = HashMap<String, Long>()
+    /**
+     * Собеседник мог сменить ключ (новое устройство, сброс), пока приложение было открыто —
+     * тогда старый ключ чата не расшифрует его новые сообщения. Сверяем ключ с сервером (не чаще раза в 20 с)
+     * и при смене пересчитываем ключ чата. true — ключ обновился.
+     */
+    suspend fun refresh(chatId: String, peerId: String?): Boolean {
+        val peer = peerId ?: return false
+        if (peer == me || status != Status.Ready) return false
+        val now = System.currentTimeMillis()
+        if (now - (checkedAt[peer] ?: 0L) < 20_000) return false
+        checkedAt[peer] = now
+        val s = runCatching { Api.select("lm_keys", mapOf("select" to "pub", "user_id" to "eq.$peer")).firstOrNull()?.str("pub") }.getOrNull() ?: return false
+        val cur = peerPubs[peer]
+        if (cur != null && runCatching { unb64(s).contentEquals(cur) }.getOrDefault(false)) return false
+        if (!accept(peer, s)) return false
+        chatKeys.keys.filter { chatPeer[it] == peer }.forEach { chatKeys.remove(it) }
+        chatKeys.remove(chatId)
+        prepare(chatId, peer)
+        return true
+    }
+
     /** Загрузить ключи сразу нескольких собеседников одним запросом */
     suspend fun prefetch(ids: Collection<String>) {
         val now = System.currentTimeMillis()

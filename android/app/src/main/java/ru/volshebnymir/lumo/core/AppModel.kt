@@ -565,7 +565,7 @@ object AppModel {
     suspend fun prep(chatId: String) {
         if (chat(chatId) == null) loadChats()
         val c = chat(chatId) ?: return
-        if (c.isPrivate) E2E.prepare(chatId, c.peerId)
+        if (c.isPrivate) { E2E.refresh(chatId, c.peerId); E2E.prepare(chatId, c.peerId) }
     }
 
     suspend fun loadMessages(chatId: String, older: Boolean = false) {

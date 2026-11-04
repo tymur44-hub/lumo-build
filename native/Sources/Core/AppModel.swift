@@ -1090,6 +1090,7 @@ final class AppModel: ObservableObject {
     func prep(_ chatId: String) async {
         if chat(chatId) == nil { await loadChats() }
         guard let c = chat(chatId), c.isPrivate else { return }
+        await E2E.shared.refresh(chatId, peer: c.peerId)
         await E2E.shared.prepare(chatId, peer: c.peerId)
     }
 
