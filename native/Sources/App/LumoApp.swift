@@ -72,12 +72,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     // приложение открыто: в открытом чате уведомление не показываем, в остальных — баннер
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        let chat = notification.request.content.userInfo["chat"] as? String
         Task { @MainActor in
-            let open = AppModel.shared.openChatId
-            // приложение открыто — короткий звук играет само приложение, баннер без системного звука
+            // приложение открыто: системное уведомление не показываем совсем —
+            // о новом сообщении сообщает собственный баннер Lumo, о звонке — экран звонка
+            if UIApplication.shared.applicationState == .active { completionHandler([]); return }
             let isCall = notification.request.identifier.hasPrefix("call-")
-            completionHandler(chat != nil && chat == open && !isCall ? [] : isCall ? [.banner, .sound, .list] : [.banner, .list])
+            completionHandler(isCall ? [.banner, .sound, .list] : [.banner, .list])
         }
     }
 

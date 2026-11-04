@@ -32,6 +32,9 @@ enum LocalCache {
     }
 
     static func saveChats(_ rows: [JSON]) { save("chats", rows) }
+    /// Свой профиль: фото, имя, юзернейм, Premium видны и без интернета
+    static func saveMe(_ uid: String, _ row: JSON) { save("me_" + safe(uid), [row]) }
+    static func loadMe(_ uid: String) -> JSON? { load("me_" + safe(uid))?.first }
     static func loadChats() -> [JSON]? { load("chats") }
 
     static func saveMessages(_ chatId: String, _ rows: [JSON]) {

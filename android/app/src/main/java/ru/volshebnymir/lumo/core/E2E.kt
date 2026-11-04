@@ -155,7 +155,7 @@ object E2E {
                 install(uid, local.first, local.second)
                 if (srv == null) publish(uid, local.second)
                 backedUp = Api.select("lm_key_backup", mapOf("select" to "user_id", "user_id" to "eq.$uid")).isNotEmpty()
-                promptBackup = !backedUp && !prefs.getBoolean("skip_$uid", false)
+                promptBackup = !backedUp   // копия ключей обязательна — пропустить нельзя
                 status = Status.Ready
                 return
             }

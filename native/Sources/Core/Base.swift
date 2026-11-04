@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import SwiftUI
 import UIKit
 
@@ -319,21 +320,62 @@ enum Net {
         set { UserDefaults.standard.set(newValue.timeIntervalSince1970, forKey: "lm_tun_until") }
     }
 
-    /// Проверить пути и выбрать работающий (не чаще раза в 20 секунд). Локальный узел поднимается параллельно.
+    /// Проверить пути и выбрать работающий (не чаще раза в 20 секунд). Все пути проверяются параллельно,
+    /// берётся первый ответивший — не ждём медленные (раньше старт ждал все три проверки по 10 с).
     /// Если недавно запросы зависали напрямую — держимся за узел (проверка «прямой: ок» обманчива: режутся только большие ответы).
     static func pick(force: Bool = false) async {
         if !force && Date().timeIntervalSince(lastPick) < 20 { return }
         lastPick = Date()
-        async let d = ok(Config.supabaseURL)
-        async let p = ok(Config.proxyURL)
-        async let t: Bool = { Fast.ensure() ? await ok(Config.supabaseURL, tunnelSession) : false }()
-        let rd = await d, rp = await p, rt = await t
         let sticky = Date() < tunUntil
-        if rp { set(.proxy, Config.proxyURL) }
-        else if sticky && rt { set(.tunnel, Config.supabaseURL) }
-        else if rd { set(.direct, Config.supabaseURL) }
-        else if rt { set(.tunnel, Config.supabaseURL) }
+        let chosen: Mode? = await withTaskGroup(of: (Mode, Bool).self) { g -> Mode? in
+            g.addTask { (.proxy, await ok(Config.proxyURL)) }
+            g.addTask { (.direct, await ok(Config.supabaseURL)) }
+            g.addTask { (.tunnel, Fast.ensure() ? await ok(Config.supabaseURL, tunnelSession) : false) }
+            var directOk = false
+            for await (m, good) in g where good {
+                if sticky && m == .direct { directOk = true; continue }
+                g.cancelAll()
+                return m
+            }
+            return directOk ? .direct : nil
+        }
+        switch chosen {
+        case .proxy: set(.proxy, Config.proxyURL)
+        case .direct: set(.direct, Config.supabaseURL)
+        case .tunnel: set(.tunnel, Config.supabaseURL)
+        case nil: break
+        }
         diag = "прямой: \(why["прямой"] ?? "-")\nзеркало: \(why["зеркало"] ?? "-")\nузел: \(Fast.isRunning ? "запущен" : "нет") (\(Fast.lastMsg.prefix(330)))\nчерез узел: \(why["узел"] ?? "-")\nрежим: \(mode)"
+    }
+
+    /// Выбрать путь, но ждать не дольше limit секунд (чтобы старт не висел без сети)
+    static func pickQuick(limit: Double = 3.5) async {
+        await withTaskGroup(of: Void.self) { g in
+            g.addTask { await pick(force: true) }
+            g.addTask { try? await Task.sleep(nanoseconds: UInt64(limit * 1_000_000_000)) }
+            _ = await g.next()
+        }
+    }
+
+    /// Смена сети (Wi-Fi ↔ LTE, включили/выключили VPN): сразу заново выбираем путь и переподключаемся,
+    /// а не ждём, пока запросы упадут по таймауту
+    private static var monitor: NWPathMonitor?
+    private static var pathSig = ""
+    static func watch() {
+        guard monitor == nil else { return }
+        let m = NWPathMonitor()
+        m.pathUpdateHandler = { path in
+            let sig = "\(path.status)|" + path.availableInterfaces.map { $0.name }.sorted().joined(separator: ",")
+            let prev = pathSig
+            pathSig = sig
+            guard !prev.isEmpty, prev != sig, path.status == .satisfied else { return }
+            Task {
+                await pick(force: true)
+                await MainActor.run { Realtime.shared.restart() }
+            }
+        }
+        m.start(queue: DispatchQueue(label: "lumo.net"))
+        monitor = m
     }
 
     /// Запрос завис при «рабочем» прямом пути — переходим на локальный узел на 30 минут

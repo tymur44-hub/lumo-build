@@ -263,7 +263,12 @@ struct MessageRow: View {
     @ViewBuilder private var reactionsRow: some View {
         let list = model.reactions[m.id] ?? []
         if !list.isEmpty {
-            let groups = Dictionary(grouping: list, by: { $0.emoji }).sorted { $0.value.count > $1.value.count }
+            // порядок стабильный: по числу, при равенстве — в порядке появления
+            // (порядок словаря случаен и менялся при каждой перерисовке — реакции «моргали»)
+            let first = Dictionary(list.enumerated().map { ($0.element.emoji, $0.offset) }, uniquingKeysWith: { a, _ in a })
+            let groups = Dictionary(grouping: list, by: { $0.emoji }).sorted {
+                $0.value.count != $1.value.count ? $0.value.count > $1.value.count : (first[$0.key] ?? 0) < (first[$1.key] ?? 0)
+            }
             HStack(spacing: 4) {
                 ForEach(groups, id: \.key) { e, rs in
                     let meIn = rs.contains { $0.userId == model.myId }
@@ -349,7 +354,7 @@ struct MessageRow: View {
                         media
                         // время — в одной строке с концом текста (как на сайте), без лишней строки снизу
                         (Text(richText(b, cmds: !mine && (m.senderId.flatMap { model.profiles[$0]?.isBot } ?? false))).foregroundColor(mine ? .white : Theme.text)
-                         + Text(timeReserve).font(.system(size: 11.5)).foregroundColor(.clear))
+                         + timeReserveText)
                             .font(.system(size: look.fontSize))
                             .tint(mine ? .white : Theme.a2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -407,13 +412,16 @@ struct MessageRow: View {
     /// Невидимый «запас» под время в конце текста — должен совпадать по ширине
     /// с реальной timeLine(), иначе счётчик просмотров в каналах налезает на текст
     /// (т.к. раньше запас не учитывал глаз+число просмотров)
-    private var timeReserve: String {
-        var s = ""
+    /// Собирается из тех же элементов и шрифтов, что и timeLine(): иконка глаза, число, время, галочка
+    private var timeReserveText: Text {
+        var t = Text("\u{2002}\u{2009}").font(.system(size: 11.5))
+        if m.editedAt != nil { t = t + Text("изм.\u{2009}").font(.system(size: 11)) }
         if chat?.isChannel == true, let v = model.msgViews[m.id], v > 0 {
-            s += String(repeating: "\u{2002}", count: viewsText(v).count + 2)
+            t = t + Text(Image(systemName: "eye")).font(.system(size: 11)) + Text("\u{2009}" + viewsText(v) + "\u{2009}\u{2009}\u{2009}").font(.system(size: 11.5))
         }
-        s += "\u{2002}" + (m.editedAt != nil ? "изм. " : "") + Fmt.clock(m.createdAt) + (mine ? "\u{2002}\u{2002}" : "")
-        return s
+        t = t + Text(Fmt.clock(m.createdAt)).font(.system(size: 11.5))
+        if mine { t = t + Text("\u{2009}").font(.system(size: 11.5)) + Text(Image(systemName: "checkmark.circle.fill")).font(.system(size: 10.5, weight: .bold)) }
+        return t.foregroundColor(.clear)
     }
 
     private func timeLine(onMedia: Bool) -> some View {

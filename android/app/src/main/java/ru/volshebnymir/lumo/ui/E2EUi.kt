@@ -48,7 +48,10 @@ fun E2EDialogs() {
     } else if (E2E.promptBackup && E2E.status == E2E.Status.Ready) {
         var pw by remember { mutableStateOf("") }
         var pw2 by remember { mutableStateOf("") }
-        AlertDialog(onDismissRequest = { E2E.skipBackup() }, title = { Text(if (E2E.backedUp) "Новый пароль копии" else "Сохраните ключи") },
+        // копию ключей пропустить нельзя: закрыть можно только смену пароля уже существующей копии
+        AlertDialog(onDismissRequest = { if (E2E.backedUp) E2E.promptBackup = false },
+            properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = E2E.backedUp, dismissOnClickOutside = E2E.backedUp),
+            title = { Text(if (E2E.backedUp) "Новый пароль копии" else "Сохраните ключи") },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text("Ключи шифрования хранятся только на вашем устройстве. Придумайте пароль резервной копии — с ним переписки можно будет прочитать на новом телефоне. " +
@@ -65,7 +68,7 @@ fun E2EDialogs() {
                 if (pw != pw2) { AppModel.say("Пароли не совпадают"); return@TextButton }
                 scope.launch { if (E2E.createBackup(pw)) AppModel.say("Резервная копия сохранена") else AppModel.say("Не удалось сохранить, попробуйте ещё раз") }
             }) { Text(if (E2E.busy) "Сохраняю…" else "Сохранить") } },
-            dismissButton = { TextButton({ E2E.skipBackup() }) { Text("Позже") } })
+            dismissButton = { if (E2E.backedUp) TextButton({ E2E.promptBackup = false }) { Text("Отмена") } })
     }
 }
 

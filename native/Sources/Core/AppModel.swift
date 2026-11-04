@@ -158,8 +158,11 @@ final class AppModel: ObservableObject {
     func start() async {
         guard loggedIn, !started else { return }
         started = true
+        // свой профиль из кэша — сразу, ещё до сети
+        if me == nil, let id = myId, let r = LocalCache.loadMe(id) { let p = Profile(json: r); me = p; profiles[id] = p }
         netStatus = "Соединение…"
-        Task { await Net.pick(force: true) }
+        Net.watch()
+        await Net.pickQuick()
         Realtime.shared.onState = { [weak self] ok in self?.netChanged(ok) }
         await loadMe()
         if let id = myId { await E2E.shared.setup(id) }
@@ -444,7 +447,10 @@ final class AppModel: ObservableObject {
 
     func loadMe() async {
         guard let id = myId else { return }
-        if let p = await fetchProfiles([id]).first {
+        let rows = (try? await API.shared.rpc("lm_profiles_get", ["p_ids": [id]])) as? [JSON]
+        if let r = rows?.first {
+            LocalCache.saveMe(id, r)
+            let p = Profile(json: r)
             me = p
             profiles[id] = p
             Accounts.shared.info(id, name: p.name, username: p.username, avatar: p.avatarURL)
@@ -1531,7 +1537,8 @@ final class AppModel: ObservableObject {
                 let col = (c?.isPrivate ?? true) ? (c?.peerColor ?? 0) : (c?.color ?? 0)
                 self.showBanner(IncomingBanner(id: "m\(m.id)", chatId: m.chatId, title: title, body: body, avatarURL: av, color: col))
             }
-            Notifier.show(id: "m\(m.id)", title: title, body: body, chatId: m.chatId)
+            // системное уведомление — только когда приложение свёрнуто
+            if !self.isActive { Notifier.show(id: "m\(m.id)", title: title, body: body, chatId: m.chatId) }
         }
     }
 }

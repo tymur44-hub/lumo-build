@@ -34,6 +34,9 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true
+        CFBundleURLTypes:
+          - CFBundleURLName: ru.volshebnymir.lumo
+            CFBundleURLSchemes: [lumo]
         ITSAppUsesNonExemptEncryption: false
         UIRequiresFullScreen: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]

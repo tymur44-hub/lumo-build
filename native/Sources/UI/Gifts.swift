@@ -44,6 +44,18 @@ final class GiftStore: ObservableObject {
         await loadUser(nil)
     }
 
+    private var artAt = Date.distantPast
+    /// Рисунки серверных подарков (тех, что не вшиты в приложение) — не чаще раза в минуту
+    func ensureArt() async {
+        guard Date().timeIntervalSince(artAt) > 60 else { return }
+        artAt = Date()
+        if let o = (try? await API.shared.rpc("lm_gift_art")) as? JSON {
+            var m = art
+            for (k, v) in o { if let sv = v as? String, sv.contains("<svg") { m[k] = sv } }
+            art = m
+        }
+    }
+
     func loadUser(_ user: String?) async {
         let params: JSON = user.map { ["p_user": $0] } ?? [:]
         guard let a = (try? await API.shared.rpc("lm_gift_mine", params)) as? [JSON] else { return }
@@ -84,7 +96,7 @@ struct GiftThumb: View {
                 Image(uiImage: img).resizable().scaledToFill()
             } else if store.art[id] != nil {
                 GiftWebView(id: id)
-            } else { Color.gray.opacity(0.3) }
+            } else { Color.gray.opacity(0.3).task { await store.ensureArt() } }
         }
         .aspectRatio(1, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -553,7 +565,7 @@ struct ProfileGiftsRow: View {
                 }
             }
         }
-        .task { await store.loadUser(userId) }
+        .task { await store.loadUser(userId); await store.ensureArt() }
         .sheet(item: $view) { o in OwnedGiftSheet(o: o).environmentObject(model) }
     }
 }

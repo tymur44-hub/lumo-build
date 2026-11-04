@@ -13,10 +13,11 @@ struct E2ESheets: ViewModifier {
     func body(content: Content) -> some View {
         content.sheet(item: Binding<E2EScreen?>(
             get: { e2e.status == .needRestore ? .restore : (e2e.promptBackup && e2e.status == .ready ? .backup : nil) },
-            set: { if $0 == nil, e2e.status == .ready, e2e.promptBackup { e2e.skipBackup() } })) { s in
+            // копию ключей пропустить нельзя: закрыть можно только смену пароля уже существующей копии
+            set: { if $0 == nil, e2e.status == .ready, e2e.promptBackup, e2e.backedUp { e2e.promptBackup = false } })) { s in
             switch s {
             case .restore: E2ERestoreView().environmentObject(model).interactiveDismissDisabled()
-            case .backup: E2EBackupView().environmentObject(model)
+            case .backup: E2EBackupView().environmentObject(model).interactiveDismissDisabled(!e2e.backedUp)
             }
         }
     }
@@ -83,7 +84,7 @@ struct E2EBackupView: View {
                     if pw != pw2 { model.say("Пароли не совпадают"); return }
                     Task { model.say(await e2e.createBackup(pw) ? "Резервная копия сохранена" : "Не удалось сохранить, попробуйте ещё раз") }
                 }
-                Button("Позже") { e2e.skipBackup() }.foregroundColor(Theme.muted).padding(.top, 4)
+                if e2e.backedUp { Button("Отмена") { e2e.promptBackup = false }.foregroundColor(Theme.muted).padding(.top, 4) }
             }
             .padding(.horizontal, 24)
         }

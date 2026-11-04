@@ -77,6 +77,13 @@ final class Realtime: NSObject, URLSessionWebSocketDelegate {
         channels.removeAll()
     }
 
+    /// Переподключиться сразу (сменилась сеть): старое соединение могло повиснуть
+    func restart() {
+        guard wanted else { return }
+        backoff = 1
+        if let t = task { droppedIfCurrent(t) } else { connect() }
+    }
+
     /// Проверка, что соединение живо (после возврата из фона)
     func ensureConnected() {
         if !wanted { return }

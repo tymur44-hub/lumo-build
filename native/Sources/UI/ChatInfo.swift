@@ -49,6 +49,9 @@ struct ChatInfoView: View {
                 actions
                 if let c = chat {
                     if c.isPrivate { privateSections(c) } else { groupSections(c) }
+                    if c.isPrivate, !saved, let pid = c.peerId, !(c.peerBot || (model.profiles[pid]?.isBot ?? false)) {
+                        ProfileGiftsRow(userId: pid).padding(.horizontal, 14)
+                    }
                     PremiumChatRows(chat: c)
                     // медиа, файлы, голосовые и ссылки из этого чата
                     SharedMediaSection(chatId: c.id)

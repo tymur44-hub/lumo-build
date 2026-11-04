@@ -74,8 +74,29 @@ struct StoryRingAvatar<Content: View>: View {
 final class ImageCache {
     static let shared = ImageCache()
     private let cache = NSCache<NSURL, UIImage>()
-    func get(_ u: URL) -> UIImage? { cache.object(forKey: u as NSURL) }
+    /// Картинки дублируются на диск — аватарки и фото видны без интернета
+    private let dir: URL = {
+        let u = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("lumo-img", isDirectory: true)
+        try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true)
+        return u
+    }()
+    private func file(_ u: URL) -> URL {
+        var h: UInt64 = 1469598103934665603
+        for b in u.absoluteString.utf8 { h = (h ^ UInt64(b)) &* 1099511628211 }
+        return dir.appendingPathComponent(String(h, radix: 36))
+    }
+    func get(_ u: URL) -> UIImage? {
+        if let i = cache.object(forKey: u as NSURL) { return i }
+        guard let d = try? Data(contentsOf: file(u)), let i = UIImage(data: d) else { return nil }
+        cache.setObject(i, forKey: u as NSURL)
+        return i
+    }
     func set(_ u: URL, _ i: UIImage) { cache.setObject(i, forKey: u as NSURL) }
+    func set(_ u: URL, _ i: UIImage, data: Data) {
+        cache.setObject(i, forKey: u as NSURL)
+        let f = file(u)
+        DispatchQueue.global(qos: .utility).async { try? data.write(to: f, options: .atomic) }
+    }
 }
 
 struct CachedImage<Content: View, Placeholder: View>: View {
@@ -99,7 +120,7 @@ struct CachedImage<Content: View, Placeholder: View>: View {
             if image != nil { return }
             if let c = ImageCache.shared.get(url) { image = c; return }
             guard let res = try? await Net.session.data(from: url.px), let i = UIImage(data: res.0) else { return }
-            ImageCache.shared.set(url, i)
+            ImageCache.shared.set(url, i, data: res.0)
             image = i
         }
     }

@@ -80,7 +80,7 @@ final class E2E: ObservableObject {
                 if srv == nil { try await publish(uid, l.pub) }
                 let b = try await API.shared.select("lm_key_backup", ["select": "user_id", "user_id": "eq." + uid])
                 backedUp = !b.isEmpty
-                promptBackup = !backedUp && !UserDefaults.standard.bool(forKey: "e2e_skip_" + uid)
+                promptBackup = !backedUp   // копия ключей обязательна — пропустить нельзя
                 status = .ready
                 return
             }

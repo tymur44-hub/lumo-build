@@ -429,7 +429,7 @@ struct ChatView: View {
         .transition(.opacity.combined(with: .scale(scale: 0.97)))
     }
 
-    private func closeMenu() { withAnimation(.easeOut(duration: 0.16)) { menuMsg = nil } }
+    private func closeMenu() { withAnimation(.easeOut(duration: 0.16)) { menuMsg = nil }; NotificationCenter.default.post(name: .lumoMenuClose, object: nil) }
 
     private func actions(_ m: Message) -> [MsgAction] {
         let mine = m.senderId == model.myId
@@ -644,7 +644,7 @@ struct ChatView: View {
                                        onImage: { imageURL = IdentifiedURL(url: $0) },
                                        onVideo: { videoURL = IdentifiedURL(url: $0) },
                                        onReport: { m in reporting = ReportTarget(user: m.senderId, chat: chatId, message: m.id) },
-                                       onMenu: { m in withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) { menuMsg = m } },
+                                       onMenu: { m in NotificationCenter.default.post(name: .lumoMenuOpen, object: nil); withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) { menuMsg = m } },
                                        selecting: selecting, isSelected: selected.contains(f.id), onToggle: { toggle($0) },
                                        onComments: { commentsFor = $0 },
                                        onJump: { id in
@@ -882,6 +882,7 @@ struct ComposerView: View {
     @State private var holding = false
     @State private var voiceLocked = false
     @FocusState private var focused: Bool
+    @State private var kbRestore = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1004,6 +1005,14 @@ struct ComposerView: View {
         }
         .lumoBarBackground()
         .onChange(of: focused) { f in if f { showStickers = false } }
+        // меню сообщения: клавиатура прячется, а после закрытия меню возвращается, если была открыта
+        .onReceive(NotificationCenter.default.publisher(for: .lumoMenuOpen)) { _ in
+            kbRestore = focused
+            if focused { focused = false }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .lumoMenuClose)) { _ in
+            if kbRestore { kbRestore = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { focused = true } }
+        }
         .sheet(isPresented: $showSchedule) {
             ScheduleSheet(chatId: chatId, text: scheduleText, replyTo: reply?.id) { text = ""; reply = nil }.environmentObject(model)
         }
@@ -1364,4 +1373,9 @@ struct PaidBar: View {
             }
         }
     }
+}
+
+extension Notification.Name {
+    static let lumoMenuOpen = Notification.Name("lumoMenuOpen")
+    static let lumoMenuClose = Notification.Name("lumoMenuClose")
 }
