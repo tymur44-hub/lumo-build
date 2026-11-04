@@ -285,6 +285,8 @@ struct Message: Identifiable, Equatable {
         case "file": return "Файл"
         case "sticker": return "Стикер"
         case "call": return "Звонок"
+        case "capsule": return "🔒 Капсула времени"
+        case "capsule_open": return "🎁 Капсула времени открылась"
         default: return b
         }
     }

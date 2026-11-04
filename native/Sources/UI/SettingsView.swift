@@ -6,7 +6,7 @@ import UIKit
 enum SettingsPage: Hashable {
     case premium, profile, profileEdit, calls, notifications, privacy, about, blocked, look, username, colors, devices, language
     case privacyKey(String)
-    case msgPrivacy, phone, twofa, wallet, gifts
+    case msgPrivacy, phone, twofa, wallet, gifts, dnd, capsules
 }
 
 struct SettingsView: View {
@@ -78,6 +78,10 @@ struct SettingsView: View {
                         }
                     }
                     SettingsGroup {
+                        NavigationLink(value: SettingsPage.dnd) {
+                            DNDSettingsRow()
+                        }
+                        divider
                         NavigationLink(value: SettingsPage.notifications) {
                             SettingsRow(icon: "bell.fill", color: Color(hex: 0xff5b5b), title: "Уведомления и звуки",
                                         subtitle: model.tgLinked ? "Telegram подключён" : "Telegram не подключён")
@@ -127,6 +131,10 @@ struct SettingsView: View {
                         NavigationLink(value: SettingsPage.gifts) {
                             SettingsRow(icon: "gift.fill", color: Color(hex: 0x2bc4a8), title: "Подарки", subtitle: "Коллекционные подарки за люмены")
                         }
+                        divider
+                        NavigationLink(value: SettingsPage.capsules) {
+                            SettingsRow(icon: "hourglass", color: Color(hex: 0xff8a3d), title: "Капсулы времени", subtitle: "Запечатанные и открытые послания")
+                        }
                     }
                     SettingsGroup {
                         Button { share = true } label: {
@@ -171,6 +179,8 @@ struct SettingsView: View {
                 case .twofa: TwoFAView()
                 case .wallet: WalletView()
                 case .gifts: GiftsView()
+                case .dnd: DNDSettingsView()
+                case .capsules: CapsuleBoxView()
                 }
             }
             .onChange(of: avatarPick) { item in

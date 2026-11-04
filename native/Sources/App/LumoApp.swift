@@ -84,7 +84,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         let chat = response.notification.request.content.userInfo["chat"] as? String
+        let msg = response.notification.request.content.userInfo["msg"] as? Int
         Task { @MainActor in
+            // напоминание «Ответить позже» — открыть чат на этом сообщении и сразу ответить
+            if let c = chat, let m = msg { AppModel.shared.pendingReply = PendingReply(chat: c, msg: m) }
             if let c = chat { AppModel.shared.open(c) }
             completionHandler()
         }
@@ -131,6 +134,7 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.2), value: model.toast)
         .fullScreenCover(isPresented: $calls.showUI) { CallView().environmentObject(calls) }
         .modifier(E2ESheets())
+        .modifier(DNDSummaryModifier())
         .sheet(isPresented: Binding(get: { model.loggedIn && phones.loaded && permsDone && !phones.reminderShown && (phones.status == "remind" || phones.status == "skipped") },
                                     set: { if !$0 { phones.reminderShown = true } })) { PhoneReminderSheet() }
         .task {

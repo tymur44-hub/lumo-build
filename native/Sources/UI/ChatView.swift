@@ -57,6 +57,8 @@ struct ChatView: View {
     @State private var fxPlay: String?
     @State private var fxSeen = 0
     @State private var newBelow = 0
+    @State private var remindFor: Message?
+    @ObservedObject private var dnd = DNDStore.shared
 
     private var chat: ChatItem? { model.chat(chatId) }
     private var isBotChat: Bool { chat?.isPrivate == true && (chat?.peerBot == true || (chat?.peerId.flatMap { model.profiles[$0]?.isBot } ?? false)) }
@@ -227,6 +229,8 @@ struct ChatView: View {
             if model.demo != nil { return }
             await model.loadMessages(chatId)
             model.markRead(chatId)
+            applyPending()
+            if let p = chat?.peerId, chat?.isPrivate == true { await dnd.loadPeers([p]) }
             await model.loadViews(chatId)
             if let p = chat?.peerId { await model.refreshProfile(p) }
         }
@@ -252,6 +256,9 @@ struct ChatView: View {
         }
         .sheet(item: $forwarding) { b in ForwardView(messages: b.messages).environmentObject(model) }
         .sheet(item: $reporting) { t in ReportView(target: t).environmentObject(model) }
+        .sheet(item: $remindFor) { m in RemindPickerSheet(message: m) }
+        .onChange(of: model.pendingReply) { _ in applyPending() }
+        .onChange(of: model.pendingJump) { _ in applyPending() }
         .sheet(item: $tipping) { m in
             if chat?.isChannel == true { LumenReactSheet(message: m, channelName: chat?.displayName ?? "канала").environmentObject(model) }
             else { TipSheet(message: m).environmentObject(model) }
@@ -429,12 +436,33 @@ struct ChatView: View {
         .transition(.opacity.combined(with: .scale(scale: 0.97)))
     }
 
+    /// открыть на сообщении из «Ответить позже» (и сразу ответить) или из шкатулки капсул
+    private func applyPending() {
+        let list = model.messages[chatId] ?? []
+        if let j = model.pendingJump, list.contains(where: { $0.id == j }) {
+            model.pendingJump = nil
+            highlight = j
+        }
+        guard let p = model.pendingReply, p.chat == chatId else { return }
+        if let m = list.first(where: { $0.id == p.msg }) ?? Reminders.shared.previews[p.msg] {
+            model.pendingReply = nil
+            if list.contains(where: { $0.id == m.id }) { highlight = m.id }
+            reply = m; editing = nil
+        }
+    }
+
     private func closeMenu() { withAnimation(.easeOut(duration: 0.16)) { menuMsg = nil }; NotificationCenter.default.post(name: .lumoMenuClose, object: nil) }
 
     private func actions(_ m: Message) -> [MsgAction] {
         let mine = m.senderId == model.myId
         var a: [MsgAction] = []
         if chat?.canPost ?? true { a.append(MsgAction(title: "Ответить", icon: "arrowshape.turn.up.left") { reply = m; editing = nil }) }
+        if !mine && m.id > 0 && m.kind != "capsule_open" && (chat?.canPost ?? true) {
+            a.append(MsgAction(title: "Ответить позже", icon: "bell.badge") { remindFor = m })
+        }
+        if !mine && m.meta.bool("urgent") && chat?.isPrivate == true {
+            a.append(MsgAction(title: "Это было не срочно", icon: "bolt.slash") { Task { await DNDStore.shared.report(m) } })
+        }
         if let b = m.body, !b.isEmpty, !isProt {
             a.append(MsgAction(title: "Копировать", icon: "doc.on.doc") { UIPasteboard.general.string = b; model.say("Скопировано") })
         }
@@ -767,6 +795,9 @@ struct ChatView: View {
                     }
                 } else if let t = model.typingText(chatId) {
                     Text(t).font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.a2).lineLimit(1)
+                } else if chat?.isPrivate == true, let pd = dnd.peer(chat?.peerId) {
+                    // собеседник в режиме «Не беспокоить»
+                    Text(DNDStore.peerLine(pd)).font(.system(size: 12.5, weight: .semibold)).foregroundColor(Color(hex: 0x8c6cff)).lineLimit(1)
                 } else {
                     Text(status).font(.system(size: 12.5)).foregroundColor(model.isOnline(chat?.peerId) && chat?.isPrivate == true ? Theme.a2 : Theme.muted).lineLimit(1)
                 }
@@ -857,6 +888,14 @@ struct ComposerView: View {
     @State private var showPhotos = false
     @State private var showAttach = false
     @State private var sendLumensTo: LumenTarget?
+    @State private var urgentOn = false
+    @State private var showCapsule = false
+    @ObservedObject private var dndStore = DNDStore.shared
+    /// собеседник в «Не беспокоить» и разрешает мне срочные
+    private var canUrgent: Bool {
+        guard let c = model.chat(chatId), c.isPrivate, let p = dndStore.peer(c.peerId) else { return false }
+        return p.urgentOK
+    }
 
     /// Собеседник, которому можно отправить люмены (личный чат с человеком, не с ботом и не «Избранное»)
     private var lumensPeer: String? {
@@ -947,6 +986,7 @@ struct ComposerView: View {
                                             case "camera": showCamera = true
                                             case "note": startNote(locked: true)
                                             case "lumens": if let p = lumensPeer { sendLumensTo = LumenTarget(id: p) }
+                                            case "capsule": showCapsule = true
                                             default: break
                                             }
                                         })
@@ -959,6 +999,19 @@ struct ComposerView: View {
                                 .font(.system(size: 16))
                                 .padding(.leading, 16).padding(.vertical, 11)
                                 .onChange(of: text) { t in if !t.isEmpty { model.userTyping(chatId) } }
+                            if canUrgent && editing == nil {
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { urgentOn.toggle() }
+                                    if urgentOn { model.say("Срочное сообщение придёт со звуком, даже в «Не беспокоить». Можно одно в сутки") }
+                                } label: {
+                                    Image(systemName: urgentOn ? "bolt.fill" : "bolt")
+                                        .font(.system(size: 19, weight: .semibold))
+                                        .foregroundColor(urgentOn ? Color(hex: 0xff8a1a) : Theme.muted)
+                                        .scaleEffect(urgentOn ? 1.15 : 1)
+                                        .frame(width: 34, height: 44)
+                                }
+                            }
                             Button { showStickers.toggle(); if showStickers { focused = false } } label: {
                                 Image(systemName: showStickers ? "keyboard" : "face.smiling")
                                     .font(.system(size: 20)).foregroundColor(Theme.muted)
@@ -968,9 +1021,12 @@ struct ComposerView: View {
                         .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 22))
                     }
                     if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !rec.recording {
-                        Image(systemName: editing != nil ? "checkmark" : "arrow.up")
+                        Image(systemName: editing != nil ? "checkmark" : (urgentOn && canUrgent ? "bolt.fill" : "arrow.up"))
                             .font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
-                            .frame(width: 44, height: 44).background(Circle().fill(Theme.accent))
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(urgentOn && canUrgent && editing == nil
+                                ? AnyShapeStyle(LinearGradient(colors: [Color(hex: 0xffb020), Color(hex: 0xff4d3d)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                : AnyShapeStyle(Theme.accent)))
                             .contentShape(Circle())
                             .onTapGesture { sendText() }
                             .onLongPressGesture(minimumDuration: 0.4) {
@@ -1020,6 +1076,7 @@ struct ComposerView: View {
             ScheduleSheet(chatId: chatId, text: scheduleText, replyTo: reply?.id) { text = ""; reply = nil }.environmentObject(model)
         }
         .sheet(isPresented: $showScheduled) { ScheduledListSheet(chatId: chatId).environmentObject(model) }
+        .sheet(isPresented: $showCapsule) { CapsuleComposeSheet(chatId: chatId, replyTo: reply?.id).environmentObject(model) }
         // «записывает голосовое/видео…» у собеседника
         .onReceive(Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()) { _ in reportActivity() }
         .onChange(of: rec.recording) { _ in reportActivity() }
@@ -1168,7 +1225,13 @@ struct ComposerView: View {
         }
         let r = reply?.id
         reply = nil
-        Task { await model.send(chatId: chatId, kind: "text", body: t, meta: silent ? ["silent": true] : [:], replyTo: r) }
+        var meta: JSON = silent ? ["silent": true] : [:]
+        if urgentOn && canUrgent { meta["urgent"] = true }
+        urgentOn = false
+        Task {
+            await model.send(chatId: chatId, kind: "text", body: t, meta: meta, replyTo: r)
+            if meta["urgent"] != nil, let p = model.chat(chatId)?.peerId { await dndStore.loadPeers([p]) }
+        }
     }
 
     private func sendVoice(_ url: URL, _ dur: Double, _ wave: [Int]) {

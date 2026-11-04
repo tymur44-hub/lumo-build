@@ -18,6 +18,10 @@ final class AppModel: ObservableObject {
     @Published var hasMore: [String: Bool] = [:]
     @Published var profiles: [String: Profile] = [:]
     @Published var path: [String] = []
+    /// открыть чат на сообщении и сразу ответить на него («Ответить позже»)
+    @Published var pendingReply: PendingReply?
+    /// перейти к сообщению после открытия чата (шкатулка капсул)
+    @Published var pendingJump: Int?
     /// Строка сверху, как в Telegram: «Соединение…» / «Обновление…»; nil — всё в порядке
     @Published var netStatus: String?
     private var netTask: Task<Void, Never>?
@@ -166,6 +170,7 @@ final class AppModel: ObservableObject {
         Realtime.shared.onState = { [weak self] ok in self?.netChanged(ok) }
         await loadMe()
         if let id = myId { await E2E.shared.setup(id) }
+        Task { await Reminders.shared.load(); await DNDStore.shared.load() }
         netStatus = "Обновление…"
         await loadContacts()
         await loadChats()
@@ -406,6 +411,7 @@ final class AppModel: ObservableObject {
 
     func scenePhase(_ active: Bool) {
         if active { Task { await Net.pick() } }
+        if active && loggedIn && demo == nil { Task { await DNDStore.shared.checkEnded(); await Reminders.shared.load() } }
         isActive = active
         if !loggedIn || demo != nil { return }
         if active {
@@ -1232,6 +1238,7 @@ final class AppModel: ObservableObject {
             if !list.contains(where: { $0.id == m.id }) { list.append(m) }
             messages[chatId] = sorted(list)
             scheduleReload()
+            Reminders.shared.repliedIn(chatId)   // ответили — напоминания по этому чату сервер уже снял
             return true
         } catch {
             messages[chatId]?.removeAll { $0.id == pid }
@@ -1508,7 +1515,10 @@ final class AppModel: ObservableObject {
         if let sid = m.senderId, profiles[sid] == nil { Task { _ = await profile(sid) } }
         // чат открыт (в том числе если поверх него открыт профиль собеседника) — баннер не нужен
         let visible = isActive && (openChatId == m.chatId || path.last == m.chatId)
-        if isActive && m.kind != "call" && chat(m.chatId)?.muted != true { playIncomingSound() }
+        // «Не беспокоить»: обычные сообщения приходят без звука, баннера и уведомления; срочные — громко
+        let urgent = m.meta.bool("urgent")
+        let quiet = DNDStore.shared.active && !urgent
+        if isActive && m.kind != "call" && chat(m.chatId)?.muted != true && !quiet { if urgent { playUrgentSound() } else { playIncomingSound() } }
         if visible {
             Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: 300_000_000)
@@ -1520,6 +1530,7 @@ final class AppModel: ObservableObject {
         if m.kind == "call" && (m.metaStatus == nil || m.metaStatus == "ended" || m.metaStatus == "rejected") { return }
         guard !notified.contains(m.id) else { return }
         notified.insert(m.id)
+        if quiet { return }
         Task {
             if chat(m.chatId) == nil { await loadChats() }
             let c = chat(m.chatId)
@@ -1529,7 +1540,9 @@ final class AppModel: ObservableObject {
             let title: String
             var body = m.preview
             if m.kind == "call" { body = m.isVideoCall ? "Пропущенный видеозвонок" : "Пропущенный звонок" }
-            if c?.isPrivate ?? true { title = senderName }
+            if m.kind == "capsule" { body = "🔒 Капсула времени" }
+            if m.kind == "capsule_open" { body = "🎁 Капсула времени открылась" }
+            if c?.isPrivate ?? true { title = (urgent ? "⚡ Срочно · " : "") + senderName }
             else if c?.isChannel == true { title = c?.displayName ?? "Канал" }
             else { title = c?.displayName ?? "Группа"; body = senderName + ": " + body }
             // Баннер внутри приложения — показываем всегда, пока Lumo открыт, независимо
@@ -1541,7 +1554,7 @@ final class AppModel: ObservableObject {
                 self.showBanner(IncomingBanner(id: "m\(m.id)", chatId: m.chatId, title: title, body: body, avatarURL: av, color: col))
             }
             // системное уведомление — только когда приложение свёрнуто
-            if !self.isActive { Notifier.show(id: "m\(m.id)", title: title, body: body, chatId: m.chatId) }
+            if !self.isActive { Notifier.show(id: "m\(m.id)", title: title, body: body, chatId: m.chatId, urgent: urgent) }
         }
     }
 }
@@ -1563,6 +1576,12 @@ extension AppModel {
         guard now.timeIntervalSince(AppModel.lastSound) > 0.8, CallManager.shared.state == .idle else { return }
         AppModel.lastSound = now
         AudioServicesPlaySystemSound(1003)
+    }
+    /// срочное: заметный звук и вибрация
+    func playUrgentSound() {
+        AppModel.lastSound = Date()
+        AudioServicesPlayAlertSound(1005)
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
     }
     static var lastSound = Date.distantPast
 }

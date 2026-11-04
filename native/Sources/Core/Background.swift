@@ -11,11 +11,13 @@ enum Notifier {
         }
     }
 
-    static func show(id: String, title: String, body: String, chatId: String) {
+    static func show(id: String, title: String, body: String, chatId: String, urgent: Bool = false) {
         let c = UNMutableNotificationContent()
         c.title = title
         c.body = body
         c.sound = .default
+        // срочное — «важное» уведомление: iOS показывает его заметнее и, если разрешено, даже в режиме фокусирования
+        if urgent { c.interruptionLevel = .timeSensitive; c.relevanceScore = 1 }
         c.threadIdentifier = chatId
         c.userInfo = ["chat": chatId]
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: c, trigger: nil))

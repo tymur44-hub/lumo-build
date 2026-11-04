@@ -112,7 +112,7 @@ struct AttachSheet: View {
     private var tabs: [(String, String)] {
         var t = [("Галерея", "photo.on.rectangle.fill"), ("Файл", "doc.fill"), ("Геопозиция", "location.fill"),
                  ("Опрос", "chart.bar.fill"), ("Звук", "play.circle.fill"), ("Контакт", "person.crop.circle.fill"),
-                 ("Камера", "camera.fill"), ("Кружок", "video.circle.fill")]
+                 ("Камера", "camera.fill"), ("Кружок", "video.circle.fill"), ("Капсула", "hourglass")]
         if canLumens { t.append(("Люмены", "sparkle")) }
         return t
     }
@@ -278,6 +278,7 @@ struct AttachSheet: View {
         case "Камера": close(); after { onAction("camera") }
         case "Кружок": close(); after { onAction("note") }
         case "Люмены": close(); after { onAction("lumens") }
+        case "Капсула": close(); after { onAction("capsule") }
         default: break
         }
     }

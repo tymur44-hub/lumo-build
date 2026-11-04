@@ -102,6 +102,40 @@ struct MessageRow: View {
     var body: some View {
         if m.kind == "gift" {
             GiftMessageCard(m: m, chat: chat)
+        } else if m.kind == "capsule" {
+            HStack(alignment: .bottom, spacing: 6) {
+                if mine { Spacer(minLength: 44) }
+                if isGroup && !mine {
+                    AvatarView(name: senderName, url: m.senderId.flatMap { model.profiles[$0]?.avatarURL },
+                               color: m.senderId.flatMap { model.profiles[$0]?.color } ?? 0, size: 34)
+                }
+                VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
+                    if isGroup && !mine { Text(senderName).font(.system(size: 13, weight: .bold)).foregroundColor(senderColor).padding(.leading, 6) }
+                    CapsuleBubble(m: m, mine: mine, isGroup: chat?.type != "private")
+                        .onLongPressGesture(minimumDuration: 0.35) {
+                            guard !selecting, m.id > 0 else { return }
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            onMenu(m)
+                        }
+                    reactionsRow
+                }
+                if !mine { Spacer(minLength: 44) }
+            }
+            .padding(.top, first ? 6 : 0)
+        } else if m.kind == "capsule_open" {
+            Button { if let id = m.meta.int("capsule") { onJump(id) } } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "gift.fill").font(.system(size: 12, weight: .bold))
+                    Text((mine ? "Ваша капсула открылась" : model.displayName(m.senderId) + ": капсула открылась") + " · посмотреть")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundColor(Color(hex: 0x8a5a1a))
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(LinearGradient(colors: [Color(hex: 0xfff1d6), Color(hex: 0xffe0b0)], startPoint: .leading, endPoint: .trailing), in: Capsule())
+            }
+            .buttonStyle(BouncyButtonStyle())
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
         } else if m.kind == "system" {
             Text(m.body ?? "")
                 .font(.system(size: 13, weight: .semibold))
@@ -123,6 +157,7 @@ struct MessageRow: View {
                     }
                 }
                 VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
+                    if m.meta.bool("urgent") { UrgentTag() }
                     content
                         .task(id: m.id) { if m.id > 0 && !m.deleted { lumens.request(m.id, withComments: chat?.isChannel == true && lumens.linked(chat?.id) != nil) } }
                         .contentShape(Rectangle())

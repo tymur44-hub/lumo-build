@@ -146,6 +146,7 @@ struct ChatListView: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 if folder == .all { StoriesBar(open: { storyStart = $0 }, add: { addStory = true }) }
+                if folder == .all { RemindersBar() }
                 if !model.chatsLoaded {
                     ProgressView().padding(40)
                 } else if filtered.isEmpty {
