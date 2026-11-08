@@ -227,7 +227,7 @@ private fun newCode(): String = (1..16).map { "0123456789abcdef".random() }.join
 private fun ChannelArt() {
     Box(Modifier.size(260.dp, 250.dp), contentAlignment = Alignment.Center) {
         Box(Modifier.size(150.dp, 230.dp).clip(RoundedCornerShape(30.dp)).background(Color(0xFFB9D8F6)).border(5.dp, Color(0xFF3B4A5C), RoundedCornerShape(30.dp)))
-        Text("🦆", fontSize = 86.sp, modifier = Modifier.offset(y = 34.dp))
+        Icon(Icons.Filled.Campaign, null, tint = Color(0xFF3B4A5C), modifier = Modifier.offset(y = 40.dp).size(72.dp))
         Box(Modifier.offset(x = (-4).dp, y = (-36).dp).size(96.dp, 34.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.9f)))
         Column(Modifier.offset(x = (-82).dp, y = (-78).dp).size(98.dp).clip(CircleShape).background(Color(0xFFCFE4F8)).border(3.dp, Color.White, CircleShape),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {

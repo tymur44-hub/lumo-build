@@ -1313,7 +1313,7 @@ struct ChannelIntroArt: View {
             RoundedRectangle(cornerRadius: 30).fill(Color(hex: 0xb9d8f6)).frame(width: 150, height: 230)
                 .overlay(RoundedRectangle(cornerRadius: 30).stroke(Color(hex: 0x3b4a5c), lineWidth: 5))
                 .overlay(alignment: .top) { Capsule().fill(Color(hex: 0x3b4a5c)).frame(width: 52, height: 9).padding(.top, 6) }
-            Text("🦆").font(.system(size: 86)).offset(y: 34)
+            Image(systemName: "megaphone.fill").font(.system(size: 64)).foregroundColor(Color(hex: 0x3b4a5c)).offset(y: 40)
             RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.9)).frame(width: 96, height: 34).offset(x: -4, y: -36)
             VStack(spacing: 2) {
                 Text("Канал").font(.system(size: 18, weight: .bold)).foregroundColor(Color(hex: 0x1d2733))
