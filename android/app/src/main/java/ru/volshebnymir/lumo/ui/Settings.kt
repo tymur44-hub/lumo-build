@@ -161,6 +161,7 @@ fun SettingsScreen() {
             Divider()
             SettingsRow(Icons.Filled.CardGiftcard, Color(0xFF2BC4A8), "Подарки", "Коллекционные подарки за люмены") { AppModel.push(Screen.Gifts) }
             SettingsRow(Icons.Filled.HourglassTop, Color(0xFFFF8A3D), "Капсулы времени", "Сообщения, которые откроются в будущем") { AppModel.push(Screen.Capsules) }
+            SettingsRow(Icons.Filled.LocalFireDepartment, Color(0xFFFF6A00), "Огоньки", "Серии общения и серийчик") { AppModel.push(Screen.Streaks) }
             SettingsRow(Icons.Filled.NotificationsActive, Color(0xFFFFA318), "Ждут ответа", if (Reminders.list.isEmpty()) "Нет напоминаний" else "${Reminders.list.size} — «Ответить позже»") { AppModel.push(Screen.Reminders) }
         }
         Card {

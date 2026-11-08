@@ -480,7 +480,7 @@ private fun ChatHeader(chatId: String, chat: ChatItem?) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (saved) "Избранное" else chat?.displayName ?: "Чат", color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (chat?.isPrivate == true) { PeerBadges(chat); StreakBadge(chatId, 16) { streakOpen = true } }
+                    if (chat?.isPrivate == true) { PeerBadges(chat); if (!saved && !chat.peerBot) StreakHeaderButton(chatId) { streakOpen = true } }
                     if (chat?.isPrivate == true && ru.volshebnymir.lumo.core.E2E.active(chatId)) {
                         Spacer(Modifier.width(5.dp))
                         Icon(androidx.compose.material.icons.Icons.Filled.Lock, null, tint = p.a2, modifier = Modifier.size(14.dp))
@@ -499,6 +499,7 @@ private fun ChatHeader(chatId: String, chat: ChatItem?) {
                 androidx.compose.animation.AnimatedContent(status, transitionSpec = { (fadeIn(tween(200)) + androidx.compose.animation.slideInVertically { it / 2 }) togetherWith fadeOut(tween(150)) }, label = "st") { st ->
                     if (st.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
                         if (t != null) { TypingDots(p.a2); Spacer(Modifier.width(4.dp)) }
+                        else if (dnd != null) { Icon(dndIcon(dnd.text), null, tint = Color(0xFF8E7BFF), modifier = Modifier.size(13.dp)); Spacer(Modifier.width(4.dp)) }
                         Text(st, color = if (t != null || st == "в сети") p.a2 else if (dnd != null && t == null) Color(0xFF8E7BFF) else p.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }

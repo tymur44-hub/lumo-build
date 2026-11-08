@@ -51,6 +51,7 @@ sealed class Screen {
     data object Reminders : Screen()
     data object Dnd : Screen()
     data object Capsules : Screen()
+    data object Streaks : Screen()
 }
 
 enum class Tab { Contacts, Chats, Settings }
@@ -181,6 +182,7 @@ object AppModel {
     fun start() {
         if (!loggedIn || started || demoId != null) return
         started = true
+        myId?.let { E2E.installLocal(it) }   // ключ с устройства — до сети
         scope.launch {
             netStatus = "Соединение…"
             Realtime.onState = { ok -> netChanged(ok) }
@@ -570,7 +572,7 @@ object AppModel {
     suspend fun prep(chatId: String) {
         if (chat(chatId) == null) loadChats()
         val c = chat(chatId) ?: return
-        if (c.isPrivate) { E2E.refresh(chatId, c.peerId); E2E.prepare(chatId, c.peerId) }
+        if (c.isPrivate) { E2E.prepare(chatId, c.peerId); E2E.refresh(chatId, c.peerId) }
     }
 
     suspend fun loadMessages(chatId: String, older: Boolean = false) {
@@ -909,8 +911,8 @@ object AppModel {
                 ch.isChannel -> ch.displayName
                 else -> { body = "$sender: $body"; ch.displayName }
             }
-            if (m.kind == "capsule") body = "🔒 Капсула времени"
-            Notifier.message(ctx, m.id, if (urgent) "⚡ Срочно · $title" else title, body, m.chatId, quiet = quiet, urgent = urgent)
+            if (m.kind == "capsule") body = "Капсула времени"
+            Notifier.message(ctx, m.id, if (urgent) "Срочно · $title" else title, body, m.chatId, quiet = quiet, urgent = urgent)
         }
     }
 

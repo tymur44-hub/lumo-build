@@ -146,20 +146,31 @@ object E2E {
 
     // ---------- запуск после входа ----------
 
+    private var verified = false
+
+    /** Ключ с устройства — сразу, без сети: сохранённые сообщения видны и без интернета */
+    fun installLocal(uid: String) {
+        if (me == uid && myPriv != null) return
+        val local = runCatching { loadLocal(uid) }.getOrNull() ?: return
+        runCatching { install(uid, local.first, local.second); status = Status.Ready }
+    }
+
     suspend fun setup(uid: String) {
-        if (me == uid && status == Status.Ready && myPriv != null) return
+        if (me == uid && status == Status.Ready && myPriv != null && verified) return
+        installLocal(uid)
         runCatching {
             val srv = Api.select("lm_keys", mapOf("select" to "pub", "user_id" to "eq.$uid")).firstOrNull()?.str("pub")
+            verified = true
             val local = loadLocal(uid)
             if (local != null && (srv == null || srv == b64(local.second))) {
-                install(uid, local.first, local.second)
+                if (!(me == uid && myPriv != null)) install(uid, local.first, local.second)
                 if (srv == null) publish(uid, local.second)
                 backedUp = Api.select("lm_key_backup", mapOf("select" to "user_id", "user_id" to "eq.$uid")).isNotEmpty()
                 promptBackup = !backedUp   // копия ключей обязательна — пропустить нельзя
                 status = Status.Ready
                 return
             }
-            if (local != null) clearLocal(uid) // на сервере другой ключ: этот устройство отстало
+            if (local != null) { clearLocal(uid); chatKeys.clear() } // на сервере другой ключ: это устройство отстало
             if (srv != null) { me = uid; myPriv = null; status = Status.NeedRestore; return }
             generateAndPublish(uid)
             promptBackup = true
@@ -244,6 +255,10 @@ object E2E {
     private suspend fun peerPub(uid: String): ByteArray? {
         if (uid == me) return myPub
         peerPubs[uid]?.let { return it }
+        // ключ собеседника, сохранённый на устройстве: расшифровка не ждёт сеть (смену ключа поймает refresh)
+        (prefs.getString("last_$uid", null) ?: prefs.getString("pin_$uid", null))?.let { s ->
+            runCatching { unb64(s) }.getOrNull()?.takeIf { it.size == 65 }?.let { peerPubs[uid] = it; return it }
+        }
         val t = noKeyAt[uid]
         if (t != null && System.currentTimeMillis() - t < 60_000) return null
         val s = runCatching { Api.select("lm_keys", mapOf("select" to "pub", "user_id" to "eq.$uid")).firstOrNull()?.str("pub") }.getOrNull()
@@ -292,6 +307,7 @@ object E2E {
         val pinned = prefs.getString("pin_$uid", null)
         if (pinned == null) prefs.edit().putString("pin_$uid", s).apply() else if (pinned != s) changed.add(uid)
         peerPubs[uid] = raw
+        prefs.edit().putString("last_$uid", s).apply()
         return true
     }
 

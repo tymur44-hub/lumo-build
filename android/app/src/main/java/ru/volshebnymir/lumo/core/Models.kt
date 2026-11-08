@@ -212,8 +212,8 @@ data class Message(
                 "file" -> "Файл"
                 "sticker" -> "Стикер"
                 "call" -> "Звонок"
-                "capsule" -> "🔒 Капсула времени"
-                "capsule_open" -> "🎁 Капсула времени открылась"
+                "capsule" -> "Капсула времени"
+                "capsule_open" -> "Капсула времени открылась"
                 else -> b
             }
         }

@@ -11,6 +11,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -390,24 +391,39 @@ object Dnd {
 }
 
 @Composable
-private fun Chip(t: String, on: Boolean, modifier: Modifier = Modifier, colors: List<Color> = VIOLET, onClick: () -> Unit) {
+private fun Chip(t: String, on: Boolean, modifier: Modifier = Modifier, colors: List<Color> = VIOLET, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, onClick: () -> Unit) {
     val p = P
-    Box(modifier.height(42.dp).clip(RoundedCornerShape(13.dp)).background(if (on) Brush.linearGradient(colors) else SolidColor(p.panel)).bouncy(onClick).padding(horizontal = 10.dp),
-        contentAlignment = Alignment.Center) {
+    Row(modifier.height(42.dp).clip(RoundedCornerShape(13.dp)).background(if (on) Brush.linearGradient(colors) else SolidColor(p.panel)).bouncy(onClick).padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+        if (icon != null) { Icon(icon, null, tint = if (on) Color.White else p.text, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(6.dp)) }
         Text(t, color = if (on) Color.White else p.text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1)
+    }
+}
+
+/** значок статуса «Не беспокоить» */
+fun dndIcon(text: String?): androidx.compose.ui.graphics.vector.ImageVector {
+    val t = (text ?: "").lowercase()
+    return when {
+        "сплю" in t || "сон" in t -> Icons.Filled.Bedtime
+        "встреч" in t -> Icons.Filled.Event
+        "рул" in t -> Icons.Filled.DirectionsCar
+        "занят" in t -> Icons.Filled.Headphones
+        "дорог" in t || "самол" in t -> Icons.Filled.Flight
+        t == "свой" -> Icons.Filled.Edit
+        else -> Icons.Filled.Bedtime
     }
 }
 
 @Composable
 fun DndScreen() {
     val p = P
-    var status by remember { mutableStateOf("😴 Сплю") }
+    var status by remember { mutableStateOf("Сплю") }
     var custom by remember { mutableStateOf("") }
     var dur by remember { mutableStateOf(-1) }
     var urgent by remember { mutableStateOf(Dnd.urgentFrom) }
     var busy by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { Dnd.load(); urgent = Dnd.urgentFrom }
-    val statuses = listOf("😴 Сплю", "📅 На встрече", "🚗 За рулём", "🎧 Занят", "✈️ В дороге", "✏️ Свой")
+    val statuses = listOf("Сплю", "На встрече", "За рулём", "Занят", "В дороге", "Свой")
     val durations = listOf("1 час" to 1, "2 часа" to 2, "4 часа" to 4, "До утра" to -1, "До завтра" to 24)
     fun untilDate(): Date {
         if (dur == -1) {
@@ -443,12 +459,12 @@ fun DndScreen() {
                 Spacer(Modifier.height(8.dp))
                 statuses.chunked(2).forEach { row ->
                     Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { s -> Chip(s, status == s, Modifier.weight(1f)) { status = s } }
+                        row.forEach { s -> Chip(s, status == s, Modifier.weight(1f), icon = dndIcon(s)) { status = s } }
                     }
                 }
-                if (status == "✏️ Свой") {
+                if (status == "Свой") {
                     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(p.panel2).padding(14.dp)) {
-                        if (custom.isEmpty()) Text("Например: 🏋️ На тренировке", color = p.muted, fontSize = 16.sp)
+                        if (custom.isEmpty()) Text("Например: На тренировке", color = p.muted, fontSize = 16.sp)
                         BasicTextField(custom, { custom = it.take(40) }, singleLine = true, textStyle = TextStyle(color = p.text, fontSize = 16.sp), cursorBrush = SolidColor(p.a1), modifier = Modifier.fillMaxWidth())
                     }
                 }
@@ -466,7 +482,7 @@ fun DndScreen() {
                 Row(Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(VIOLET))
                     .bouncy {
                         if (busy) return@bouncy
-                        val t = if (status == "✏️ Свой") custom.trim() else status
+                        val t = if (status == "Свой") custom.trim() else status
                         busy = true
                         AppModel.scope.launch { Dnd.set(untilDate(), t.ifEmpty { "Не беспокоить" }, urgent); busy = false }
                     }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
@@ -489,7 +505,7 @@ fun DndScreen() {
                     }
                 }
             }
-            Text("⚡ Срочное сообщение приходит со звуком даже в этом режиме. Каждый может отправить вам не больше одного срочного в сутки. Если сообщение было не срочным — зажмите его и выберите «Это было не срочно»: человек на неделю потеряет эту возможность.",
+            Text("Срочное сообщение приходит со звуком даже в этом режиме. Каждый может отправить вам не больше одного срочного в сутки. Если сообщение было не срочным — зажмите его и выберите «Это было не срочно»: человек на неделю потеряет эту возможность.",
                 color = p.muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 8.dp, bottom = 30.dp))
         }
     }
@@ -525,7 +541,7 @@ object Capsules {
         val j = Api.rpc("lm_capsule_open", jsonOf("p_msg" to m.id)) as? JSONObject ?: throw ApiError("Не удалось открыть", 0)
         val pl = j.optJSONObject("payload") ?: JSONObject()
         AppModel.prep(m.chatId)
-        fun dec(s: String?): String? = if (s == null) null else if (E2E.isEnc(s)) (E2E.decrypt(m.chatId, s) ?: "🔒") else s
+        fun dec(s: String?): String? = if (s == null) null else if (E2E.isEnc(s)) (E2E.decrypt(m.chatId, s) ?: "Зашифровано") else s
         opened[m.id] = CapsuleContent(pl.str("kind") ?: "text", dec(pl.str("text")), dec(pl.str("image")))
         views[m.id] = j.optInt("views")
         null
@@ -638,7 +654,7 @@ fun CapsuleCard(m: Message, mine: Boolean, group: Boolean) {
                 .clickable(remember { MutableInteractionSource() }, null) {
                     if (!ready) {
                         scope.launch { for (x in listOf(14f, -12f, 9f, -6f, 3f, 0f)) shake.animateTo(x, tween(45)) }
-                        AppModel.say("Ещё рано 🙂 Откроется " + fullDate(openAt))
+                        AppModel.say("Ещё рано. Откроется " + fullDate(openAt))
                     } else if (!opening) {
                         opening = true
                         scope.launch {
@@ -656,8 +672,8 @@ fun CapsuleCard(m: Message, mine: Boolean, group: Boolean) {
                 if (burst.value > 0f) {
                     for (i in 0 until 12) {
                         val a = i / 12.0 * Math.PI * 2
-                        Text("✦", color = if (i % 2 == 0) Color(0xFFFFD24C) else Color(0xFFFF8AE3), fontSize = (12 + (i % 3) * 5).sp,
-                            modifier = Modifier.graphicsLayer {
+                        Icon(Icons.Filled.AutoAwesome, null, tint = if (i % 2 == 0) Color(0xFFFFD24C) else Color(0xFFFF8AE3),
+                            modifier = Modifier.size((12 + (i % 3) * 5).dp).graphicsLayer {
                                 translationX = (cos(a) * 300 * burst.value).toFloat(); translationY = (sin(a) * 200 * burst.value).toFloat()
                                 alpha = burst.value; scaleX = burst.value; scaleY = burst.value
                             })
@@ -846,11 +862,13 @@ fun CapsulesScreen() {
 
 // ================= Серия (огонёк) =================
 
-data class Streak(val chatId: String, val count: Int, val best: Int, val level: Int, val done: Boolean, val mine: Boolean, val peer: Boolean)
+data class Streak(val chatId: String, val count: Int, val best: Int, val level: Int, val done: Boolean, val mine: Boolean, val peer: Boolean, val enabled: Boolean)
 
 object Streaks {
     val map = mutableStateMapOf<String, Streak>()
     val levels = listOf(3, 10, 30, 100, 200)
+    /** праздник «огонёк загорелся» поверх всего приложения */
+    var celebrate by mutableStateOf<Streak?>(null)
     private var lastLoad = 0L
 
     suspend fun load(force: Boolean = true) {
@@ -859,20 +877,39 @@ object Streaks {
         val a = runCatching { Api.rpc("lm_streaks") as? JSONArray }.getOrNull() ?: return
         val got = a.objects().mapNotNull { j ->
             val c = j.str("chat_id") ?: return@mapNotNull null
-            Streak(c, j.optInt("count"), j.optInt("best"), j.optInt("level"), j.bool("done"), j.bool("mine"), j.bool("peer"))
+            Streak(c, j.optInt("count"), j.optInt("best"), j.optInt("level"), j.bool("done"), j.bool("mine"), j.bool("peer"), j.bool("enabled"))
         }.associateBy { it.chatId }
         map.keys.filter { it !in got }.forEach { map.remove(it) }
         map.putAll(got)
+        checkCelebrate()
     }
 
-    /** огонёк виден с 3 дней */
-    fun of(chatId: String?): Streak? = chatId?.let { map[it] }?.takeIf { it.count >= 3 }
+    /** новый уровень огонька — один раз показываем анимацию */
+    private fun checkCelebrate() {
+        if (celebrate != null) return
+        val prefs = AppModel.ctx.getSharedPreferences("lumo_streak_seen", Context.MODE_PRIVATE)
+        for (s in map.values) {
+            if (!s.enabled || s.level < 3) continue
+            if (prefs.getInt(s.chatId, 0) < s.level) { prefs.edit().putInt(s.chatId, s.level).apply(); celebrate = s; return }
+        }
+    }
 
-    fun colors(level: Int, lit: Boolean): List<Color> = if (!lit) listOf(Color(0xFFD9D9DE), Color(0xFF9EA0A8)) else when (level) {
-        200 -> listOf(Color(0xFFFFE27A), Color(0xFFB45CFF), Color(0xFF5B2BFF))
-        100 -> listOf(Color(0xFFB6F0FF), Color(0xFF3FA9FF), Color(0xFF2155FF))
-        30 -> listOf(Color(0xFFFFD1F0), Color(0xFFFF4FA3), Color(0xFFE0145A))
-        10 -> listOf(Color(0xFFFFE07A), Color(0xFFFF5A2A), Color(0xFFD9141E))
+    /** огонёк виден, когда серийчик выведен и серия от 3 дней */
+    fun of(chatId: String?): Streak? = chatId?.let { map[it] }?.takeIf { it.enabled && it.count >= 3 }
+
+    /** «Вывести серийчика» */
+    suspend fun enable(chatId: String): Boolean = try {
+        Api.rpc("lm_streak_enable", jsonOf("p_chat" to chatId))
+        lastLoad = 0; load()
+        map[chatId]?.let { if (it.count < 3) celebrate = it }
+        true
+    } catch (e: Exception) { AppModel.say(e.message ?: "Не удалось"); false }
+
+    fun colors(level: Int, lit: Boolean): List<Color> = if (!lit) listOf(Color(0xFFD9D9DE), Color(0xFF9EA0A8)) else when {
+        level >= 200 -> listOf(Color(0xFFFFE27A), Color(0xFFB45CFF), Color(0xFF5B2BFF))
+        level >= 100 -> listOf(Color(0xFFB6F0FF), Color(0xFF3FA9FF), Color(0xFF2155FF))
+        level >= 30 -> listOf(Color(0xFFFFD1F0), Color(0xFFFF4FA3), Color(0xFFE0145A))
+        level >= 10 -> listOf(Color(0xFFFFE07A), Color(0xFFFF5A2A), Color(0xFFD9141E))
         else -> listOf(Color(0xFFFFE680), Color(0xFFFFA318), Color(0xFFFF6A00))
     }
 
@@ -882,37 +919,68 @@ object Streaks {
     }
 }
 
+private fun flameOuter(w: Float, h: Float, extra: Boolean) = Path().apply {
+    moveTo(w * 0.5f, h * 0.98f)
+    cubicTo(w * 0.12f, h * 0.98f, w * 0.02f, h * 0.62f, w * 0.2f, h * 0.38f)
+    cubicTo(w * 0.24f, h * 0.52f, w * 0.32f, h * 0.56f, w * 0.36f, h * 0.55f)
+    cubicTo(w * 0.3f, h * 0.3f, w * 0.44f, h * 0.1f, w * 0.6f, h * 0.02f)
+    cubicTo(w * 0.58f, h * 0.22f, w * 0.7f, h * 0.3f, w * 0.78f, h * 0.4f)
+    if (extra) { cubicTo(w * 0.8f, h * 0.32f, w * 0.84f, h * 0.26f, w * 0.88f, h * 0.2f); cubicTo(w * 0.96f, h * 0.4f, w * 0.98f, h * 0.55f, w * 0.96f, h * 0.65f) }
+    cubicTo(w * 1.0f, h * 0.84f, w * 0.82f, h * 0.98f, w * 0.5f, h * 0.98f)
+    close()
+}
+
+private fun flameInner(w: Float, h: Float) = Path().apply {
+    moveTo(w * 0.5f, h * 0.96f)
+    cubicTo(w * 0.3f, h * 0.96f, w * 0.26f, h * 0.76f, w * 0.36f, h * 0.64f)
+    cubicTo(w * 0.42f, h * 0.7f, w * 0.46f, h * 0.7f, w * 0.48f, h * 0.68f)
+    cubicTo(w * 0.46f, h * 0.56f, w * 0.52f, h * 0.48f, w * 0.6f, h * 0.44f)
+    cubicTo(w * 0.62f, h * 0.56f, w * 0.74f, h * 0.66f, w * 0.72f, h * 0.8f)
+    cubicTo(w * 0.7f, h * 0.92f, w * 0.62f, h * 0.96f, w * 0.5f, h * 0.96f)
+    close()
+}
+
 /** Нарисованный огонёк: чем выше уровень — тем больше языков пламени */
 @Composable
 fun Flame(modifier: Modifier, level: Int, lit: Boolean) {
     val cs = Streaks.colors(level, lit)
     Canvas(modifier) {
         val w = size.width; val h = size.height
-        val outer = Path().apply {
-            moveTo(w * 0.5f, h * 0.98f)
-            cubicTo(w * 0.12f, h * 0.98f, w * 0.02f, h * 0.62f, w * 0.2f, h * 0.38f)
-            cubicTo(w * 0.24f, h * 0.52f, w * 0.32f, h * 0.56f, w * 0.36f, h * 0.55f)
-            cubicTo(w * 0.3f, h * 0.3f, w * 0.44f, h * 0.1f, w * 0.6f, h * 0.02f)
-            cubicTo(w * 0.58f, h * 0.22f, w * 0.7f, h * 0.3f, w * 0.78f, h * 0.4f)
-            if (level >= 30 && lit) { cubicTo(w * 0.8f, h * 0.32f, w * 0.84f, h * 0.26f, w * 0.88f, h * 0.2f); cubicTo(w * 0.96f, h * 0.4f, w * 0.98f, h * 0.55f, w * 0.96f, h * 0.65f) }
-            cubicTo(w * 1.0f, h * 0.84f, w * 0.82f, h * 0.98f, w * 0.5f, h * 0.98f)
-            close()
-        }
-        drawPath(outer, Brush.verticalGradient(listOf(cs[1], cs.getOrElse(2) { cs[1] }), 0f, h))
-        val inner = Path().apply {
-            moveTo(w * 0.5f, h * 0.96f)
-            cubicTo(w * 0.3f, h * 0.96f, w * 0.26f, h * 0.76f, w * 0.36f, h * 0.64f)
-            cubicTo(w * 0.42f, h * 0.7f, w * 0.46f, h * 0.7f, w * 0.48f, h * 0.68f)
-            cubicTo(w * 0.46f, h * 0.56f, w * 0.52f, h * 0.48f, w * 0.6f, h * 0.44f)
-            cubicTo(w * 0.62f, h * 0.56f, w * 0.74f, h * 0.66f, w * 0.72f, h * 0.8f)
-            cubicTo(w * 0.7f, h * 0.92f, w * 0.62f, h * 0.96f, w * 0.5f, h * 0.96f)
-            close()
-        }
-        drawPath(inner, Brush.verticalGradient(listOf(cs[0].copy(alpha = 0.95f), Color.White.copy(alpha = if (lit) 0.9f else 0.6f)), h * 0.44f, h))
+        drawPath(flameOuter(w, h, level >= 30 && lit), Brush.verticalGradient(listOf(cs[1], cs.getOrElse(2) { cs[1] }), 0f, h))
+        drawPath(flameInner(w, h), Brush.verticalGradient(listOf(cs[0].copy(alpha = 0.95f), Color.White.copy(alpha = if (lit) 0.9f else 0.6f)), h * 0.44f, h))
     }
 }
 
-/** 🔥 3 — рядом с именем в списке чатов и в шапке чата */
+/** Серийчик — огонёк с глазками */
+@Composable
+fun SerialMascot(size: Int = 120, level: Int = 3, sleeping: Boolean = false) {
+    val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "m")
+    val sq by inf.animateFloat(0.97f, 1.03f, androidx.compose.animation.core.infiniteRepeatable(tween(800), androidx.compose.animation.core.RepeatMode.Reverse), label = "sq")
+    var blink by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { while (true) { delay(3200); blink = true; delay(150); blink = false } }
+    val cs = Streaks.colors(level, !sleeping)
+    Canvas(Modifier.size((size * 0.86f).dp, size.dp).graphicsLayer { scaleX = sq; scaleY = 2f - sq; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f) }) {
+        val w = this.size.width; val h = this.size.height
+        drawPath(flameOuter(w, h, false), Brush.verticalGradient(listOf(cs[1], cs.getOrElse(2) { cs[1] }), 0f, h))
+        drawPath(flameInner(w, h), Brush.verticalGradient(listOf(cs[0].copy(alpha = 0.95f), Color.White.copy(alpha = 0.85f)), h * 0.44f, h))
+        val ey = h * 0.66f; val ex = w * 0.13f; val er = w * 0.075f
+        for (dx in listOf(-ex, ex)) {
+            val c = Offset(w * 0.53f + dx, ey)
+            if (sleeping || blink) {
+                val l = Path().apply { moveTo(c.x - er, c.y); quadraticBezierTo(c.x, c.y + er * 0.9f, c.x + er, c.y) }
+                drawPath(l, Color(0xFF5A2600), style = Stroke(w * 0.03f, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+            } else {
+                drawOval(Color(0xFF4A1D00), Offset(c.x - er, c.y - er * 1.2f), Size(er * 2, er * 2.4f))
+                drawOval(Color.White, Offset(c.x - er * 0.25f, c.y - er * 0.9f), Size(er * 0.8f, er * 0.8f))
+            }
+        }
+        val m = Path().apply { moveTo(w * 0.45f, h * 0.8f); quadraticBezierTo(w * 0.53f, h * 0.87f, w * 0.61f, h * 0.8f) }
+        drawPath(m, Color(0xFF5A2600), style = Stroke(w * 0.03f, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+        for (dx in listOf(-w * 0.24f, w * 0.24f)) drawOval(Color(0xFFFF5A7A).copy(alpha = 0.55f), Offset(w * 0.53f + dx - w * 0.05f, h * 0.74f), Size(w * 0.1f, w * 0.06f))
+    }
+}
+
+/** Огонёк с числом рядом с именем (виден, когда серийчик выведен и серия от 3 дней) */
 @Composable
 fun StreakBadge(chatId: String?, size: Int = 15, onClick: (() -> Unit)? = null) {
     val s = Streaks.of(chatId) ?: return
@@ -924,68 +992,176 @@ fun StreakBadge(chatId: String?, size: Int = 15, onClick: (() -> Unit)? = null) 
     }
 }
 
-/** Окно серии (как в TikTok) */
+/** Кнопка в шапке личного чата: огонёк с числом или серый контур, если серийчик не выведен */
+@Composable
+fun StreakHeaderButton(chatId: String, onClick: () -> Unit) {
+    if (Streaks.of(chatId) != null) StreakBadge(chatId, 16, onClick)
+    else Box(Modifier.padding(start = 5.dp).clip(CircleShape).clickable { onClick() }.padding(2.dp)) {
+        Flame(Modifier.size(12.dp, 14.dp).graphicsLayer { alpha = 0.8f }, 3, false)
+    }
+}
+
+/** Окно серии: что это, уровни, «Вывести серийчика» */
 @Composable
 fun StreakSheet(chatId: String, onClose: () -> Unit) {
     val p = P
     val s = Streaks.map[chatId]
+    val on = s?.enabled == true
     val c = AppModel.chat(chatId)
     val me = AppModel.myId?.let { AppModel.profiles[it] }
-    val count = s?.count ?: 0
+    val count = if (on) s?.count ?: 0 else 0
     val lit = s?.done == true
-    val bob = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { while (true) { bob.animateTo(1f, tween(900)); bob.animateTo(0f, tween(900)) } }
+    var busy by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { Streaks.load(force = false) }
+    val name = c?.displayName ?: "собеседником"
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(remember { MutableInteractionSource() }, null) { onClose() }, contentAlignment = Alignment.BottomCenter) {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)).background(p.bg)
-                .clickable(remember { MutableInteractionSource() }, null) {}.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 18.dp),
+            Column(Modifier.fillMaxWidth().heightIn(max = 760.dp).clip(RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)).background(p.bg)
+                .clickable(remember { MutableInteractionSource() }, null) {}.navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.fillMaxWidth()) {
-                    Flame(Modifier.size(54.dp, 64.dp).graphicsLayer { translationY = -8f * bob.value; rotationZ = -8f + 16f * bob.value }, s?.level ?: 3, true)
-                    Icon(Icons.Filled.Close, "Закрыть", tint = p.text, modifier = Modifier.align(Alignment.TopEnd).size(28.dp).clip(CircleShape).clickable { onClose() })
+                    Icon(Icons.Filled.Close, "Закрыть", tint = p.text, modifier = Modifier.align(Alignment.TopEnd).size(34.dp).clip(CircleShape).background(p.panel2).clickable { onClose() }.padding(6.dp))
                 }
-                Box(Modifier.height(110.dp).width(190.dp)) {
-                    Box(Modifier.align(Alignment.CenterStart).border(3.dp, p.bg, CircleShape)) { Avatar(AppModel.displayName(AppModel.myId), me?.avatarUrl, me?.color ?: 0, 104.dp) }
-                    Box(Modifier.align(Alignment.CenterEnd).border(3.dp, p.bg, CircleShape)) { Avatar(c?.displayName ?: "", c?.displayAvatar, c?.displayColor ?: 0, 104.dp) }
+                if (on && count >= 3) {
+                    Box(Modifier.height(130.dp).width(200.dp)) {
+                        Box(Modifier.align(Alignment.TopStart).border(3.dp, p.bg, CircleShape)) { Avatar(AppModel.displayName(AppModel.myId), me?.avatarUrl, me?.color ?: 0, 96.dp) }
+                        Box(Modifier.align(Alignment.TopEnd).border(3.dp, p.bg, CircleShape)) { Avatar(c?.displayName ?: "", c?.displayAvatar, c?.displayColor ?: 0, 96.dp) }
+                        Box(Modifier.align(Alignment.BottomCenter)) { SerialMascot(54, s?.level ?: 3) }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Ваша серия длится ", color = p.text, fontWeight = FontWeight.Black, fontSize = 22.sp)
+                        Flame(Modifier.size(20.dp, 24.dp), s?.level ?: 3, lit)
+                        Text(" $count ${Streaks.days(count)}", color = if (lit) Color(0xFFFF7A1A) else p.muted, fontWeight = FontWeight.Black, fontSize = 22.sp)
+                    }
+                } else {
+                    SerialMascot(120, 3, sleeping = !on)
+                    Text(if (on) "Серийчик выведен" else "Серийчик ещё спит", color = p.text, fontWeight = FontWeight.Black, fontSize = 24.sp, modifier = Modifier.padding(top = 8.dp))
+                    Text(if (on) "Пишите друг другу каждый день — на третий день загорится огонёк. Сейчас: $count ${Streaks.days(count)} подряд."
+                         else "Выведите серийчика, и в чате с $name начнётся серия: общайтесь каждый день, и через 3 дня рядом с именем загорится огонёк.",
+                        color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
                 }
-                Spacer(Modifier.height(18.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (count >= 3) "Ваша серия длится " else "Серия: ", color = p.text, fontWeight = FontWeight.Black, fontSize = 24.sp)
-                    Flame(Modifier.size(22.dp, 26.dp), s?.level ?: 3, lit)
-                    Text(" $count ${Streaks.days(count)}", color = if (lit) Color(0xFFFF7A1A) else p.muted, fontWeight = FontWeight.Black, fontSize = 24.sp)
-                }
-                Spacer(Modifier.height(14.dp))
-                val todo = when {
-                    s == null || count == 0 -> "Пишите друг другу каждый день — через 3 дня появится огонёк."
-                    lit -> "Сегодня вы оба уже написали — огонёк горит. Возвращайтесь завтра!"
-                    s.mine -> "Вы сегодня уже написали. Ждём ответа от ${c?.displayName ?: "собеседника"} — иначе серия погаснет в полночь."
-                    s.peer -> "${c?.displayName ?: "Собеседник"} уже написал(а) сегодня. Ответьте до полуночи, чтобы серия продолжилась!"
-                    else -> "Напишите друг другу сегодня до полуночи (по Москве), чтобы серия не погасла."
-                }
-                Column(Modifier.fillMaxWidth()) {
-                    listOf("Серия растёт, когда вы оба пишете друг другу каждый день.", todo, "Продолжайте общаться, чтобы огонёк становился ярче!").forEach { t ->
-                        Row(Modifier.padding(vertical = 4.dp)) {
-                            Text("•", color = p.muted, fontSize = 16.sp, modifier = Modifier.padding(end = 8.dp))
-                            Text(t, color = p.muted, fontSize = 16.sp)
-                        }
+                Spacer(Modifier.height(16.dp))
+                @Composable fun bullet(ic: androidx.compose.ui.graphics.vector.ImageVector, t: String) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Icon(ic, null, tint = Color(0xFFFF7A1A), modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(t, color = p.muted, fontSize = 15.sp)
                     }
                 }
-                Spacer(Modifier.height(20.dp))
+                bullet(Icons.Filled.CalendarMonth, "День засчитывается, когда вы оба написали друг другу хотя бы по сообщению (по московскому времени).")
+                if (on) bullet(Icons.Filled.Schedule, when {
+                    s == null || s.count == 0 -> "Напишите друг другу сегодня — серия начнётся."
+                    s.done -> "Сегодня вы оба уже написали — огонёк горит. Возвращайтесь завтра!"
+                    s.mine -> "Вы сегодня уже написали. Ждём ответа от ${c?.displayName ?: "собеседника"} — иначе серия погаснет в полночь."
+                    s.peer -> "${c?.displayName ?: "Собеседник"} уже написал(а) сегодня. Ответьте до полуночи, чтобы серия продолжилась!"
+                    else -> "Напишите друг другу сегодня до полуночи, чтобы серия не погасла."
+                })
+                bullet(Icons.Filled.LocalFireDepartment, "Не пропускайте дни: если день пропущен, серия погаснет в полночь.")
+                bullet(Icons.Filled.AutoAwesome, "Чем дольше серия, тем ярче огонёк: 3, 10, 30, 100 и 200 дней.")
+                Spacer(Modifier.height(16.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Streaks.levels.forEachIndexed { i, lv ->
                         if (i > 0) Box(Modifier.weight(1f).height(3.dp).clip(CircleShape).background(if (count >= lv) Color(0xFFFF9A3D) else p.line))
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Flame(Modifier.size(30.dp, 36.dp), lv, count >= lv)
+                            Flame(Modifier.size(28.dp, 34.dp), lv, count >= lv)
                             Spacer(Modifier.height(4.dp))
                             Text("$lv д", color = if (count >= lv) p.text else p.muted, fontSize = 13.sp, fontWeight = if (count >= lv) FontWeight.Bold else FontWeight.Normal)
                         }
                     }
                 }
-                if ((s?.best ?: 0) > count) Text("Рекорд: ${s?.best} ${Streaks.days(s?.best ?: 0)}", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
+                if (on && (s?.best ?: 0) > count) Text("Рекорд: ${s?.best} ${Streaks.days(s?.best ?: 0)}", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
                 Spacer(Modifier.height(20.dp))
-                Box(Modifier.fillMaxWidth().height(54.dp).clip(CircleShape).background(Color(0xFFE8455A)).bouncy(onClose), contentAlignment = Alignment.Center) {
+                if (on) Box(Modifier.fillMaxWidth().height(54.dp).clip(CircleShape).background(Color(0xFFE8455A)).bouncy(onClose), contentAlignment = Alignment.Center) {
                     Text("Понятно", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                } else Row(Modifier.fillMaxWidth().height(54.dp).clip(CircleShape).background(Brush.horizontalGradient(listOf(Color(0xFFFFA318), Color(0xFFFF5A2A))))
+                    .bouncy { if (!busy) { busy = true; AppModel.scope.launch { if (Streaks.enable(chatId)) onClose(); busy = false } } },
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.5.dp)
+                    else { Icon(Icons.Filled.LocalFireDepartment, null, tint = Color.White); Spacer(Modifier.width(8.dp)); Text("Вывести серийчика", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) }
                 }
+            }
+        }
+    }
+}
+
+/** Раздел «Огоньки» в настройках */
+@Composable
+fun StreakInfoScreen() {
+    val p = P
+    Column(Modifier.fillMaxSize().background(p.bg)) {
+        TopBar("Огоньки")
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            SerialMascot(130)
+            Text("Огоньки и серийчик", color = p.text, fontWeight = FontWeight.Black, fontSize = 24.sp, modifier = Modifier.padding(top = 8.dp))
+            Text("Огонёк показывает, сколько дней подряд вы общаетесь с человеком.", color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(6.dp))
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                listOf(Icons.Filled.LooksOne to "Откройте личный чат и нажмите на серый огонёк рядом с именем, затем — «Вывести серийчика».",
+                    Icons.Filled.LooksTwo to "Пишите друг другу каждый день. День засчитывается, когда написали вы оба (по московскому времени).",
+                    Icons.Filled.Looks3 to "На третий день загорится огонёк с числом — его видно в списке чатов и в шапке чата.",
+                    Icons.Filled.Bedtime to "Если день пропущен, серия гаснет в полночь, и в чате появится сообщение об этом.").forEach { (ic, t) ->
+                    Row { Icon(ic, null, tint = Color(0xFFFF7A1A), modifier = Modifier.size(22.dp)); Spacer(Modifier.width(12.dp)); Text(t, color = p.text, fontSize = 15.sp) }
+                }
+            }
+            Text("УРОВНИ", color = p.muted, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp, start = 4.dp))
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.panel)) {
+                val names = listOf("Огонёк загорелся", "Огонёк ярче", "Розовое пламя", "Синее пламя", "Легендарное пламя")
+                Streaks.levels.forEachIndexed { i, lv ->
+                    if (i > 0) Box(Modifier.padding(start = 54.dp).fillMaxWidth().height(1.dp).background(p.line))
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Flame(Modifier.size(26.dp, 31.dp), lv, true)
+                        Spacer(Modifier.width(12.dp))
+                        Text("$lv ${Streaks.days(lv)} подряд", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(names[i], color = p.muted, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Красивое появление огонька: вспышка, искры, растущее пламя и число */
+@Composable
+fun StreakCelebrationOverlay() {
+    val s = Streaks.celebrate ?: return
+    val lit = s.count >= 3
+    val k = remember(s) { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "cel")
+    val t by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(2200, easing = androidx.compose.animation.core.LinearEasing)), label = "t")
+    val glow by inf.animateFloat(0.88f, 1.12f, androidx.compose.animation.core.infiniteRepeatable(tween(1100), androidx.compose.animation.core.RepeatMode.Reverse), label = "g")
+    LaunchedEffect(s) { k.animateTo(1f, spring(0.55f, 220f)) }
+    fun close() { scope.launch { k.animateTo(0f, tween(220)); Streaks.celebrate = null } }
+    Dialog(onDismissRequest = { close() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.62f * k.value.coerceIn(0f, 1f))).clickable(remember { MutableInteractionSource() }, null) { close() }, contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                val c = Offset(size.width / 2, size.height * 0.4f)
+                for (i in 0 until 36) {
+                    val a = (i * 12.9898).rem(6.283)
+                    val sp = 0.6 + (i * 3.1 * 12.9898).rem(1.0)
+                    val life = ((t * sp) + i / 36.0).rem(1.0)
+                    val r = (40 + life * 190) * density / 2.5
+                    val pt = Offset(c.x + (cos(a) * r).toFloat(), c.y + (sin(a) * r).toFloat() - (life * 60).toFloat())
+                    val col = when (i % 3) { 0 -> Color(0xFFFFD24C); 1 -> Color(0xFFFF8A3D); else -> Color.White }
+                    drawCircle(col.copy(alpha = ((1 - life) * k.value.coerceIn(0f, 1f)).toFloat()), (3 + (1 - life) * 5).toFloat() * density / 2.5f, pt)
+                }
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(30.dp)) {
+                Box(Modifier.size(260.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(260.dp).graphicsLayer { scaleX = glow; scaleY = glow; alpha = k.value.coerceIn(0f, 1f) }
+                        .background(Brush.radialGradient(listOf(Color(0xFFFFB347).copy(alpha = 0.75f), Color.Transparent)), CircleShape))
+                    Box(Modifier.graphicsLayer { scaleX = k.value; scaleY = k.value; rotationZ = (glow - 1f) * 25f; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f) }) {
+                        if (lit) Flame(Modifier.size(130.dp, 155.dp), s.level, true) else SerialMascot(150)
+                    }
+                }
+                if (lit) Text("${s.count}", color = Color.White, fontWeight = FontWeight.Black, fontSize = 64.sp, modifier = Modifier.graphicsLayer { scaleX = k.value; scaleY = k.value; alpha = k.value.coerceIn(0f, 1f) })
+                Text(if (lit) (if (s.level <= 3) "Огонёк загорелся!" else "Огонёк стал ярче!") else "Серийчик выведен!", color = Color.White, fontWeight = FontWeight.Black, fontSize = 26.sp,
+                    modifier = Modifier.graphicsLayer { alpha = k.value.coerceIn(0f, 1f) })
+                Text(if (lit) "${s.count} ${Streaks.days(s.count)} подряд с ${AppModel.chat(s.chatId)?.displayName ?: "собеседником"}. Не прерывайте серию!"
+                     else "Пишите друг другу каждый день — через 3 дня загорится огонёк.",
+                    color = Color.White.copy(alpha = 0.85f), fontSize = 16.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 10.dp).graphicsLayer { alpha = k.value.coerceIn(0f, 1f) })
+                Box(Modifier.padding(top = 20.dp).size(200.dp, 52.dp).clip(CircleShape).background(Brush.horizontalGradient(listOf(Color(0xFFFFA318), Color(0xFFFF5A2A)))).bouncy { close() },
+                    contentAlignment = Alignment.Center) { Text("Ура!", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) }
             }
         }
     }
