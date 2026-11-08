@@ -312,6 +312,8 @@ struct Message: Identifiable, Equatable {
     var width: Double? { meta.double("w") }
     var height: Double? { meta.double("h") }
     var fileName: String { meta.str("name") ?? "Файл" }
+    /// большой файл, загруженный частями
+    var parts: [String] { (meta["parts"] as? [String]) ?? [] }
     var fileSize: Int? { meta.int("size") }
     var isVideoCall: Bool { meta.bool("video") }
 

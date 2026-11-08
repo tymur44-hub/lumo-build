@@ -42,7 +42,7 @@ enum AttachLoader {
                     try await PHAssetResourceManager.default().writeData(for: r, toFile: tmp, options: opt)
                     let d = try Data(contentsOf: tmp)
                     try? FileManager.default.removeItem(at: tmp)
-                    if d.count > 50 * 1024 * 1024 { say("Видео больше 50 МБ пропущено"); continue }
+                    if d.count > BigFile.limit(premium: AppModel.shared.isPremium) { say("Видео больше " + BigFile.limitText(premium: AppModel.shared.isPremium) + " пропущено"); continue }
                     let mime = UTType(filenameExtension: ext)?.preferredMIMEType ?? "video/quicktime"
                     out.append(.init(kind: "video", data: d, ext: ext, mime: mime, meta: ["name": "video." + ext, "size": d.count]))
                 } catch { say("Не удалось открыть видео") }

@@ -274,6 +274,7 @@ fun ChatScreen(chatId: String) {
                                 m = r.m, chat = chat, first = r.first, last = r.last, album = r.album, onOpen = { if (!selecting) viewer = it }, selecting = selecting, isSelected = r.m.id in selected, flash = flash == r.m.id,
                                 onTap = { m ->
                                     if (selecting) { if (m.id in selected) selected.remove(m.id) else if (m.id > 0) selected.add(m.id) }
+                                    else if (m.parts.isNotEmpty()) scope.launch { AppModel.fetchBig(ctx, m)?.let { MediaUtil.openLocal(ctx, it) } }
                                     else if (m.kind == "image" || m.kind == "video") viewer = m
                                     else if (m.kind == "file") MediaUtil.open(ctx, m.mediaUrl)
                                 },
@@ -787,6 +788,24 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
             Text("Сообщение удалено", color = sub, fontStyle = FontStyle.Italic, fontSize = Look.fontSize.sp)
         } else if (album.size > 1) {
             AlbumGrid(album, onOpen)
+        } else if (m.parts.isNotEmpty()) {
+            // большой файл/видео частями: значок, имя, размер и прогресс скачивания
+            val prog = AppModel.bigProgress[m.id]
+            val ctxB = androidx.compose.ui.platform.LocalContext.current
+            val ready = remember(m.id, prog) { AppModel.bigLocal(ctxB, m).exists() }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(44.dp).clip(CircleShape).background(if (mine) Color.White.copy(alpha = 0.22f) else p.a1), contentAlignment = Alignment.Center) {
+                    if (prog != null) {
+                        androidx.compose.material3.CircularProgressIndicator(progress = { prog.coerceAtLeast(0.04f) }, modifier = Modifier.size(38.dp), color = Color.White, strokeWidth = 3.dp, trackColor = Color.White.copy(alpha = 0.25f))
+                        Text("${(prog * 100).toInt()}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    } else Icon(if (!ready) Icons.Filled.Download else if (m.kind == "video") Icons.Filled.PlayArrow else Icons.Filled.Description, null, tint = Color.White)
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.widthIn(max = 200.dp)) {
+                    Text(m.fileName, color = fg, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text((if (m.kind == "video") "Видео · " else "") + (m.fileSize?.let { s -> if (prog != null) Fmt.size((s * prog).toLong()) + " из " + Fmt.size(s) else Fmt.size(s) } ?: "Файл"), color = sub, fontSize = 12.5.sp)
+                }
+            }
         } else when (m.kind) {
             "image" -> {
                 val ratio = ((m.width ?: 1.0) / (m.height ?: 1.0)).toFloat().coerceIn(0.5f, 2f)
@@ -1064,16 +1083,18 @@ private fun Composer(
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         val caption = takeCaption(); val r = takeReply()
-        scope.launch { AppModel.sendAlbum(chatId, buildAlbumParts(ctx, uris), caption, r) }
+        scope.launch { AppModel.sendAlbum(chatId, buildAlbumParts(ctx, uris, chatId), caption, r) }
     }
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         if (u == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val data = withContext(Dispatchers.IO) { MediaUtil.read(ctx, u) } ?: run { AppModel.say("Не удалось открыть файл"); return@launch }
-            if (data.size > 50 * 1024 * 1024) { AppModel.say("Файл больше 50 МБ"); return@launch }
+            val size = withContext(Dispatchers.IO) { MediaUtil.size(ctx, u) }
+            if (size > AppModel.uploadLimit()) { AppModel.say("Можно отправить файл до " + AppModel.limitText()); return@launch }
             val name = MediaUtil.name(ctx, u)
             val type = ctx.contentResolver.getType(u) ?: "application/octet-stream"
             val ext = name.substringAfterLast('.', "").lowercase().ifEmpty { "bin" }
+            if (size > AppModel.bigChunk) { AppModel.sendBigFile(ctx, chatId, if (type.startsWith("video")) "video" else "file", u, name, ext, size, takeReply()); return@launch }
+            val data = withContext(Dispatchers.IO) { MediaUtil.read(ctx, u) } ?: run { AppModel.say("Не удалось открыть файл"); return@launch }
             AppModel.sendMedia(chatId, "file", data, ext, type, jsonOf("name" to name, "size" to data.size))
         }
     }
@@ -1155,7 +1176,7 @@ private fun Composer(
                     if (attach) AttachSheet(
                         canLumens = chat?.isPrivate == true && chat.peerId != AppModel.myId && !peerBadges(chat).first,
                         onDismiss = { attach = false },
-                        onSend = { uris, cap -> val r = takeReply(); scope.launch { AppModel.sendAlbum(chatId, buildAlbumParts(ctx, uris), cap, r) } },
+                        onSend = { uris, cap -> val r = takeReply(); scope.launch { AppModel.sendAlbum(chatId, buildAlbumParts(ctx, uris, chatId), cap, r) } },
                         onSystemPicker = { pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                         onFile = { pickFile.launch(arrayOf("*/*")) },
                         onAudio = { pickFile.launch(arrayOf("audio/*")) },

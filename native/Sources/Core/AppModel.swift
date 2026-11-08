@@ -1351,6 +1351,23 @@ final class AppModel: ObservableObject {
         messages[chatId, default: []].append(temp)
         Task {
             do {
+                if data.count > BigFile.chunk {
+                    // хранилище принимает до 50 МБ за раз — грузим частями, получатель склеит
+                    var parts: [String] = []
+                    var off = 0
+                    var i = 0
+                    while off < data.count {
+                        let end = min(data.count, off + BigFile.chunk)
+                        let u = try await API.shared.upload(data.subdata(in: off..<end), ext: "\(ext).p\(i)", contentType: "application/octet-stream")
+                        parts.append(u); off = end; i += 1
+                    }
+                    var meta = meta
+                    meta["parts"] = parts
+                    meta["size"] = data.count
+                    if meta["name"] == nil { meta["name"] = "\(kind == "video" ? "video" : "file").\(ext)" }
+                    await send(chatId: chatId, kind: kind, body: body, media: parts[0], meta: meta, replyTo: replyTo, pendingId: temp.id)
+                    return
+                }
                 let url = try await API.shared.upload(data, ext: ext, contentType: contentType)
                 await send(chatId: chatId, kind: kind, body: body, media: url, meta: meta, replyTo: replyTo, pendingId: temp.id)
             } catch {

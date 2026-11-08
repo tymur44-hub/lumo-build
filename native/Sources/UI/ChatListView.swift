@@ -126,10 +126,12 @@ struct ChatListView: View {
                 Button { model.markAllRead() } label: { Label("Прочитать все", systemImage: "checkmark.message") }
                 Button { showNew = true } label: { Label("Новый чат, группа или канал", systemImage: "square.and.pencil") }
             } label: {
-                Text("Изм.").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text)
+                Text("Изм.").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text).lineLimit(1).fixedSize()
                     .padding(.horizontal, 16).frame(height: 44)
                     .lumoGlass(Capsule(), interactive: true)
+                    .fixedSize()
             }
+            .layoutPriority(4)
             Spacer(minLength: 0)
             HStack(spacing: 6) {
                 if !storiesOpen { storyStack.transition(.scale(scale: 0.5).combined(with: .opacity)) }

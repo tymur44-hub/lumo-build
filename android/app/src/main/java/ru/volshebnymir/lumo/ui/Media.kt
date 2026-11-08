@@ -77,6 +77,23 @@ import java.io.File
 object MediaUtil {
     fun read(ctx: Context, uri: Uri): ByteArray? = runCatching { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
 
+    /** Открыть скачанный файл из кэша в подходящем приложении */
+    fun openLocal(ctx: Context, f: java.io.File) {
+        val u = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+        val type = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(f.extension.lowercase()) ?: "*/*"
+        runCatching { ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(u, type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Открыть").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { ru.volshebnymir.lumo.core.AppModel.say("Нет приложения, чтобы открыть этот файл") }
+    }
+
+    fun size(ctx: Context, uri: Uri): Long {
+        runCatching {
+            ctx.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+                if (c.moveToFirst() && !c.isNull(0)) return c.getLong(0)
+            }
+        }
+        return runCatching { ctx.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } }.getOrNull() ?: -1L
+    }
+
     fun name(ctx: Context, uri: Uri): String {
         runCatching {
             ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->

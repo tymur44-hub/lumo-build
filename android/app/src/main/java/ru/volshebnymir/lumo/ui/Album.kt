@@ -122,13 +122,20 @@ private fun galPerms(): Array<String> =
     else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 
 /** Читает выбранные фото/видео и готовит части альбома (в порядке выбора) */
-suspend fun buildAlbumParts(ctx: Context, uris: List<Uri>): List<AppModel.AlbumPart> {
+suspend fun buildAlbumParts(ctx: Context, uris: List<Uri>, chatId: String? = null): List<AppModel.AlbumPart> {
     val out = mutableListOf<AppModel.AlbumPart>()
     for (u in uris) {
         val type = ctx.contentResolver.getType(u) ?: ""
+        val size = withContext(Dispatchers.IO) { MediaUtil.size(ctx, u) }
+        if (size > AppModel.uploadLimit()) { AppModel.say("Пропущен файл больше " + AppModel.limitText()); continue }
+        if (size > AppModel.bigChunk && chatId != null) {
+            // большое видео уходит отдельным сообщением частями
+            val ext = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(type) ?: if (type.startsWith("video")) "mp4" else "bin"
+            AppModel.sendBigFile(ctx, chatId, if (type.startsWith("video")) "video" else "file", u, (if (type.startsWith("video")) "video." else "file.") + ext, ext, size)
+            continue
+        }
         val data = withContext(Dispatchers.IO) { MediaUtil.read(ctx, u) }
         if (data == null) { AppModel.say("Не удалось открыть файл"); continue }
-        if (data.size > 50 * 1024 * 1024) { AppModel.say("Файл больше 50 МБ пропущен"); continue }
         if (type.startsWith("video")) {
             val ext = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(type) ?: "mp4"
             out.add(AppModel.AlbumPart("video", data, ext, type, jsonOf("name" to "video.$ext", "size" to data.size)))

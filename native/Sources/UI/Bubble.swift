@@ -527,6 +527,9 @@ struct MessageRow: View {
     }
 
     @ViewBuilder private var singleMedia: some View {
+        if !m.parts.isEmpty {
+            BigFileBubble(m: m, mine: mine, onVideo: onVideo)
+        } else {
         switch m.kind {
         case "image":
             if let u = m.mediaURL.flatMap(URL.init(string:)) {
@@ -585,6 +588,7 @@ struct MessageRow: View {
             }
         default:
             EmptyView()
+        }
         }
     }
 

@@ -689,6 +689,76 @@ object AppModel {
         }
     }
 
+    // большие файлы: до 100 МБ, с Premium до 200 МБ; хранилище берёт до 50 МБ за раз — режем на части
+    val bigChunk = 45 * 1024 * 1024
+    fun uploadLimit(): Long = (if (isPremium) 200L else 100L) * 1024 * 1024
+    fun limitText(): String = if (isPremium) "200 МБ" else "100 МБ (с Premium — 200 МБ)"
+
+    /** Отправка большого файла частями, читая его с диска по кускам (без загрузки целиком в память) */
+    fun sendBigFile(ctx: android.content.Context, chatId: String, kind: String, uri: android.net.Uri, name: String, ext: String, size: Long, replyTo: Int? = null) {
+        val me = myId ?: return
+        val meta = jsonOf("name" to name, "size" to size)
+        val temp = Message.pending(chatId, me, kind, null, meta, replyTo, null)
+        messages[chatId] = (messages[chatId] ?: emptyList()) + temp
+        scope.launch {
+            try {
+                val parts = JSONArray()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    ctx.contentResolver.openInputStream(uri)?.use { ins ->
+                        var i = 0
+                        while (true) {
+                            val buf = ByteArray(bigChunk)
+                            var n = 0
+                            while (n < bigChunk) { val r = ins.read(buf, n, bigChunk - n); if (r < 0) break; n += r }
+                            if (n == 0) break
+                            parts.put(Api.upload(if (n == bigChunk) buf else buf.copyOf(n), "$ext.p$i", "application/octet-stream"))
+                            i++
+                            if (n < bigChunk) break
+                        }
+                    } ?: throw Exception("Не удалось открыть файл")
+                }
+                if (parts.length() == 0) throw Exception("Пустой файл")
+                meta.put("parts", parts)
+                send(chatId, kind, null, parts.getString(0), meta, replyTo, pendingId = temp.id)
+            } catch (e: Exception) {
+                messages[chatId] = (messages[chatId] ?: emptyList()).filter { it.id != temp.id }
+                say("Ошибка загрузки: " + (e.message ?: ""))
+            }
+        }
+    }
+
+    /** Скачать части большого файла и склеить в один файл в кэше; прогресс — в bigProgress */
+    val bigProgress = androidx.compose.runtime.mutableStateMapOf<Int, Float>()
+    fun bigLocal(ctx: android.content.Context, m: Message): java.io.File =
+        java.io.File(java.io.File(ctx.cacheDir, "bigfiles").apply { mkdirs() }, "${m.id}-" + m.fileName.replace('/', '_'))
+    suspend fun fetchBig(ctx: android.content.Context, m: Message): java.io.File? {
+        val out = bigLocal(ctx, m)
+        if (out.exists()) return out
+        if (bigProgress.containsKey(m.id)) return null
+        val parts = m.parts; if (parts.isEmpty()) return null
+        bigProgress[m.id] = 0f
+        val tmp = java.io.File(out.path + ".part")
+        return try {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                java.io.FileOutputStream(tmp).use { os ->
+                    parts.forEachIndexed { i, p ->
+                        val u = java.net.URL(Net.px(p) ?: p)
+                        (u.openConnection() as java.net.HttpURLConnection).run {
+                            connectTimeout = 20000; readTimeout = 60000
+                            if (responseCode >= 300) throw Exception("HTTP $responseCode")
+                            inputStream.use { it.copyTo(os, 256 * 1024) }
+                            disconnect()
+                        }
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { bigProgress[m.id] = (i + 1f) / parts.size }
+                    }
+                }
+                tmp.renameTo(out)
+            }
+            out
+        } catch (e: Exception) { tmp.delete(); say("Не удалось скачать файл"); null }
+        finally { bigProgress.remove(m.id) }
+    }
+
     suspend fun forward(m: Message, to: String) {
         val from = m.forwardedFrom?.takeIf { it.isNotEmpty() } ?: chat(m.chatId)?.takeIf { it.isChannel }?.displayName ?: displayName(m.senderId)
         send(to, m.kind, m.body, m.mediaUrl, m.meta, forwardedFrom = from)

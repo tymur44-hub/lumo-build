@@ -1253,7 +1253,7 @@ struct ComposerView: View {
         let ok = url.startAccessingSecurityScopedResource()
         defer { if ok { url.stopAccessingSecurityScopedResource() } }
         guard let d = try? Data(contentsOf: url) else { model.say("Не удалось открыть файл"); return }
-        if d.count > 50 * 1024 * 1024 { model.say("Файл больше 50 МБ"); return }
+        if d.count > BigFile.limit(premium: model.isPremium) { model.say("Можно отправить файл до " + BigFile.limitText(premium: model.isPremium)); return }
         let ext = url.pathExtension.isEmpty ? "bin" : url.pathExtension.lowercased()
         let mime = UTType(filenameExtension: ext)?.preferredMIMEType ?? "application/octet-stream"
         model.sendMedia(chatId: chatId, kind: "file", data: d, ext: ext, contentType: mime,
@@ -1269,7 +1269,7 @@ struct ComposerView: View {
                 model.say("Не удалось открыть файл")
                 continue
             }
-            if data.count > 50 * 1024 * 1024 { model.say("Файл больше 50 МБ"); continue }
+            if data.count > BigFile.limit(premium: model.isPremium) { model.say("Можно отправить файл до " + BigFile.limitText(premium: model.isPremium)); continue }
             let body: String? = (!captionUsed && !caption.isEmpty) ? caption : nil
             if body != nil { captionUsed = true; text = "" }
             let r = reply?.id

@@ -189,6 +189,8 @@ data class Message(
     val width get() = meta.dbl("w")
     val height get() = meta.dbl("h")
     val fileName get() = meta.str("name") ?: "Файл"
+    /** большой файл, загруженный частями по 45 МБ */
+    val parts: List<String> get() = meta.optJSONArray("parts")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
     val fileSize: Long? get() = meta.dbl("size")?.toLong()
     val isVideoCall get() = meta.bool("video")
     /** Кнопки под сообщением бота: строки по [текст, data|url] */
