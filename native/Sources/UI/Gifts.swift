@@ -563,8 +563,14 @@ struct ProfileGiftsRow: View {
             if !l.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("ПОДАРКИ · \(l.count)").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.muted).padding(.horizontal, 6)
-                    OwnedGrid(list: Array(l.prefix(6))) { view = $0 }.padding(.horizontal, -14)
+                    OwnedGrid(list: l) { view = $0 }.padding(.horizontal, -14)
                 }
+            } else if store.of[userId] != nil {
+                VStack(spacing: 6) {
+                    Image(systemName: "gift").font(.system(size: 28)).foregroundColor(Theme.muted)
+                    Text("Пока нет подарков").font(.subheadline).foregroundColor(Theme.muted)
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, 22)
             }
         }
         .task { await store.loadUser(userId); await store.ensureArt() }

@@ -121,54 +121,52 @@ struct ChatListView: View {
 
     /// Шапка как в Telegram: «Изм.», истории + «Чаты», кнопки справа и синяя «Новый чат»
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Menu {
                 Button { model.markAllRead() } label: { Label("Прочитать все", systemImage: "checkmark.message") }
                 Button { showNew = true } label: { Label("Новый чат, группа или канал", systemImage: "square.and.pencil") }
             } label: {
-                Text("Изм.").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text).lineLimit(1).fixedSize()
-                    .padding(.horizontal, 16).frame(height: 44)
+                // компактная кнопка: всегда в одну строку и не распирает шапку
+                Text("Изм.").font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .frame(width: 58, height: 40)
                     .lumoGlass(Capsule(), interactive: true)
-                    .fixedSize()
             }
-            .layoutPriority(4)
-            Spacer(minLength: 0)
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 if !storiesOpen { storyStack.transition(.scale(scale: 0.5).combined(with: .opacity)) }
-                Text("Чаты").font(.system(size: 19, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
-                    .fixedSize().layoutPriority(3)
+                Text("Чаты").font(.system(size: 18, weight: .bold)).foregroundColor(Theme.text)
+                    .lineLimit(1).minimumScaleFactor(0.75)
                 if model.me?.premium == true {
                     // эмодзи-статус рядом с «Чаты»; нажатие — выбрать другой
                     Button { showEmoji = true } label: {
-                        if let e = model.me?.emojiStatus, !e.isEmpty { StatusEmojiView(s: e, size: 22) }
-                        else { Image(systemName: "star.fill").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.a1) }
+                        if let e = model.me?.emojiStatus, !e.isEmpty { StatusEmojiView(s: e, size: 20) }
+                        else { Image(systemName: "star.fill").font(.system(size: 15, weight: .bold)).foregroundColor(Theme.a1) }
                     }
                     .buttonStyle(BouncyButtonStyle())
-                    .fixedSize()
                 }
             }
-            .layoutPriority(2)
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity)
             HStack(spacing: 0) {
                 Button { showNet = true } label: {
                     Image(systemName: Net.mode == .direct ? "checkmark.shield" : "bolt.shield")
-                        .font(.system(size: 18, weight: .semibold)).foregroundColor(Theme.text).frame(width: 40, height: 44)
+                        .font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text).frame(width: 36, height: 40)
                 }
                 Button { addStory = true } label: {
                     Image(systemName: "plus.circle.dashed")
-                        .font(.system(size: 19, weight: .semibold)).foregroundColor(Theme.text).frame(width: 40, height: 44)
+                        .font(.system(size: 18, weight: .semibold)).foregroundColor(Theme.text).frame(width: 36, height: 40)
                 }
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 3)
             .lumoGlass(Capsule(), interactive: true)
             Button { showNew = true } label: {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 19, weight: .semibold)).foregroundColor(.white)
-                    .frame(width: 46, height: 46)
+                    .font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
+                    .frame(width: 42, height: 42)
                     .background(Circle().fill(Theme.a1))
             }
             .buttonStyle(BouncyButtonStyle())
         }
+        .frame(maxWidth: .infinity)
         .sheet(isPresented: $showEmoji) { EmojiStatusSheet().environmentObject(model) }
         .alert("Соединение", isPresented: $showNet) {
             Button("Проверить заново") { Task { await Net.pick(force: true); await model.loadChats() } }
@@ -186,16 +184,16 @@ struct ChatListView: View {
         }
         if !groups.isEmpty {
             Button { storyStart = groups.first(where: { $0.userId != model.myId && $0.unseen })?.userId ?? groups[0].userId } label: {
-                HStack(spacing: -12) {
+                HStack(spacing: -11) {
                     if groups.count > 2 {
-                        Text("\(groups.count)").font(.system(size: 13, weight: .bold)).foregroundColor(.white)
-                            .frame(width: 30, height: 30)
+                        Text("\(groups.count)").font(.system(size: 12, weight: .bold)).foregroundColor(.white)
+                            .frame(width: 28, height: 28)
                             .background(Circle().fill(LinearGradient(colors: [Color(hex: 0x6fb8ff), Theme.a1], startPoint: .top, endPoint: .bottom)))
                             .padding(2).overlay(Circle().strokeBorder(Color(hex: 0x34c759), lineWidth: 2))
                             .zIndex(3)
                     }
-                    ForEach(Array(groups.prefix(2).enumerated()), id: \.offset) { i, g in
-                        AvatarView(name: g.name, url: g.avatarURL, color: g.color, size: 30)
+                    ForEach(Array(groups.prefix(groups.count > 2 ? 1 : 2).enumerated()), id: \.offset) { i, g in
+                        AvatarView(name: g.name, url: g.avatarURL, color: g.color, size: 28)
                             .padding(2)
                             .overlay(StoryRing(unseen: g.unseen, mine: g.userId == model.myId).scaleEffect(1.0))
                             .background(Circle().fill(Theme.bg))

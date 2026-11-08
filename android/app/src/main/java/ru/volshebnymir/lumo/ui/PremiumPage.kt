@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.BarChart
@@ -155,6 +156,7 @@ val FEATURES = listOf(
     Feat(Icons.Filled.Celebration, Color(0xFFFF5B7A), "Анимированные эффекты сообщений", "Удерживайте кнопку отправки и выберите эффект"),
     Feat(Icons.Filled.EmojiEmotions, Color(0xFFFFB020), "Анимированные эмодзи", "Вкладка «Анимации» в панели эмодзи: оживающие эмодзи в любом чате"),
     Feat(Icons.Filled.Favorite, Color(0xFFFF5B7A), "До 3 реакций на сообщение", "Без Premium — одна реакция"),
+    Feat(Icons.Filled.Description, Color(0xFF2B8CFF), "Файлы до 200 МБ", "Без Premium — до 100 МБ на файл или видео"),
     Feat(Icons.Filled.Wallpaper, Color(0xFF2B8CFF), "Обои для вас и собеседника", "Свои обои в личном чате — только для вас или сразу для двоих"),
     Feat(Icons.Filled.Timer, Color(0xFF1FB6A6), "Исчезающие сообщения", "Автоудаление в чате через час, день, неделю или месяц"),
     Feat(Icons.Filled.BarChart, Color(0xFF22A6FF), "Статистика каналов", "Подписчики и посты по дням"),
