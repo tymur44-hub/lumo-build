@@ -1466,22 +1466,37 @@ struct ProfileStyleBackground: View {
     let bg: Int?
     let pattern: String?
     var avatarCenterY: CGFloat = 92
+
+    private struct Dot: Identifiable { let id: Int; let dx: CGFloat; let dy: CGFloat; let size: CGFloat; let alpha: Double }
+
+    private static let dots: [Dot] = {
+        var out: [Dot] = []
+        let counts = [8, 12, 16], radii: [CGFloat] = [88, 128, 172], sizes: [CGFloat] = [15, 13, 11]
+        var id = 0
+        for ring in 0..<3 {
+            for k in 0..<counts[ring] {
+                let a = Double(k) / Double(counts[ring]) * Double.pi * 2 + Double(ring) * 0.35
+                let dx = CGFloat(cos(a)) * radii[ring]
+                let dy = CGFloat(sin(a)) * radii[ring] * 0.8
+                out.append(Dot(id: id, dx: dx, dy: dy, size: sizes[ring], alpha: 0.3 - Double(ring) * 0.07))
+                id += 1
+            }
+        }
+        return out
+    }()
+
     var body: some View {
         ZStack {
             if let g = ProfileStyle.gradient(bg) { g } else { Color.clear }
             if let p = pattern, !p.isEmpty {
                 GeometryReader { geo in
-                    let cx = geo.size.width / 2
-                    ForEach(0..<3, id: \.self) { ring in
-                        let n = [8, 12, 16][ring]
-                        let r = CGFloat([88, 128, 172][ring])
-                        ForEach(0..<n, id: \.self) { k in
-                            let a = Double(k) / Double(n) * .pi * 2 + Double(ring) * 0.35
-                            Image(systemName: p)
-                                .font(.system(size: CGFloat([15, 13, 11][ring])))
-                                .foregroundColor(bg == nil ? Theme.a1.opacity(0.22 - Double(ring) * 0.05) : Color.white.opacity(0.3 - Double(ring) * 0.07))
-                                .position(x: cx + CGFloat(cos(a)) * r, y: avatarCenterY + CGFloat(sin(a)) * r * 0.8)
-                        }
+                    let cx: CGFloat = geo.size.width / 2
+                    let tint: Color = bg == nil ? Theme.a1 : Color.white
+                    ForEach(Self.dots) { d in
+                        Image(systemName: p)
+                            .font(.system(size: d.size))
+                            .foregroundColor(tint.opacity(bg == nil ? d.alpha * 0.75 : d.alpha))
+                            .position(x: cx + d.dx, y: avatarCenterY + d.dy)
                     }
                 }
             }
