@@ -28,6 +28,9 @@ struct ChatView: View {
     @State private var imageURL: IdentifiedURL?
     @State private var videoURL: IdentifiedURL?
     @State private var showInfo = false
+    @State private var gcall: GroupCallInfo?
+    @State private var gcCount = 0
+    @State private var gcBusy = false
     @State private var forwarding: ForwardBatch?
     @State private var selecting = false
     @State private var selected: Set<Int> = []
@@ -126,6 +129,7 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if chat?.type == "group", gcCount > 0 { GroupCallBanner(count: gcCount) { joinGroupCall(video: false) } }
             if let pid = chat?.pinnedMessageId { pinnedBar(pid) }
             PaidBar(chat: chat, chatId: chatId).environmentObject(model)
             if isProt {
@@ -210,6 +214,21 @@ struct ChatView: View {
                     Button { calls.startCall(chat: c, video: false) } label: { Image(systemName: "phone.fill") }
                     Button { calls.startCall(chat: c, video: true) } label: { Image(systemName: "video.fill") }
                 }
+                if !selecting, let c = chat, c.type == "group" {
+                    Menu {
+                        Button { joinGroupCall(video: false) } label: { Label("Групповой звонок", systemImage: "phone") }
+                        Button { joinGroupCall(video: true) } label: { Label("Групповой видеозвонок", systemImage: "video") }
+                    } label: { Image(systemName: gcBusy ? "hourglass" : "phone.fill") }
+                }
+            }
+        }
+        .fullScreenCover(item: $gcall, onDismiss: { Task { gcCount = await model.groupCallCount(chatId) } }) { GroupCallScreen(info: $0) }
+        .task(id: chatId) {
+            guard chat?.type == "group" else { return }
+            while !Task.isCancelled {
+                let n = await model.groupCallCount(chatId)
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { gcCount = n }
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
             }
         }
         .navigationBarBackButtonHidden(selecting)
@@ -741,6 +760,16 @@ struct ChatView: View {
                 withAnimation { proxy.scrollTo(id, anchor: .center) }
                 Task { try? await Task.sleep(nanoseconds: 1_600_000_000); if highlight == id { highlight = nil } }
             }
+        }
+    }
+
+    private func joinGroupCall(video: Bool) {
+        guard !gcBusy else { return }
+        gcBusy = true
+        Task {
+            let ok = await AVAudioApplicationPermission.ask(video: video)
+            if ok, let info = await model.groupCall(chatId, video: video) { gcall = info }
+            gcBusy = false
         }
     }
 

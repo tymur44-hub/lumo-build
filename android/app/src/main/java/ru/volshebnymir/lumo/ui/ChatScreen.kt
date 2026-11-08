@@ -263,6 +263,7 @@ fun ChatScreen(chatId: String) {
                 onDelete = { deleting = msgs.filter { it.id in selected }.takeIf { it.isNotEmpty() } },
             ) else ChatHeader(chatId, chat)
             NetStatusBar()
+            if (chat?.type == "group") { val gstart = rememberGroupCallStarter(chatId, chat.displayName); GroupCallBanner(chatId) { gstart(false) } }
             PinnedBar(chat, chatId) { scrollTo(it) }
             PaidBar(chat, chatId)
             Box(Modifier.weight(1f)) {
@@ -510,6 +511,11 @@ private fun ChatHeader(chatId: String, chat: ChatItem?) {
             val call = rememberCallStarter()
             RoundIcon(Icons.Filled.Videocam) { call(chat, true) }
             RoundIcon(Icons.Filled.Call) { call(chat, false) }
+        }
+        if (chat?.type == "group") {
+            val gstart = rememberGroupCallStarter(chat.id, chat.displayName)
+            RoundIcon(Icons.Filled.Videocam) { gstart(true) }
+            RoundIcon(Icons.Filled.Call) { gstart(false) }
         }
     }
 }

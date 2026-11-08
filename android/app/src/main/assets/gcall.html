@@ -1,0 +1,163 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<style>html,body{margin:0;background:#0b0b10;height:100%;overflow:hidden}</style>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.18.10/dist/livekit-client.umd.js"></script>
+<script>/* Lumo: групповой звонок (LiveKit). Общий код для сайта и приложений.
+   GCall.open({url, token, title, video, onLeave}) — рисует полноэкранное окно звонка. */
+(function(){
+if (window.GCall) return;
+const IC = {
+  mic: '<path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  micOff: '<path d="M3 3l18 18"/><path d="M9 9v3a3 3 0 0 0 5.1 2.1M15 9.3V6a3 3 0 0 0-5.8-1.1"/><path d="M5 11a7 7 0 0 0 11.6 5.3M19 11a7 7 0 0 1-.4 2.3M12 18v3"/>',
+  cam: '<rect x="2.5" y="6" width="13" height="12" rx="3"/><path d="M15.5 10.5l6-3.5v10l-6-3.5z"/>',
+  camOff: '<path d="M3 3l18 18"/><path d="M15.5 10.5l6-3.5v10l-3.2-1.9M13 18H5.5a3 3 0 0 1-3-3V9a3 3 0 0 1 2-2.8M9 6h3.5a3 3 0 0 1 3 3v3"/>',
+  flip: '<path d="M4 7h11a4 4 0 0 1 4 4v1"/><path d="M7 4L4 7l3 3"/><path d="M20 17H9a4 4 0 0 1-4-4v-1"/><path d="M17 20l3-3-3-3"/>',
+  end: '<path d="M3.5 14.5c4.7-4 12.3-4 17 0l-2 2.6-3.6-1.4v-2.3a10 10 0 0 0-5.8 0v2.3l-3.6 1.4z" fill="currentColor"/>',
+  spk: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 8.5a5 5 0 0 1 0 7M19.5 6a8.5 8.5 0 0 1 0 12"/>',
+  min: '<path d="M6 15l6-6 6 6"/>'
+};
+const svg = (n, s = 24) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
+const COLORS = [['#ff8a65','#f4511e'],['#9575cd','#5e35b1'],['#4fc3f7','#0288d1'],['#81c784','#388e3c'],['#f06292','#c2185b'],['#ffb74d','#f57c00'],['#4db6ac','#00796b'],['#7986cb','#3949ab']];
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const css = `
+#gcw{position:fixed;inset:0;z-index:2147483000;background:#0b0b10;color:#fff;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;animation:gcin .32s cubic-bezier(.2,.9,.3,1)}
+@keyframes gcin{from{opacity:0;transform:scale(.97)}}
+#gcw.out{animation:gcout .26s ease forwards}@keyframes gcout{to{opacity:0;transform:scale(.97)}}
+#gcw .hd{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 16px 8px}
+#gcw .hd b{font-size:17px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#gcw .hd small{font-size:13px;opacity:.65}
+#gcw .grid{flex:1;min-height:0;display:grid;gap:8px;padding:8px 10px;grid-auto-rows:1fr}
+#gcw .t{position:relative;border-radius:22px;overflow:hidden;background:#1c1c24;display:grid;place-items:center;transition:box-shadow .2s;animation:gcin .3s ease}
+#gcw .t::after{content:'';position:absolute;inset:0;border-radius:22px;box-shadow:inset 0 0 0 3px #34c759;opacity:0;transition:opacity .2s;pointer-events:none;z-index:2}#gcw .t.sp::after{opacity:1}#gcw .t .nm{z-index:3}
+#gcw .t video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#gcw .t.me video{transform:scaleX(-1)}
+#gcw .t.me.back video{transform:none}
+#gcw .t .av{width:92px;height:92px;border-radius:50%;display:grid;place-items:center;font-size:34px;font-weight:800;background-size:cover;background-position:center;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+#gcw .t .nm{position:absolute;left:10px;bottom:10px;display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:600;padding:5px 10px;border-radius:12px;background:rgba(0,0,0,.42);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);max-width:calc(100% - 20px)}
+#gcw .t .nm span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#gcw .t .nm i{display:grid;color:#ff5a5a}
+#gcw .t .nm i svg{width:15px;height:15px}
+#gcw .bar{display:flex;justify-content:center;gap:14px;padding:12px 16px calc(18px + env(safe-area-inset-bottom))}
+#gcw .bar button{width:60px;height:60px;border-radius:50%;border:0;display:grid;place-items:center;color:#fff;background:rgba(255,255,255,.14);cursor:pointer;transition:transform .15s,background .2s}
+#gcw .bar button:active{transform:scale(.92)}
+#gcw .bar button.off{background:#fff;color:#111}
+#gcw .bar button.end{background:#ff3b30}
+#gcw .bar label{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;opacity:.85}
+#gcw .st{position:absolute;left:0;right:0;top:45%;text-align:center;font-size:15px;opacity:.8}
+`;
+function avatarHtml(name, meta) {
+  let m = {}; try { m = JSON.parse(meta || '{}') || {}; } catch (e) {}
+  const c = COLORS[Math.abs(m.color || 0) % COLORS.length];
+  const ini = String(name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+  return m.avatar ? `<div class="av" style="background-image:url('${esc(m.avatar)}')"></div>` : `<div class="av" style="background:linear-gradient(160deg,${c[0]},${c[1]})">${esc(ini)}</div>`;
+}
+window.GCall = {
+  active: false,
+  async open(o) {
+    if (this.active) return;
+    const LK = window.LivekitClient;
+    if (!LK) { alert('Не удалось загрузить звонок. Проверьте интернет.'); o.onLeave && o.onLeave(); return; }
+    this.active = true;
+    const { Room, RoomEvent, Track, VideoPresets } = LK;
+    if (!document.getElementById('gcss')) { const s = document.createElement('style'); s.id = 'gcss'; s.textContent = css; document.head.appendChild(s); }
+    const w = document.createElement('div'); w.id = 'gcw';
+    w.innerHTML = `<div class="hd"><div style="flex:1;min-width:0"><b>${esc(o.title || 'Групповой звонок')}</b><small id="gcs">Подключение…</small></div></div>
+<div class="grid" id="gcg"></div><div id="gca" style="display:none"></div>
+<div class="bar">
+<label><button id="gcm">${svg('mic')}</button>Микрофон</label>
+<label><button id="gcv">${svg('cam')}</button>Камера</label>
+<label><button id="gcf">${svg('flip')}</button>Повернуть</label>
+<label><button id="gce" class="end">${svg('end', 28)}</button>Выйти</label></div>`;
+    document.body.appendChild(w);
+    const $ = id => w.querySelector('#' + id);
+    const room = new Room({ adaptiveStream: true, dynacast: true, videoCaptureDefaults: { resolution: VideoPresets.h540.resolution, facingMode: 'user' }, audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    let t0 = 0, timer = 0, front = true, closed = false;
+    const fmt = s => (s >= 3600 ? Math.floor(s / 3600) + ':' : '') + String(Math.floor(s / 60) % 60).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+    const status = () => {
+      const n = 1 + room.remoteParticipants.size;
+      $('gcs').textContent = (t0 ? fmt(Math.floor((Date.now() - t0) / 1000)) + ' · ' : '') + n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'участник' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'участника' : 'участников');
+    };
+    const tiles = new Map();
+    function tileFor(p, me) {
+      let t = tiles.get(p.identity);
+      if (!t) { t = document.createElement('div'); t.className = 't' + (me ? ' me' : ''); tiles.set(p.identity, t); $('gcg').appendChild(t); }
+      const camPub = p.getTrackPublication(Track.Source.Camera);
+      const micPub = p.getTrackPublication(Track.Source.Microphone);
+      const vt = camPub && !camPub.isMuted && camPub.track ? camPub.track : null;
+      const muted = !micPub || micPub.isMuted;
+      const key = (vt ? vt.sid || 'v' : 'a') + (muted ? 'm' : '') + (p.name || '');
+      if (t.__k !== key) {
+        t.__k = key;
+        t.innerHTML = '';
+        if (vt) { const v = vt.attach(); v.muted = true; v.playsInline = true; t.appendChild(v); }
+        else t.insertAdjacentHTML('beforeend', avatarHtml(p.name || p.identity, p.metadata));
+        t.insertAdjacentHTML('beforeend', `<div class="nm">${muted ? `<i>${svg('micOff')}</i>` : ''}<span>${esc(me ? 'Вы' : (p.name || 'Участник'))}</span></div>`);
+      }
+      return t;
+    }
+    function layout() {
+      const all = [room.localParticipant, ...room.remoteParticipants.values()];
+      const ids = new Set(all.map(p => p.identity));
+      for (const [id, t] of tiles) if (!ids.has(id)) { t.remove(); tiles.delete(id); }
+      all.forEach((p, i) => tileFor(p, i === 0));
+      const n = all.length, wide = w.clientWidth > w.clientHeight;
+      const cols = n <= 1 ? 1 : n === 2 ? (wide ? 2 : 1) : n <= 4 ? 2 : n <= 9 ? 3 : 4;
+      all.forEach((p, i) => { const t = tiles.get(p.identity); if (t) t.style.gridColumn = (cols === 2 && n % 2 === 1 && i === n - 1) ? 'span 2' : ''; });
+      $('gcg').style.gridTemplateColumns = `repeat(${cols},1fr)`;
+      status();
+    }
+    const syncBtns = () => {
+      const lp = room.localParticipant;
+      $('gcm').classList.toggle('off', !lp.isMicrophoneEnabled); $('gcm').innerHTML = svg(lp.isMicrophoneEnabled ? 'mic' : 'micOff');
+      $('gcv').classList.toggle('off', !lp.isCameraEnabled); $('gcv').innerHTML = svg(lp.isCameraEnabled ? 'cam' : 'camOff');
+      $('gcf').parentElement.style.display = lp.isCameraEnabled ? '' : 'none';
+    };
+    const leave = async () => {
+      if (closed) return; closed = true; clearInterval(timer);
+      try { await room.disconnect(); } catch (e) {}
+      w.classList.add('out'); setTimeout(() => { w.remove(); }, 260);
+      GCall.active = false; o.onLeave && o.onLeave();
+    };
+    room
+      .on(RoomEvent.ParticipantConnected, layout)
+      .on(RoomEvent.ParticipantDisconnected, layout)
+      .on(RoomEvent.TrackSubscribed, (track) => { if (track.kind === 'audio') { const a = track.attach(); $('gca').appendChild(a); } layout(); })
+      .on(RoomEvent.TrackUnsubscribed, (track) => { track.detach().forEach(el => el.remove()); layout(); })
+      .on(RoomEvent.TrackMuted, layout).on(RoomEvent.TrackUnmuted, layout)
+      .on(RoomEvent.LocalTrackPublished, () => { layout(); syncBtns(); })
+      .on(RoomEvent.LocalTrackUnpublished, () => { layout(); syncBtns(); })
+      .on(RoomEvent.ParticipantMetadataChanged, layout).on(RoomEvent.ParticipantNameChanged, layout)
+      .on(RoomEvent.ActiveSpeakersChanged, (sp) => { const s = new Set(sp.map(p => p.identity)); for (const [id, t] of tiles) t.classList.toggle('sp', s.has(id)); })
+      .on(RoomEvent.Reconnecting, () => { $('gcs').textContent = 'Переподключение…'; })
+      .on(RoomEvent.Reconnected, status)
+      .on(RoomEvent.Disconnected, () => { if (!closed) leave(); });
+    $('gce').onclick = leave;
+    $('gcm').onclick = async () => { await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled).catch(() => {}); syncBtns(); layout(); };
+    $('gcv').onclick = async () => { await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled, { facingMode: front ? 'user' : 'environment' }).catch(() => {}); syncBtns(); layout(); };
+    $('gcf').onclick = async () => {
+      const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+      if (!pub || !pub.videoTrack) return;
+      front = !front;
+      try { await pub.videoTrack.restartTrack({ facingMode: front ? 'user' : 'environment' }); } catch (e) { front = !front; }
+      const t = tiles.get(room.localParticipant.identity); if (t) t.classList.toggle('back', !front);
+    };
+    window.addEventListener('resize', layout);
+    this.leave = leave;
+    try {
+      await room.connect(o.url, o.token);
+      t0 = Date.now(); timer = setInterval(status, 1000);
+      await room.localParticipant.setMicrophoneEnabled(true).catch(() => {});
+      if (o.video) await room.localParticipant.setCameraEnabled(true).catch(() => {});
+      try { await room.startAudio(); } catch (e) {}
+      layout(); syncBtns();
+    } catch (e) {
+      $('gcs').textContent = 'Не удалось подключиться';
+      setTimeout(leave, 1800);
+    }
+  }
+};
+})();
+</script></head><body><script>/*CFG*/
+function bye(){ try{window.webkit.messageHandlers.lumo.postMessage('leave')}catch(e){} try{LumoBridge.leave()}catch(e){} }
+function go(){ GCall.open(Object.assign({}, window.LUMO_CALL||{}, {onLeave:bye})); }
+if(window.LivekitClient) go(); else { var s=document.createElement('script'); s.src='https://unpkg.com/livekit-client@2.18.10/dist/livekit-client.umd.js'; s.onload=go; s.onerror=go; document.head.appendChild(s); }
+</script></body></html>
