@@ -27,6 +27,7 @@ struct ChatListView: View {
     @State private var showNet = false
     @State private var showEmoji = false
     @State private var storiesOpen = false
+    @State private var pulled = false
     @Namespace private var foldNS
     @FocusState private var searchFocused: Bool
     /// iPad: список слева, чат справа (без собственной навигации)
@@ -282,7 +283,9 @@ struct ChatListView: View {
         .coordinateSpace(name: "clist")
         .onPreferenceChange(ProfileScrollKey.self) { y in
             // как в Telegram: потянуть вниз — раскрыть ленту историй, прокрутить вверх — свернуть
-            if y > 70, !storiesOpen {
+            if y < 10 { pulled = false }
+            if y > 70, !storiesOpen, !pulled {
+                pulled = true
                 Task { await model.loadChats(); await model.loadStories() }
                 if !model.stories.isEmpty { UIImpactFeedbackGenerator(style: .light).impactOccurred(); storiesOpen = true }
             } else if y < -24, storiesOpen { storiesOpen = false }
