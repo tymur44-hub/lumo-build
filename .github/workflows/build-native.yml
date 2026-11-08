@@ -81,6 +81,7 @@ jobs:
       - name: Собрать приложение
         run: |
           set -o pipefail
+          rm -rf ~/Library/Caches/org.swift.swiftpm/artifacts ~/Library/org.swift.swiftpm/security spm || true
           xcodebuild -project LumoNative.xcodeproj -scheme Lumo -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' \
             -derivedDataPath build -clonedSourcePackagesDirPath spm \
