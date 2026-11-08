@@ -26,7 +26,7 @@ suspend fun AppModel.scheduledList(chatId: String): List<Scheduled> {
     prep(chatId)
     return rows.map { r ->
         var t = r.str("body") ?: ""
-        if (E2E.isEnc(t)) t = E2E.decrypt(chatId, t) ?: "🔒"
+        if (E2E.isEnc(t)) t = E2E.decrypt(chatId, t) ?: "Зашифровано"
         Scheduled(r.int("id") ?: 0, r.date("send_at") ?: Date(), t)
     }
 }

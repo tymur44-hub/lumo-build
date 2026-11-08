@@ -27,7 +27,7 @@ extension AppModel {
         await prep(chatId)
         return rows.map { r in
             var t = r.str("body") ?? ""
-            if t.hasPrefix("e2e1:"), let d = E2E.shared.decrypt(chatId, t) { t = d } else if t.hasPrefix("e2e1:") { t = "🔒" }
+            if t.hasPrefix("e2e1:"), let d = E2E.shared.decrypt(chatId, t) { t = d } else if t.hasPrefix("e2e1:") { t = "Зашифровано" }
             return (r.int("id") ?? 0, r.date("send_at") ?? Date(), t)
         }
     }

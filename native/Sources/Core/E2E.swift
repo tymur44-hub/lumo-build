@@ -11,7 +11,7 @@ import Security
 final class E2E: ObservableObject {
     static let shared = E2E()
     nonisolated static let prefix = "e2e1:"
-    nonisolated static let locked = "🔒 Не удалось расшифровать"
+    nonisolated static let locked = "Не удалось расшифровать"
     nonisolated static func isEnc(_ b: String?) -> Bool { b?.hasPrefix(prefix) == true }
 
     enum Status { case loading, ready, needRestore }

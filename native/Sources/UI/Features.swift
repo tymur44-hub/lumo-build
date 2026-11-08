@@ -1211,7 +1211,7 @@ struct StreakSheet: View {
                     SerialMascot(size: 120, level: 3, sleeping: !on)
                     Text(on ? "Серийчик выведен" : "Серийчик ещё спит").font(.system(size: 24, weight: .black)).foregroundColor(Theme.text).padding(.top, 8)
                     Text(on ? "Пишите друг другу каждый день — на третий день загорится огонёк. Сейчас: \(count) \(Streaks.days(count)) подряд."
-                            : "Выведите серийчика, и в чате с \(peerName) начнётся серия: общайтесь каждый день, и через 3 дня рядом с именем загорится огонёк.")
+                            : "Выведите серийчика, и в этом чате начнётся серия: общайтесь каждый день, и через 3 дня рядом с именем загорится огонёк.")
                         .font(.system(size: 15)).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(.top, 6).padding(.horizontal, 8)
                 }
                 VStack(alignment: .leading, spacing: 8) {

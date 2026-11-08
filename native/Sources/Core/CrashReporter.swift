@@ -38,7 +38,7 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
     }
 
     /// после входа: отправить сохранённые отчёты
-    func flush() {
+    @MainActor func flush() {
         guard API.shared.userId != nil else { return }
         if let s = try? String(contentsOfFile: CrashReporter.path, encoding: .utf8), !s.isEmpty {
             try? FileManager.default.removeItem(atPath: CrashReporter.path)
@@ -62,6 +62,6 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         let v = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") + " (" + (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "") + ")"
         let body: [String: Any] = ["platform": "ios-" + kind, "app_version": v, "os": UIDevice.current.systemVersion + " " + UIDevice.current.model,
                                    "payload": String(payload.prefix(190_000))]
-        Task { _ = try? await API.shared.raw("POST", "/rest/v1/lm_crash_reports", body: body, headers: ["Prefer": "return=minimal"]) }
+        Task { @MainActor in _ = try? await API.shared.raw("POST", "/rest/v1/lm_crash_reports", body: body, headers: ["Prefer": "return=minimal"]) }
     }
 }

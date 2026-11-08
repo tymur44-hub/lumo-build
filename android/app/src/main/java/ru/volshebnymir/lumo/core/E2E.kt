@@ -40,7 +40,7 @@ import javax.crypto.spec.SecretKeySpec
  */
 object E2E {
     const val PREFIX = "e2e1:"
-    const val LOCKED = "🔒 Не удалось расшифровать"
+    const val LOCKED = "Не удалось расшифровать"
 
     enum class Status { Loading, Ready, NeedRestore }
 

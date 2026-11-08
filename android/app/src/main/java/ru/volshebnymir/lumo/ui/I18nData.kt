@@ -817,7 +817,7 @@ object I18nData {
         m["февраля"] = "February"
         m["января"] = "January"
         m["‹ Влево — отмена"] = "‹ Left — cancel"
-        m["🔒 Не удалось расшифровать"] = "🔒 Could not decrypt"
+        m["Не удалось расшифровать"] = "Could not decrypt"
     }
     val tt: Map<String, String> by lazy { val m = HashMap<String, String>(); ttPart1(m); ttPart2(m); ttPart3(m); m }
     private fun ttPart1(m: HashMap<String, String>) {
@@ -1634,6 +1634,6 @@ object I18nData {
         m["февраля"] = "февраль"
         m["января"] = "гыйнвар"
         m["‹ Влево — отмена"] = "‹ Сулга — кире алу"
-        m["🔒 Не удалось расшифровать"] = "🔒 Шифрдан чыгарып булмады"
+        m["Не удалось расшифровать"] = "Шифрдан чыгарып булмады"
     }
 }

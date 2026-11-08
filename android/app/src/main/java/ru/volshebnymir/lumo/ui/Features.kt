@@ -1038,7 +1038,7 @@ fun StreakSheet(chatId: String, onClose: () -> Unit) {
                     SerialMascot(120, 3, sleeping = !on)
                     Text(if (on) "Серийчик выведен" else "Серийчик ещё спит", color = p.text, fontWeight = FontWeight.Black, fontSize = 24.sp, modifier = Modifier.padding(top = 8.dp))
                     Text(if (on) "Пишите друг другу каждый день — на третий день загорится огонёк. Сейчас: $count ${Streaks.days(count)} подряд."
-                         else "Выведите серийчика, и в чате с $name начнётся серия: общайтесь каждый день, и через 3 дня рядом с именем загорится огонёк.",
+                         else "Выведите серийчика, и в этом чате начнётся серия: общайтесь каждый день, и через 3 дня рядом с именем загорится огонёк.",
                         color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
                 }
                 Spacer(Modifier.height(16.dp))
