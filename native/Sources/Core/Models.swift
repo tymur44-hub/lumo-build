@@ -28,6 +28,12 @@ struct Profile: Identifiable, Equatable {
     /// оформление профиля: цвет фона шапки и узор (узор — Premium)
     var profileBg: Int?
     var profilePattern: String?
+    /// музыка профиля: {url,title,artist,dur}
+    var musicURL: String?
+    var musicTitle = ""
+    var musicArtist = ""
+    /// число публикаций (закреплённых историй) в профиле
+    var posts = 0
 
     /// Имя без фамилии (в name хранится полное имя)
     var firstName: String { !lastName.isEmpty && name.hasSuffix(" " + lastName) ? String(name.dropLast(lastName.count + 1)) : name }
@@ -70,7 +76,37 @@ struct Profile: Identifiable, Equatable {
         emojiStatus = j.str("emoji_status")
         profileBg = j.int("profile_bg")
         profilePattern = j.str("profile_pattern")
+        let m = j.dict("profile_music")
+        musicURL = m.str("url").flatMap { $0.isEmpty ? nil : $0 }
+        musicTitle = m.str("title") ?? ""
+        musicArtist = m.str("artist") ?? ""
+        posts = j.int("posts") ?? 0
     }
+}
+
+/// Публикация в профиле (закреплённая история) или запись архива
+struct ProfilePost: Identifiable, Equatable {
+    var id: Int
+    var kind: String
+    var mediaURL: String
+    var caption: String
+    var createdAt: Date
+    var expiresAt: Date?
+    var pinned: Bool
+    var views: Int
+    var thumbURL: String?
+    init(json j: JSON) {
+        id = j.int("id") ?? 0
+        kind = j.str("kind") ?? "image"
+        mediaURL = j.str("media_url") ?? ""
+        caption = j.str("caption") ?? ""
+        createdAt = j.date("created_at") ?? Date()
+        expiresAt = j.date("expires_at")
+        pinned = j["pinned"] == nil ? true : j.bool("pinned")
+        views = j.int("views") ?? 0
+        thumbURL = j.dict("meta").str("thumb")
+    }
+    var preview: String? { kind == "video" ? thumbURL : mediaURL }
 }
 
 /// День рождения «1 июля 2011 (15 лет)»
@@ -394,10 +430,13 @@ struct StoryItem: Identifiable, Equatable {
     var views: Int
     /// я поставил сердечко
     var liked = false
+    /// автор запретил снимки экрана
+    var noShot = false
 
     init(json j: JSON) {
         id = j.int("id") ?? 0
         liked = j.bool("liked")
+        noShot = j.dict("meta").bool("noshot")
         userId = j.str("user_id") ?? ""
         name = j.str("name") ?? ""
         username = j.str("username") ?? ""

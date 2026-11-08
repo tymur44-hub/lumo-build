@@ -1468,6 +1468,7 @@ struct ProfileStyleBackground: View {
     let pattern: String?
     var status: String? = nil
     var avatarCenterY: CGFloat = 92
+    @State private var drift = false
 
     private struct Dot: Identifiable { let id: Int; let dx: CGFloat; let dy: CGFloat; let size: CGFloat; let alpha: Double }
 
@@ -1503,15 +1504,23 @@ struct ProfileStyleBackground: View {
                     let cx: CGFloat = geo.size.width / 2
                     let useStatus: Bool = p == "@status" && (status ?? "").isEmpty == false
                     let tint: Color = bg == nil ? Theme.a1 : Color.white
-                    ForEach(Self.dots) { d in
-                        Group {
-                            if useStatus { StatusEmojiView(s: status ?? "", size: d.size).saturation(0.15) }
-                            else { Image(systemName: p == "@status" ? "star.fill" : p).font(.system(size: d.size * 0.8)).foregroundColor(tint) }
+                    let anchor = UnitPoint(x: 0.5, y: avatarCenterY / max(geo.size.height, 1))
+                    ZStack {
+                        ForEach(Self.dots) { d in
+                            Group {
+                                if useStatus { StatusEmojiView(s: status ?? "", size: d.size).saturation(0.15) }
+                                else { Image(systemName: p == "@status" ? "star.fill" : p).font(.system(size: d.size * 0.8)).foregroundColor(tint) }
+                            }
+                            .opacity(useStatus ? d.alpha * 0.9 : (bg == nil ? d.alpha * 0.6 : d.alpha * 0.8))
+                            .position(x: cx + d.dx, y: avatarCenterY + d.dy)
                         }
-                        .opacity(useStatus ? d.alpha * 0.9 : (bg == nil ? d.alpha * 0.6 : d.alpha * 0.8))
-                        .position(x: cx + d.dx, y: avatarCenterY + d.dy)
                     }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    // узор медленно «дышит» и покачивается вокруг аватара, как в Telegram
+                    .rotationEffect(.degrees(drift ? 7 : -7), anchor: anchor)
+                    .scaleEffect(drift ? 1.05 : 0.97, anchor: anchor)
                 }
+                .onAppear { withAnimation(.easeInOut(duration: 7).repeatForever(autoreverses: true)) { drift = true } }
             }
         }
         .allowsHitTesting(false)
@@ -1568,6 +1577,7 @@ struct ProfileTopHero<Top: View, Bottom: View>: View {
                 .contentShape(Rectangle())
                 .onTapGesture { onAvatar() }
                 .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                bottom().padding(.top, 12)
             } else {
                 VStack(spacing: 8) {
                     top().padding(.horizontal, 14)
@@ -1755,5 +1765,17 @@ struct ProfileStyleView: View {
             c()
         }
         .padding(.horizontal, 16)
+    }
+}
+
+extension View {
+    /// Насколько список оттянут вниз (положительное значение) или прокручен вверх (отрицательное).
+    /// На iOS 18+ — точные данные прокрутки, на старых — через GeometryReader-маркер.
+    @ViewBuilder func onPull(_ f: @escaping (CGFloat) -> Void) -> some View {
+        if #available(iOS 18.0, *) {
+            self.onScrollGeometryChange(for: CGFloat.self, of: { g in -(g.contentOffset.y + g.contentInsets.top) }, action: { _, y in f(y) })
+        } else {
+            self.onPreferenceChange(ProfileScrollKey.self) { y in f(y) }
+        }
     }
 }

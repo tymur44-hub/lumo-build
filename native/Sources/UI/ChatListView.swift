@@ -28,6 +28,7 @@ struct ChatListView: View {
     @State private var showEmoji = false
     @State private var storiesOpen = false
     @State private var pulled = false
+    @State private var archiveMode: String?
     @Namespace private var foldNS
     @FocusState private var searchFocused: Bool
     /// iPad: список слева, чат справа (без собственной навигации)
@@ -93,8 +94,8 @@ struct ChatListView: View {
                     .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 10)
 
                 if query.trimmingCharacters(in: .whitespaces).isEmpty {
-                    if storiesOpen && !model.stories.isEmpty {
-                        StoriesBar(open: { storyStart = $0 }, add: { addStory = true })
+                    if storiesOpen {
+                        StoriesBar(open: { storyStart = $0 }, add: { addStory = true }, menu: { archiveMode = $0 })
                             .padding(.bottom, 8)
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
@@ -112,7 +113,10 @@ struct ChatListView: View {
             .fullScreenCover(item: Binding(get: { storyStart.map { IdentifiedString(value: $0) } }, set: { storyStart = $0?.value })) { s in
                 StoryViewer(startUser: s.value).environmentObject(model)
             }
-            .sheet(isPresented: $addStory) { AddStoryView().environmentObject(model) }
+            .fullScreenCover(isPresented: $addStory) { AddStoryView().environmentObject(model) }
+            .sheet(item: Binding(get: { archiveMode.map { IdentifiedString(value: $0) } }, set: { archiveMode = $0?.value })) { m in
+                StoryArchiveView(postsOnly: m.value == "posts").environmentObject(model)
+            }
     }
 
     /// Шапка как в Telegram: «Изм.», истории + «Чаты», кнопки справа и синяя «Новый чат»
@@ -126,10 +130,11 @@ struct ChatListView: View {
                     .padding(.horizontal, 16).frame(height: 44)
                     .lumoGlass(Capsule(), interactive: true)
             }
-            Spacer(minLength: 4)
-            HStack(spacing: 8) {
+            Spacer(minLength: 0)
+            HStack(spacing: 6) {
                 if !storiesOpen { storyStack.transition(.scale(scale: 0.5).combined(with: .opacity)) }
                 Text("Чаты").font(.system(size: 19, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
+                    .fixedSize().layoutPriority(3)
                 if model.me?.premium == true {
                     // эмодзи-статус рядом с «Чаты»; нажатие — выбрать другой
                     Button { showEmoji = true } label: {
@@ -137,9 +142,11 @@ struct ChatListView: View {
                         else { Image(systemName: "star.fill").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.a1) }
                     }
                     .buttonStyle(BouncyButtonStyle())
+                    .fixedSize()
                 }
             }
-            Spacer(minLength: 4)
+            .layoutPriority(2)
+            Spacer(minLength: 0)
             HStack(spacing: 0) {
                 Button { showNet = true } label: {
                     Image(systemName: Net.mode == .direct ? "checkmark.shield" : "bolt.shield")
@@ -281,13 +288,13 @@ struct ChatListView: View {
             .padding(.horizontal, 8)
         }
         .coordinateSpace(name: "clist")
-        .onPreferenceChange(ProfileScrollKey.self) { y in
+        .onPull { y in
             // как в Telegram: потянуть вниз — раскрыть ленту историй, прокрутить вверх — свернуть
             if y < 10 { pulled = false }
             if y > 70, !storiesOpen, !pulled {
                 pulled = true
                 Task { await model.loadChats(); await model.loadStories() }
-                if !model.stories.isEmpty { UIImpactFeedbackGenerator(style: .light).impactOccurred(); storiesOpen = true }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred(); storiesOpen = true
             } else if y < -24, storiesOpen { storiesOpen = false }
         }
         .chatDeletion($deleting)

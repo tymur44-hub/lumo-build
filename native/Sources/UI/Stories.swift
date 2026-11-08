@@ -19,6 +19,8 @@ struct StoriesBar: View {
     @EnvironmentObject var model: AppModel
     let open: (String) -> Void
     let add: () -> Void
+    /// долгое нажатие на «Моя история»: posts / archive
+    var menu: ((String) -> Void)? = nil
 
     var body: some View {
         let mine = model.stories.first { $0.userId == model.myId }
@@ -40,7 +42,15 @@ struct StoriesBar: View {
                     Text("Моя история").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.text).lineLimit(1)
                 }
                 .frame(width: 70)
+                .contentShape(Rectangle())
                 .onTapGesture { if mine != nil { open(model.myId ?? "") } else { add() } }
+                .contextMenu {
+                    Button { add() } label: { Label("Добавить историю", systemImage: "plus") }
+                    if let m = menu {
+                        Button { m("posts") } label: { Label("Опубликованные истории", systemImage: "square.grid.3x3") }
+                        Button { m("archive") } label: { Label("Архив историй", systemImage: "archivebox") }
+                    }
+                }
 
                 ForEach(others) { g in
                     VStack(spacing: 5) {
@@ -87,7 +97,9 @@ struct StoryViewer: View {
         ZStack {
             Color.black.ignoresSafeArea()
             if let s = item {
-                media(s)
+                Group {
+                    if s.noShot && !mine { ScreenShield { media(s) } } else { media(s) }
+                }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0)
@@ -97,8 +109,8 @@ struct StoryViewer: View {
                         }
                         .onEnded { v in
                             paused = false
-                            if v.translation.height > 120 { dismiss(); return }
-                            dragY = 0
+                            if dragY > 0 && (v.translation.height > 90 || v.predictedEndTranslation.height > 280) { dismiss(); return }
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) { dragY = 0 }
                             if abs(v.translation.width) > 70 && abs(v.translation.width) > abs(v.translation.height) {
                                 v.translation.width < 0 ? nextGroup() : prevGroup()
                             } else if abs(v.translation.width) < 12 && abs(v.translation.height) < 12 {
@@ -146,8 +158,10 @@ struct StoryViewer: View {
                 .padding(.horizontal, 10).padding(.top, 8)
             }
         }
+        .mask(RoundedRectangle(cornerRadius: dragY > 0 ? 28 : 0, style: .continuous).ignoresSafeArea())
+        .scaleEffect(1 - min(0.18, dragY / 1400))
         .offset(y: dragY)
-        .scaleEffect(1 - min(0.15, dragY / 1500))
+        .background(StoryClearBackground())
         .onAppear {
             gi = groups.firstIndex { $0.userId == startUser } ?? 0
             if let g = group, g.userId != model.myId { ii = g.items.firstIndex { !$0.seen } ?? 0 }
@@ -227,7 +241,9 @@ struct StoryViewer: View {
         let m = Int(Date().timeIntervalSince(d) / 60)
         if m < 1 { return "только что" }
         if m < 60 { return "\(m) мин назад" }
-        return "\(m / 60) ч назад"
+        if m < 60 * 24 { return "\(m / 60) ч назад" }
+        let dd = m / (60 * 24)
+        return dd == 1 ? "вчера" : "\(dd) дн. назад"
     }
 
     private func show() {
@@ -333,9 +349,15 @@ struct AddStoryView: View {
     @State private var isVideo = false
     @State private var caption = ""
     @State private var hours = 24
-    @State private var aud = "all"
-    @State private var allow: Set<String> = []
-    @State private var pickAud = false
+    @State private var choice = "all"
+    @State private var excl: Set<String> = []
+    @State private var sel: Set<String> = []
+    @State private var pinned = true
+    @State private var shots = true
+    @State private var share = false
+    @State private var muted = false
+    @State private var editPlayer: AVPlayer?
+    @FocusState private var captionFocused: Bool
     @State private var busy = false
     @State private var duration: Double = 0
     @StateObject private var cam = StoryCam()
@@ -345,8 +367,9 @@ struct AddStoryView: View {
 
     var body: some View {
         Group {
-            if data == nil { cameraView } else { editorView }
+            if data == nil { cameraView } else { editorView.transition(.opacity) }
         }
+        .animation(.easeInOut(duration: 0.22), value: data == nil)
         .onChange(of: pick) { item in
             guard let item = item else { return }
             Task { await load(item) }
@@ -459,55 +482,94 @@ struct AddStoryView: View {
         isVideo = true; duration = dur; videoURL = u; data = d
     }
 
-    // MARK: подготовка и публикация
+    // MARK: подготовка и публикация (как в Telegram: полноэкранный предпросмотр, подпись, «Далее»)
 
     private var editorView: some View {
-        NavigationStack {
-            VStack(spacing: 14) {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 10) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18).fill(Color.black)
+                    RoundedRectangle(cornerRadius: 22).fill(Color(white: 0.08))
                     if let i = image { Image(uiImage: i).resizable().scaledToFit() }
-                    else if let v = videoURL { VideoPlayer(player: AVPlayer(url: v.px)) }
-                    else {
-                        PhotosPicker(selection: $pick, matching: .any(of: [.images, .videos])) {
-                            VStack(spacing: 10) {
-                                Image(systemName: "photo.on.rectangle.angled").font(.system(size: 40))
-                                Text("Выбрать фото или видео").font(.headline)
-                            }
-                            .foregroundColor(Theme.text)
+                    else if let p = editPlayer { PlayerLayerView(player: p, fill: false) }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 22))
+                .overlay(alignment: .topTrailing) {
+                    Button { resetEditor() } label: {
+                        Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                            .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.4)))
+                    }
+                    .padding(12)
+                }
+                .overlay(alignment: .topLeading) {
+                    if isVideo {
+                        Button { muted.toggle(); editPlayer?.isMuted = muted } label: {
+                            Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                                .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.4)))
                         }
+                        .padding(12)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-                .frame(maxHeight: 420)
-                TextField("Подпись (необязательно)", text: $caption).lumoField()
-                Picker("Срок", selection: $hours) {
-                    Text("24 ч").tag(24); Text("48 ч ★").tag(48); Text("3 дня ★").tag(72); Text("7 дней ★").tag(168)
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: hours) { h in if h > 24 && !model.isPremium { hours = 24; model.say(premiumSoon) } }
-                VStack(spacing: 6) {
-                    Text("Кто увидит историю").font(.footnote).foregroundColor(Theme.muted)
-                    Picker("Кто увидит", selection: $aud) {
-                        Text("Все").tag("all"); Text("Контакты").tag("contacts"); Text("Выбранные").tag("only"); Text("Кроме…").tag("except")
+                .onTapGesture { captionFocused = false }
+                HStack(spacing: 8) {
+                    TextField("Добавить подпись…", text: $caption, axis: .vertical)
+                        .lineLimit(1...4)
+                        .focused($captionFocused)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16).padding(.vertical, 11)
+                        .background(Capsule().fill(Color.white.opacity(0.12)))
+                    if captionFocused {
+                        Button { captionFocused = false } label: {
+                            Image(systemName: "checkmark").font(.system(size: 15, weight: .bold)).foregroundColor(.black)
+                                .frame(width: 40, height: 40).background(Circle().fill(Color.white))
+                        }
+                        .transition(.scale.combined(with: .opacity))
                     }
-                    .pickerStyle(.segmented)
-                    .onChange(of: aud) { a in if a == "only" || a == "except" { pickAud = true } }
-                    Text(audHint).font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center)
-                        .onTapGesture { if aud == "only" || aud == "except" { pickAud = true } }
                 }
-                .sheet(isPresented: $pickAud) { AudiencePicker(title: aud == "only" ? "Кто увидит" : "Скрыть от", sel: $allow).environmentObject(model) }
-                GradientButton(title: "Опубликовать", loading: busy) { publish() }
-                    .disabled(data == nil)
-                    .opacity(data == nil ? 0.5 : 1)
-                Spacer()
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: captionFocused)
+                HStack {
+                    Button { resetEditor() } label: {
+                        Image(systemName: "chevron.left").font(.system(size: 17, weight: .bold)).foregroundColor(.white)
+                            .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.12)))
+                    }
+                    Spacer()
+                    Button { captionFocused = false; editPlayer?.pause(); share = true } label: {
+                        HStack(spacing: 6) {
+                            Text("ДАЛЕЕ").font(.system(size: 15, weight: .bold))
+                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundColor(.white).padding(.horizontal, 20).frame(height: 44)
+                        .background(Capsule().fill(StoryUI.blue))
+                    }
+                    .buttonStyle(BouncyButtonStyle())
+                }
             }
-            .padding(16)
-            .background(Theme.bg.ignoresSafeArea())
-            .navigationTitle("Новая история")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Назад") { data = nil; image = nil; videoURL = nil; pick = nil; isVideo = false } } }
+            .padding(.horizontal, 10).padding(.top, 4).padding(.bottom, 6)
         }
+        .preferredColorScheme(.dark)
+        .onAppear { startEditPlayer() }
+        .onDisappear { editPlayer?.pause() }
+        .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { n in
+            if let p = editPlayer, (n.object as? AVPlayerItem) === p.currentItem { p.seek(to: .zero); p.play() }
+        }
+        .sheet(isPresented: $share, onDismiss: { if !busy { editPlayer?.play() } }) {
+            StoryShareSheet(choice: $choice, excl: $excl, sel: $sel, pinned: $pinned, shots: $shots, hours: $hours, busy: busy) { publish() }
+                .environmentObject(model)
+                .presentationDetents([.large])
+        }
+    }
+
+    private func startEditPlayer() {
+        guard isVideo, let v = videoURL else { return }
+        let p = AVPlayer(url: v)
+        p.isMuted = muted
+        editPlayer = p
+        p.play()
+    }
+
+    private func resetEditor() {
+        editPlayer?.pause(); editPlayer = nil
+        data = nil; image = nil; videoURL = nil; pick = nil; isVideo = false; caption = ""
     }
 
     private func load(_ item: PhotosPickerItem) async {
@@ -529,24 +591,28 @@ struct AddStoryView: View {
         }
     }
 
-    private var audHint: String {
-        switch aud {
-        case "contacts": return "Только люди из ваших контактов"
-        case "only": return allow.isEmpty ? "Выберите, кто увидит историю" : "Увидят \(allow.count) чел. · нажмите, чтобы изменить"
-        case "except": return allow.isEmpty ? "Выберите, от кого скрыть" : "Скрыто от \(allow.count) чел. · нажмите, чтобы изменить"
-        default: return "Контакты и те, с кем у вас есть переписка"
-        }
-    }
-
     private func publish() {
         guard let d = data else { return }
         busy = true
+        let (aud, allow): (String, Set<String>) = {
+            switch choice {
+            case "contacts": return ("contacts", excl)
+            case "close": return ("close", [])
+            case "only": return ("only", sel)
+            default: return excl.isEmpty ? ("all", []) : ("except", excl)
+            }
+        }()
+        var meta: JSON = isVideo ? ["dur": duration] : [:]
+        if !shots { meta["noshot"] = true }
         Task {
+            var thumb: Data? = nil
+            if isVideo, let v = videoURL { thumb = await StoryThumb.make(v) }
             let ok = await model.addStory(kind: isVideo ? "video" : "image", data: d, ext: isVideo ? "mov" : "jpg",
                                           contentType: isVideo ? "video/quicktime" : "image/jpeg",
-                                          caption: caption, meta: isVideo ? ["dur": duration] : [:], hours: hours, aud: aud, allow: Array(allow))
+                                          caption: caption, meta: meta, hours: hours, aud: aud, allow: Array(allow),
+                                          pinned: pinned, thumb: thumb)
             busy = false
-            if ok { dismiss() }
+            if ok { share = false; editPlayer?.pause(); dismiss() }
         }
     }
 }
@@ -678,4 +744,15 @@ struct AudiencePicker: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
         }
     }
+}
+
+
+/// Прозрачный фон полноэкранного окна: при смахивании истории вниз виден список чатов
+struct StoryClearBackground: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let v = UIView()
+        DispatchQueue.main.async { v.superview?.superview?.backgroundColor = .clear }
+        return v
+    }
+    func updateUIView(_ v: UIView, context: Context) {}
 }

@@ -47,12 +47,11 @@ struct ChatInfoView: View {
         ScrollView {
             VStack(spacing: 16) {
                 GeometryReader { g in Color.clear.preference(key: ProfileScrollKey.self, value: g.frame(in: .named("pscroll")).minY) }.frame(height: 0)
-                if chat?.isPrivate == true, !saved { peerHero } else { hero }
-                actions
+                if chat?.isPrivate == true, !saved { peerHero } else { hero; actions }
                 if let c = chat {
                     if c.isPrivate { privateSections(c) } else { groupSections(c) }
                     if c.isPrivate, !saved, let pid = c.peerId, !(c.peerBot || (model.profiles[pid]?.isBot ?? false)) {
-                        ProfileGiftsRow(userId: pid).padding(.horizontal, 14)
+                        ProfileTabs(userId: pid)
                     }
                     PremiumChatRows(chat: c)
                     // медиа, файлы, голосовые и ссылки из этого чата
@@ -63,7 +62,7 @@ struct ChatInfoView: View {
             .padding(.top, 4)
         }
         .coordinateSpace(name: "pscroll")
-        .onPreferenceChange(ProfileScrollKey.self) { y in
+        .onPull { y in
             guard chat?.isPrivate == true, !saved, chat?.displayAvatar != nil else { return }
             if y > 90, !heroExpanded { UIImpactFeedbackGenerator(style: .light).impactOccurred(); heroExpanded = true }
             else if y < -40, heroExpanded { heroExpanded = false }
@@ -210,6 +209,14 @@ struct ChatInfoView: View {
                                       Text(model.peerBlockText(c?.peerId) ?? "").font(.subheadline.weight(.bold)).foregroundColor(Theme.danger)
                                           .multilineTextAlignment(.center).padding(.horizontal, 20)
                                   }
+                                  VStack(spacing: 10) {
+                                      actions
+                                      if let u = p?.musicURL {
+                                          ProfileMusicRow(url: u, title: p?.musicTitle ?? "", artist: p?.musicArtist ?? "", light: styled)
+                                              .padding(.horizontal, 14)
+                                      }
+                                  }
+                                  .padding(.top, 8)
                               })
     }
 
@@ -290,9 +297,10 @@ struct ChatInfoView: View {
             Image(systemName: icon).font(.system(size: 21, weight: .semibold)).frame(height: 24)
             Text(title).font(.system(size: 12.5, weight: .medium))
         }
-        .foregroundColor(Theme.a1)
+        .foregroundColor(styled ? .white : Theme.a1)
         .frame(maxWidth: .infinity, minHeight: 66)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
+        .background(styled ? Color.white.opacity(0.18) : Theme.panel, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(styled ? 0.22 : 0), lineWidth: 0.7))
     }
 
     private func actionButton(_ icon: String, _ title: String, _ action: @escaping () -> Void) -> some View {

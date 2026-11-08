@@ -1027,14 +1027,59 @@ final class AppModel: ObservableObject {
         stories = groups
     }
 
-    func addStory(kind: String, data: Data, ext: String, contentType: String, caption: String, meta: JSON, hours: Int = 24, aud: String = "all", allow: [String] = []) async -> Bool {
+    func addStory(kind: String, data: Data, ext: String, contentType: String, caption: String, meta: JSON, hours: Int = 24, aud: String = "all", allow: [String] = [], pinned: Bool = false, thumb: Data? = nil) async -> Bool {
         do {
             let url = try await API.shared.upload(data, ext: ext, contentType: contentType)
-            _ = try await API.shared.rpc("lm_story_add2", ["p_kind": kind, "p_url": url, "p_caption": caption, "p_meta": meta, "p_hours": hours, "p_aud": aud, "p_allow": allow])
+            var meta = meta
+            if let t = thumb, let tu = try? await API.shared.upload(t, ext: "jpg", contentType: "image/jpeg") { meta["thumb"] = tu }
+            _ = try await API.shared.rpc("lm_story_add3", ["p_kind": kind, "p_url": url, "p_caption": caption, "p_meta": meta, "p_hours": hours, "p_aud": aud, "p_allow": allow, "p_pinned": pinned])
+            await loadMe()
             await loadStories()
             say("История опубликована")
             return true
         } catch { say("Ошибка: " + error.localizedDescription); return false }
+    }
+
+    // MARK: публикации в профиле, архив, близкие друзья, музыка профиля
+
+    func profilePosts(_ uid: String) async -> [ProfilePost] {
+        guard let r = try? await API.shared.rpc("lm_profile_posts", ["p_user": uid]) as? [JSON] else { return [] }
+        return r.map(ProfilePost.init(json:))
+    }
+
+    func storyArchive() async -> [ProfilePost] {
+        guard let r = try? await API.shared.rpc("lm_story_archive", [:]) as? [JSON] else { return [] }
+        return r.map(ProfilePost.init(json:))
+    }
+
+    func setStoryPinned(_ id: Int, _ on: Bool) async {
+        _ = try? await API.shared.rpc("lm_story_set_pinned", ["p_id": id, "p_on": on])
+        await loadMe()
+    }
+
+    func closeFriends() async -> Set<String> {
+        guard let r = try? await API.shared.rpc("lm_close_friends_get", [:]) else { return [] }
+        if let a = r as? [String] { return Set(a) }
+        if let a = r as? [JSON] { return Set(a.compactMap { $0.str("lm_close_friends_get") }) }
+        return []
+    }
+
+    func setCloseFriends(_ ids: Set<String>) async {
+        _ = try? await API.shared.rpc("lm_close_friends_set", ["p_ids": Array(ids)])
+    }
+
+    func setProfileMusic(data: Data?, ext: String = "mp3", title: String = "", artist: String = "", dur: Double = 0) async -> Bool {
+        do {
+            if let d = data {
+                let ct = ext == "m4a" ? "audio/mp4" : (ext == "wav" ? "audio/wav" : "audio/mpeg")
+                let url = try await API.shared.upload(d, ext: ext, contentType: ct)
+                _ = try await API.shared.rpc("lm_set_profile_music", ["p": ["url": url, "title": title, "artist": artist, "dur": dur]])
+            } else {
+                _ = try await API.shared.rpc("lm_set_profile_music", ["p": NSNull()])
+            }
+            await loadMe()
+            return true
+        } catch { say(error.localizedDescription); return false }
     }
 
     func viewStory(_ s: StoryItem) {

@@ -163,7 +163,7 @@ struct SettingsView: View {
                 .padding(.top, 8)
             }
             .coordinateSpace(name: "setscroll")
-            .onPreferenceChange(ProfileScrollKey.self) { y in
+            .onPull { y in
                 if y > 90, !heroExpanded, model.me?.avatarURL != nil { UIImpactFeedbackGenerator(style: .light).impactOccurred(); heroExpanded = true }
                 else if y < -40, heroExpanded { heroExpanded = false }
             }
@@ -344,7 +344,13 @@ struct MyProfileView: View {
                                subtitle: "в сети", subtitleAccent: true, bg: me?.profileBg, pattern: me?.profilePattern,
                                expanded: $heroExpanded,
                                onAvatar: { if let u = me?.avatarURL.flatMap(URL.init(string:)) { avatarFull = IdentifiedURL(url: u) } else { showPicker = true } },
-                               top: { EmptyView() }, bottom: { if uploading { ProgressView() } })
+                               top: { EmptyView() }, bottom: {
+                                   if uploading { ProgressView() }
+                                   if let u = me?.musicURL {
+                                       ProfileMusicRow(url: u, title: me?.musicTitle ?? "", artist: me?.musicArtist ?? "", light: me?.profileBg != nil)
+                                           .padding(.horizontal, 14).padding(.top, 8)
+                                   }
+                               })
 
                 VStack(spacing: 0) {
                     HStack {
@@ -403,12 +409,12 @@ struct MyProfileView: View {
                 .background(RoundedRectangle(cornerRadius: 22).fill(Theme.panel))
                 .padding(.horizontal, 14)
                 if let p = me { ProfileChannelCard(p: p) }
-                MyProfileTabs()
+                if let id = model.myId { ProfileTabs(userId: id) }
                 Color.clear.frame(height: 30)
             }
         }
         .coordinateSpace(name: "myprof")
-        .onPreferenceChange(ProfileScrollKey.self) { y in heroPull(y) }
+        .onPull { y in heroPull(y) }
         .task { if !phoneStore.loaded { await phoneStore.load() } }
         .background(Theme.bg.ignoresSafeArea())
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -603,6 +609,8 @@ struct ProfileEditView: View {
                         TGIconRow(icon: "megaphone.fill", color: Color(hex: 0xffa33a), title: "Канал", value: me?.channelTitle ?? "Добавить")
                     }
                     .buttonStyle(RowButtonStyle())
+                    Divider().overlay(Theme.line).padding(.leading, 68)
+                    ProfileMusicEditRow().padding(.horizontal, 16)
                 }
                 Color.clear.frame(height: 22)
                 TGCard {
