@@ -85,6 +85,19 @@ struct BannedScreen: View {
     @State private var confirmOut = false
 
     private var pending: Bool { ban.appealStatus == "pending" }
+    private var subtitle: String {
+        let un = model.me?.username ?? ""
+        let who = un.isEmpty ? "" : " @" + un
+        return "Администрация Lumo ограничила доступ к аккаунту" + who + ". Пока блокировка действует, нельзя писать сообщения и пользоваться Lumo."
+    }
+    private var reasonText: String {
+        let r = ban.reason ?? ""
+        return r.isEmpty ? "Причина не указана" : r
+    }
+    private var buttonTitle: String {
+        if pending { return "Апелляция на рассмотрении" }
+        return ban.appealStatus == "rejected" ? "Подать апелляцию ещё раз" : "Подать апелляцию"
+    }
 
     var body: some View {
         ZStack {
@@ -111,14 +124,14 @@ struct BannedScreen: View {
                     Text("Ваш аккаунт заблокирован")
                         .font(.system(size: 26, weight: .heavy)).foregroundColor(Theme.text)
                         .multilineTextAlignment(.center).padding(.top, 58)
-                    Text("Администрация Lumo ограничила доступ к аккаунту" + ((model.me?.username).map { " @" + $0 } ?? "") + ". Пока блокировка действует, нельзя писать сообщения и пользоваться Lumo.")
+                    Text(subtitle)
                         .font(.system(size: 15)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
                         .padding(.horizontal, 28).padding(.top, 10)
 
                     VStack(alignment: .leading, spacing: 6) {
                         Label("ПРИЧИНА", systemImage: "exclamationmark.triangle.fill")
                             .font(.system(size: 12, weight: .bold)).foregroundColor(Color(hex: 0xff6a5b))
-                        Text((ban.reason ?? "").isEmpty ? "Причина не указана" : ban.reason!)
+                        Text(reasonText)
                             .font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -132,7 +145,7 @@ struct BannedScreen: View {
                     Button { appeal = true } label: {
                         HStack(spacing: 8) {
                             Image(systemName: pending ? "clock.fill" : "envelope.open.fill")
-                            Text(pending ? "Апелляция на рассмотрении" : ban.appealStatus == "rejected" ? "Подать апелляцию ещё раз" : "Подать апелляцию")
+                            Text(buttonTitle)
                         }
                         .font(.system(size: 17, weight: .bold)).foregroundColor(.white)
                         .frame(maxWidth: .infinity).frame(height: 54)
@@ -162,14 +175,24 @@ struct BannedScreen: View {
 
     private func appealCard(_ st: String) -> some View {
         let rej = st == "rejected"
+        let icon: String = rej ? "xmark.circle.fill" : "hourglass"
+        let tint: Color = rej ? Theme.danger : Color(hex: 0xf0a23a)
+        let title: String = rej ? "Апелляция отклонена" : "Апелляция отправлена"
+        var body: String
+        if rej {
+            let reply = ban.appealReply ?? ""
+            body = reply.isEmpty ? "Модераторы оставили блокировку в силе." : "Ответ модератора: " + reply
+        } else {
+            body = "Модераторы рассмотрят её и снимут блокировку, если согласятся. Это окно обновится само."
+            if let at = ban.appealAt { body += "\nОтправлена " + DateParser.time(at) }
+        }
         return HStack(alignment: .top, spacing: 12) {
-            Image(systemName: rej ? "xmark.circle.fill" : "hourglass")
-                .font(.system(size: 20, weight: .bold)).foregroundColor(rej ? Theme.danger : Color(hex: 0xf0a23a))
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .bold)).foregroundColor(tint)
                 .frame(width: 26)
             VStack(alignment: .leading, spacing: 3) {
-                Text(rej ? "Апелляция отклонена" : "Апелляция отправлена").font(.system(size: 15, weight: .bold)).foregroundColor(Theme.text)
-                Text(rej ? ((ban.appealReply ?? "").isEmpty ? "Модераторы оставили блокировку в силе." : "Ответ модератора: " + ban.appealReply!)
-                         : "Модераторы рассмотрят её и снимут блокировку, если согласятся. Это окно обновится само." + (ban.appealAt.map { "\nОтправлена " + DateParser.time($0) } ?? ""))
+                Text(title).font(.system(size: 15, weight: .bold)).foregroundColor(Theme.text)
+                Text(body)
                     .font(.system(size: 13.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
