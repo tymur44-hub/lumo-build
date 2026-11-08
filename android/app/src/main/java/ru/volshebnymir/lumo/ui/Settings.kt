@@ -144,6 +144,7 @@ fun SettingsScreen() {
             SettingsRow(Icons.Filled.Devices, Color(0xFFFF9F1A), "Устройства", "Активные сеансы") { AppModel.push(Screen.Devices) }
         }
         Card {
+            SettingsRow(Icons.Filled.Bedtime, Color(0xFF7C5CFF), "Не беспокоить", Dnd.until?.takeIf { Dnd.active }?.let { (Dnd.text ?: "Включено") + " " + Dnd.untilText(it) } ?: "Выключено") { AppModel.push(Screen.Dnd) }
             SettingsRow(Icons.Filled.Notifications, Color(0xFFFF5B5B), "Уведомления и звуки", if (AppModel.tgLinked) "Telegram подключён" else "Telegram не подключён") { AppModel.push(Screen.Notifications) }
             Divider()
             SettingsRow(Icons.Filled.Lock, Color(0xFF8E8EA8), "Конфиденциальность", "Время захода, звонки, блокировки") { AppModel.push(Screen.Privacy) }
@@ -159,6 +160,8 @@ fun SettingsScreen() {
             SettingsRow(Icons.Filled.Star, Color(0xFFFF9A3D), "Мои люмены", "${Lumens.balance} ${lumenWord(Lumens.balance)}", lead = { LumenIcon(26.dp) }) { AppModel.push(Screen.Wallet) }
             Divider()
             SettingsRow(Icons.Filled.CardGiftcard, Color(0xFF2BC4A8), "Подарки", "Коллекционные подарки за люмены") { AppModel.push(Screen.Gifts) }
+            SettingsRow(Icons.Filled.HourglassTop, Color(0xFFFF8A3D), "Капсулы времени", "Сообщения, которые откроются в будущем") { AppModel.push(Screen.Capsules) }
+            SettingsRow(Icons.Filled.NotificationsActive, Color(0xFFFFA318), "Ждут ответа", if (Reminders.list.isEmpty()) "Нет напоминаний" else "${Reminders.list.size} — «Ответить позже»") { AppModel.push(Screen.Reminders) }
         }
         Card {
             SettingsRow(Icons.Filled.PersonAdd, Color(0xFFFF5B8A), "Пригласить друзей", "Поделиться ссылкой на ваш профиль") { share(ctx, "Я в Lumo — напиши мне: " + AppModel.profileLink) }

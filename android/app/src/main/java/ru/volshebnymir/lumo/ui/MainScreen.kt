@@ -151,7 +151,7 @@ fun Root() {
             else if (PhoneUi.bind) PhoneAuthScreen(bind = true) { PhoneUi.bind = false }
             else if (PhoneStore.loaded && !PhoneStore.reminderShown && (PhoneStore.status == "remind" || PhoneStore.status == "skipped")) PhoneReminderDialog()
         }
-        if (AppModel.loggedIn) { Ui.Overlays(); if (AppModel.demoId == null) FullScreenPrompt(); E2EDialogs() }
+        if (AppModel.loggedIn) { Ui.Overlays(); if (AppModel.demoId == null) FullScreenPrompt(); E2EDialogs(); DndSummaryDialog() }
         CallsUi.Overlay()
         if (AppModel.loggedIn) LockOverlay()
         AnimatedVisibility(AppModel.toast != null, Modifier.align(Alignment.BottomCenter).padding(bottom = 110.dp, start = 24.dp, end = 24.dp),
@@ -202,6 +202,9 @@ fun MainScreen() {
             is Screen.Comments -> CommentsScreen(s.chatId, s.postId)
             is Screen.EditChat -> EditChatScreen(s.chatId)
             Screen.TwoFa -> TwoFaScreen()
+            Screen.Reminders -> RemindersScreen()
+            Screen.Dnd -> DndScreen()
+            Screen.Capsules -> CapsulesScreen()
         }
     }
 }
@@ -304,6 +307,7 @@ fun ChatListScreen() {
     val p = P
     var q by remember { mutableStateOf("") }
     var folder by remember { mutableStateOf("all") }
+    LaunchedEffect(AppModel.chats.size) { Streaks.load(force = false) }
     val results = remember { mutableStateListOf<SearchResult>() }
     LaunchedEffect(q) {
         results.clear()
@@ -336,6 +340,7 @@ fun ChatListScreen() {
             if (!AppModel.chatsLoaded) Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = p.a1) }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 110.dp)) {
                 if (folder == "all") item(key = "stories") { StoriesBar() }
+                if (folder == "all" && Reminders.list.isNotEmpty()) item(key = "reminders") { RemindersBar() }
                 items(list, key = { it.id }) { c -> ChatRow(c, Modifier.animateItem()) }
                 if (AppModel.chatsLoaded && list.isEmpty()) item {
                     Text(if (folder == "all") "Пока нет чатов.\nНайдите людей через поиск или нажмите карандаш" else "Здесь пусто",
@@ -391,7 +396,7 @@ fun ChatRow(c: ChatItem, modifier: Modifier = Modifier) {
                     if (c.isChannel) Icon(Icons.Filled.Campaign, null, tint = p.muted, modifier = Modifier.size(16.dp).padding(end = 3.dp))
                     Text(if (saved) "Избранное" else c.displayName, color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.5.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (c.isPrivate && !saved) PeerBadges(c)
+                    if (c.isPrivate && !saved) { PeerBadges(c); StreakBadge(c.id) }
                     if (c.muted) Icon(Icons.Filled.NotificationsOff, null, tint = p.muted, modifier = Modifier.size(15.dp).padding(start = 3.dp))
                   }
                     val mine = c.lastSender == AppModel.myId && c.lastKind != "system" && !saved && !c.isChannel

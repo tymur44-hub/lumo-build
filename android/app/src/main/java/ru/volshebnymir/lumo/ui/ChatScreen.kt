@@ -63,6 +63,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
@@ -148,6 +149,29 @@ fun ChatScreen(chatId: String) {
     var reportMsg by remember { mutableStateOf<Message?>(null) }
     var tipMsg by remember { mutableStateOf<Message?>(null) }
     var readersMsg by remember { mutableStateOf<Message?>(null) }
+    var remindFor by remember { mutableStateOf<Message?>(null) }
+    var capsuleOpen by remember { mutableStateOf(false) }
+    var capsuleReply by remember { mutableStateOf<Int?>(null) }
+    var urgentOn by remember(chatId) { mutableStateOf(false) }
+    val peerDnd = Dnd.peer(chat?.takeIf { it.isPrivate }?.peerId)
+    LaunchedEffect(chat?.peerId) { chat?.takeIf { it.isPrivate }?.peerId?.let { Dnd.loadPeers(listOf(it)) } }
+    // «Ответить позже»: открыли из напоминания — ставим ответ на это сообщение и открываем клавиатуру
+    val pr = AppModel.pendingReply
+    LaunchedEffect(pr, msgs.size) {
+        if (pr == null || pr.first != chatId) return@LaunchedEffect
+        var m = msgs.firstOrNull { it.id == pr.second }
+        if (m == null && msgs.isNotEmpty()) m = Reminders.previews[pr.second] ?: runCatching {
+            Api.select("lm_messages", mapOf("select" to "*", "id" to "eq.${pr.second}")).firstOrNull()?.let { Message.from(it) }
+        }.getOrNull()
+        if (m == null) return@LaunchedEffect
+        AppModel.pendingReply = null
+        reply = if (E2E.isEnc(m.body)) m.copy(body = E2E.decrypt(m.chatId, m.body)) else m
+        editing = null
+        AppModel.pendingJump = m.id
+        Reminders.remove(m.id)
+        delay(350)
+        ComposerFocus.tick++
+    }
     val notePerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
         if (r.values.all { it }) note = NoteSession(true) else AppModel.say("Нужен доступ к камере и микрофону")
     }
@@ -295,6 +319,7 @@ fun ChatScreen(chatId: String) {
                 }
             }
             val blockedText = if (chat?.isPrivate == true) AppModel.peerBlockText(chat.peerId) else null
+            if (peerDnd != null && blockedText == null) UrgentStrip(chat?.displayName ?: "", peerDnd, urgentOn) { urgentOn = !urgentOn }
             if (blockedText != null) {
                 Text(blockedText, color = p.muted, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().background(p.panel).navigationBarsPadding().padding(16.dp))
@@ -320,7 +345,14 @@ fun ChatScreen(chatId: String) {
                         text = ""
                         val e = editing
                         if (e != null) { editing = null; if (t != e.body) scope.launch { AppModel.edit(e, t) } }
-                        else { val r = reply?.id; reply = null; scope.launch { AppModel.send(chatId, "text", t, replyTo = r) } }
+                        else {
+                            val r = reply?.id; reply = null
+                            val u = urgentOn; urgentOn = false
+                            scope.launch {
+                                AppModel.send(chatId, "text", t, meta = if (u) org.json.JSONObject().put("urgent", true) else org.json.JSONObject(), replyTo = r)
+                                if (u) chat?.peerId?.let { Dnd.loadPeers(listOf(it)) }
+                            }
+                        }
                     }
                 },
                 onSendMenu = { which ->
@@ -347,6 +379,7 @@ fun ChatScreen(chatId: String) {
                         .filter { ContextCompat.checkSelfPermission(ctx, it) != PackageManager.PERMISSION_GRANTED }
                     if (need.isEmpty()) NoteSession(lockedStart).also { note = it } else { notePerm.launch(need.toTypedArray()); null }
                 },
+                onCapsule = { capsuleReply = reply?.id; reply = null; capsuleOpen = true },
             )
         }
 
@@ -373,9 +406,13 @@ fun ChatScreen(chatId: String) {
                 onReport = { menuFor = null; reportMsg = m },
                 onTip = { menuFor = null; tipMsg = m },
                 onReaders = { menuFor = null; readersMsg = m },
+                onRemind = { menuFor = null; remindFor = m },
+                onNotUrgent = { menuFor = null; scope.launch { Dnd.report(m) } },
             )
         }
         viewer?.let { MediaViewer(it) { viewer = null } }
+        remindFor?.let { m -> RemindPickerDialog(m) { remindFor = null } }
+        if (capsuleOpen) CapsuleComposeDialog(chatId, capsuleReply) { capsuleOpen = false }
         tipMsg?.let { m -> if (chat?.isChannel == true) LumenReactDialog(m, chat.displayName) { tipMsg = null } else TipDialog(m) { tipMsg = null } }
         readersMsg?.let { m -> ReadersDialog(m) { readersMsg = null } }
         reportMsg?.let { m -> ReportDialog(m.senderId, chatId, m.id) { reportMsg = null } }
@@ -427,6 +464,9 @@ fun copy(ctx: Context, t: String) {
 private fun ChatHeader(chatId: String, chat: ChatItem?) {
     val p = P
     val saved = chat?.isPrivate == true && chat.peerId == AppModel.myId
+    var streakOpen by remember { mutableStateOf(false) }
+    if (streakOpen) StreakSheet(chatId) { streakOpen = false }
+    LaunchedEffect(chatId) { if (chat?.isPrivate == true) Streaks.load(force = false) }
     Row(Modifier.fillMaxWidth().background(p.panel.copy(alpha = 0.97f)).padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         RoundIcon(Icons.AutoMirrored.Filled.ArrowBack) { AppModel.pop() }
         Row(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).bouncy {
@@ -438,16 +478,18 @@ private fun ChatHeader(chatId: String, chat: ChatItem?) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (saved) "Избранное" else chat?.displayName ?: "Чат", color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (chat?.isPrivate == true) PeerBadges(chat)
+                    if (chat?.isPrivate == true) { PeerBadges(chat); StreakBadge(chatId, 16) { streakOpen = true } }
                     if (chat?.isPrivate == true && ru.volshebnymir.lumo.core.E2E.active(chatId)) {
                         Spacer(Modifier.width(5.dp))
                         Icon(androidx.compose.material.icons.Icons.Filled.Lock, null, tint = p.a2, modifier = Modifier.size(14.dp))
                     }
                 }
                 val t = AppModel.typingText(chatId)
+                val dnd = Dnd.peer(chat?.takeIf { it.isPrivate }?.peerId)
                 val status = when {
                     t != null -> t
                     chat == null || saved -> ""
+                    dnd != null -> Dnd.peerLine(dnd)
                     chat.isPrivate -> if (chat.peerBot) "бот" else AppModel.lastSeenText(chat.peerId, chat.peerLastSeen)
                     chat.isChannel -> plural(chat.membersCount, "подписчик", "подписчика", "подписчиков")
                     else -> plural(chat.membersCount, "участник", "участника", "участников")
@@ -455,7 +497,7 @@ private fun ChatHeader(chatId: String, chat: ChatItem?) {
                 androidx.compose.animation.AnimatedContent(status, transitionSpec = { (fadeIn(tween(200)) + androidx.compose.animation.slideInVertically { it / 2 }) togetherWith fadeOut(tween(150)) }, label = "st") { st ->
                     if (st.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
                         if (t != null) { TypingDots(p.a2); Spacer(Modifier.width(4.dp)) }
-                        Text(st, color = if (t != null || st == "в сети") p.a2 else p.muted, fontSize = 13.sp, maxLines = 1)
+                        Text(st, color = if (t != null || st == "в сети") p.a2 else if (dnd != null && t == null) Color(0xFF8E7BFF) else p.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -624,6 +666,23 @@ private fun MessageRow(
     var lumenDlg by remember { mutableStateOf(false) }
     if (lumenDlg && chat != null) LumenReactDialog(m, chat.displayName) { lumenDlg = false }
     if (m.kind == "gift") { GiftMessageCard(m, chat); return }
+    if (m.kind == "system" && (m.meta.has("streak") || m.meta.has("streak_lost"))) { StreakSystemPill(m); return }
+    if (m.kind == "capsule_open") { CapsuleOpenPill(m) { onReplyTap(it) }; return }
+    if (m.kind == "capsule") {
+        val mineC = m.senderId == AppModel.myId
+        Row(modifier.fillMaxWidth().background(if (flash) p.a2.copy(alpha = 0.18f) else Color.Transparent).padding(horizontal = 8.dp, vertical = 3.dp)) {
+            if (mineC) Spacer(Modifier.weight(1f))
+            Column(Modifier.combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
+                onClick = {}, onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onLong(m) }),
+                horizontalAlignment = if (mineC) Alignment.End else Alignment.Start) {
+                if (chat?.type == "group" && !mineC) Text(AppModel.displayName(m.senderId), color = p.a2, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp, bottom = 2.dp))
+                CapsuleCard(m, mineC, chat?.type == "group")
+                Reactions(m, mineC)
+            }
+            if (!mineC) Spacer(Modifier.weight(1f))
+        }
+        return
+    }
     if (m.kind == "system") {
         Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
             Text(m.body ?: "", color = p.text, fontSize = 13.sp, textAlign = TextAlign.Center,
@@ -682,6 +741,7 @@ private fun MessageRow(
         }
         Box(Modifier.offset { IntOffset(dx.value.roundToInt() + (if (selecting && !mine) 32.dp.roundToPx() else 0), 0) }.widthIn(max = 310.dp)) {
             Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                if (m.meta.bool("urgent")) UrgentTag()
                 Bubble(m, chat, mine, group && !mine && first, last, onReplyTap, album, onOpen)
                 Reactions(m, mine)
                 if (chat?.isChannel == true && m.id > 0 && !m.deleted) LumenReactChip(m) { lumenDlg = true } else TipPill(m, mine)
@@ -872,6 +932,7 @@ private fun Reactions(m: Message, mine: Boolean) {
 private fun MessageMenu(
     m: Message, chat: ChatItem?, onClose: () -> Unit, onReact: (String) -> Unit, onReply: () -> Unit, onCopy: () -> Unit, onEdit: () -> Unit,
     onForward: () -> Unit, onPin: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit, onOpen: () -> Unit, onReport: () -> Unit, onTip: () -> Unit = {}, onReaders: () -> Unit = {},
+    onRemind: (() -> Unit)? = null, onNotUrgent: (() -> Unit)? = null,
 ) {
     val p = P
     BackHandler { onClose() }
@@ -921,6 +982,8 @@ private fun MessageMenu(
                     if (ok && !prot) item(Icons.AutoMirrored.Filled.Forward, "Переслать", f = onForward)
                     if (!m.mediaUrl.isNullOrEmpty() && ok && !prot) item(Icons.Filled.Download, "Скачать", f = onOpen)
                     if (mine && ok && chat != null && !chat.isPrivate && !chat.isChannel) item(Icons.Filled.Visibility, "Кто прочитал и отреагировал", f = onReaders)
+                    if (!mine && ok && m.senderId != null && onRemind != null) item(Icons.Filled.NotificationsActive, "Ответить позже", f = onRemind)
+                    if (!mine && ok && m.meta.bool("urgent") && onNotUrgent != null) item(Icons.Filled.Bolt, "Это было не срочно", f = onNotUrgent)
                     if (!mine && ok && m.senderId != null) item(Icons.Filled.Star, "Отправить люмены", f = onTip)
                     if (!mine && ok) item(Icons.Filled.Flag, "Пожаловаться", f = onReport)
                     if (ok) item(Icons.Filled.DeleteOutline, "Удалить", danger = true, f = onDelete)
@@ -973,12 +1036,16 @@ private fun Composer(
     chatId: String, text: String, onText: (String) -> Unit, reply: Message?, editing: Message?, onCancel: () -> Unit, onSend: () -> Unit,
     onSendMenu: (Int) -> Unit = {}, onFx: (String) -> Unit = {},
     takeReply: () -> Int?, takeCaption: () -> String?, onVideoNote: (Boolean) -> NoteSession?,
+    onCapsule: (() -> Unit)? = null,
 ) {
     val p = P
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     var attach by remember { mutableStateOf(false) }
+    val inputFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    LaunchedEffect(ComposerFocus.tick) { if (ComposerFocus.tick > 0) { runCatching { inputFocus.requestFocus() }; kb?.show() } }
     var sendLumensTo by remember { mutableStateOf<String?>(null) }
     val chat = AppModel.chat(chatId)
     var recording by remember { mutableStateOf(false) }
@@ -1096,13 +1163,14 @@ private fun Composer(
                         onNote = { onVideoNote(true) },
                         onLumens = { sendLumensTo = chat?.peerId },
                         onPost = { kind, body, media, meta -> val r = takeReply(); scope.launch { AppModel.send(chatId, kind, body, media, meta, replyTo = r) } },
+                        onCapsule = onCapsule?.takeIf { chat?.canPost != false },
                     )
                 }
                 Row(Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).background(p.panel2), verticalAlignment = Alignment.Bottom) {
                     Box(Modifier.weight(1f).padding(start = 16.dp, top = 12.dp, bottom = 12.dp)) {
                         if (text.isEmpty()) Text("Сообщение", color = p.muted, fontSize = 16.sp)
                         BasicTextField(text, onText, maxLines = 6, textStyle = TextStyle(color = p.text, fontSize = 16.sp), cursorBrush = SolidColor(p.a1),
-                            modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) stickers = false })
+                            modifier = Modifier.fillMaxWidth().focusRequester(inputFocus).onFocusChanged { if (it.isFocused) stickers = false })
                     }
                     RoundIcon(if (stickers) Icons.Filled.Keyboard else Icons.Filled.EmojiEmotions, 44.dp, tint = p.muted) { stickers = !stickers }
                 }

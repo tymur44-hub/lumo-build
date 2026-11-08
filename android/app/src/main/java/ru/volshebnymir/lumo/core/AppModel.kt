@@ -48,6 +48,9 @@ sealed class Screen {
     data class Comments(val chatId: String, val postId: Int) : Screen()
     data class EditChat(val chatId: String) : Screen()
     data object TwoFa : Screen()
+    data object Reminders : Screen()
+    data object Dnd : Screen()
+    data object Capsules : Screen()
 }
 
 enum class Tab { Contacts, Chats, Settings }
@@ -183,6 +186,7 @@ object AppModel {
             Realtime.onState = { ok -> netChanged(ok) }
             loadMe()
             launch { Lumens.load(); Lumens.loadCfg() }
+            launch { ru.volshebnymir.lumo.ui.Reminders.load(); ru.volshebnymir.lumo.ui.Dnd.load(); ru.volshebnymir.lumo.ui.Streaks.load() }
             launch { PhoneStore.load(); if (PhoneStore.hasContactsAccess()) PhoneStore.syncContacts() }
             myId?.let { E2E.setup(it) }
             netStatus = "Обновление…"
@@ -378,6 +382,7 @@ object AppModel {
             Realtime.ensure()
             onlineChannel?.let { Realtime.track(it, jsonOf("at" to System.currentTimeMillis())) }
             presence(true)
+            scope.launch { ru.volshebnymir.lumo.ui.Dnd.checkEnded(); ru.volshebnymir.lumo.ui.Reminders.load(); ru.volshebnymir.lumo.ui.Streaks.load() }
             scope.launch {
                 loadMe() // статус (Premium, эмодзи-статус и т.п.) мог поменяться, пока приложение было в фоне
                 loadChats()
@@ -656,6 +661,8 @@ object AppModel {
             val list = (messages[chatId] ?: emptyList()).filter { it.id != pid }.let { l -> if (l.any { it.id == m.id }) l else l + m }
             messages[chatId] = sorted(list)
             scheduleReload()
+            ru.volshebnymir.lumo.ui.Reminders.repliedIn(chatId)
+            if (chat(chatId)?.isPrivate == true) scope.launch { delay(600); ru.volshebnymir.lumo.ui.Streaks.load() }
             true
         } catch (e: Exception) {
             messages[chatId] = (messages[chatId] ?: emptyList()).filter { it.id != pid }
@@ -876,11 +883,16 @@ object AppModel {
         }
         m.senderId?.let { s -> typing[m.chatId]?.let { typing[m.chatId] = it - s } }
         scheduleReload()
+        if (m.kind == "system" && (m.meta.has("streak") || m.meta.has("streak_lost"))) scope.launch { ru.volshebnymir.lumo.ui.Streaks.load() }
+        if (m.senderId == myId && m.kind != "system") ru.volshebnymir.lumo.ui.Reminders.repliedIn(m.chatId)
         if (m.senderId == myId || m.kind == "system") return
+        if (chat(m.chatId)?.isPrivate == true) scope.launch { delay(600); ru.volshebnymir.lumo.ui.Streaks.load() }
+        val urgent = m.meta.bool("urgent")
+        val quiet = ru.volshebnymir.lumo.ui.Dnd.active && !urgent
         scope.launch { m.senderId?.let { loadProfiles(listOf(it)) } }
         val visible = isActive && openChatId == m.chatId
         val c = chat(m.chatId)
-        if (isActive && m.kind != "call" && c?.muted != true) Notifier.beep()
+        if (isActive && m.kind != "call" && c?.muted != true && !quiet) { Notifier.beep(); if (urgent) Notifier.urgentBuzz(ctx) }
         if (visible) { scope.launch { delay(300); markRead(m.chatId) }; return }
         if (m.kind == "call" && (m.metaStatus == null || m.metaStatus == "ended" || m.metaStatus == "rejected")) return
         if (!notified.add(m.id)) return
@@ -897,7 +909,8 @@ object AppModel {
                 ch.isChannel -> ch.displayName
                 else -> { body = "$sender: $body"; ch.displayName }
             }
-            Notifier.message(ctx, m.id, title, body, m.chatId)
+            if (m.kind == "capsule") body = "🔒 Капсула времени"
+            Notifier.message(ctx, m.id, if (urgent) "⚡ Срочно · $title" else title, body, m.chatId, quiet = quiet, urgent = urgent)
         }
     }
 
@@ -905,6 +918,8 @@ object AppModel {
     // ---------- дополнительно: Telegram, роли, блокировки, звонки, истории, QR ----------
 
     var pendingJump: Int? = null
+    /** «Ответить позже»: открыть чат с ответом на это сообщение (чат, сообщение) */
+    var pendingReply by mutableStateOf<Pair<String, Int>?>(null)
     var staffRole by mutableStateOf<String?>(null)
     var tgLinked by mutableStateOf(false)
     val blockedByMe = mutableStateListOf<String>()

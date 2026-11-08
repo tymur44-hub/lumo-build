@@ -86,6 +86,7 @@
             android:name=".core.LumoService"
             android:exported="false"
             android:foregroundServiceType="dataSync|microphone|camera" />
+        <receiver android:name=".ui.RemindReceiver" android:exported="false" />
         <receiver android:name=".core.BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

@@ -153,6 +153,7 @@ fun AttachSheet(
     onNote: () -> Unit,
     onLumens: () -> Unit,
     onPost: (String, String?, String?, org.json.JSONObject) -> Unit = { _, _, _, _ -> },
+    onCapsule: (() -> Unit)? = null,
 ) {
     var tabSel by remember { mutableStateOf("Галерея") }
     val p = P
@@ -232,6 +233,7 @@ fun AttachSheet(
                         tab(Icons.Filled.AccountCircle, "Контакт", tabSel == "Контакт") { picked.clear(); tabSel = "Контакт" }
                         tab(Icons.Filled.CameraAlt, "Камера") { onDismiss(); onCamera() }
                         tab(Icons.Filled.SlowMotionVideo, "Кружок") { onDismiss(); onNote() }
+                        if (onCapsule != null) tab(Icons.Filled.HourglassTop, "Капсула") { onDismiss(); onCapsule() }
                         if (canLumens) tab(Icons.Filled.Diamond, "Люмены") { onDismiss(); onLumens() }
                     }
                 } else {

@@ -68,6 +68,8 @@ class MainActivity : FragmentActivity() {
         val chat = i?.getStringExtra("chat") ?: return
         i.removeExtra("chat")
         if (!AppModel.loggedIn) return
+        val msg = i.getIntExtra("msg", 0)
+        if (msg > 0) { i.removeExtra("msg"); AppModel.pendingReply = chat to msg }
         AppModel.tab = ru.volshebnymir.lumo.core.Tab.Chats
         if ((AppModel.stack.lastOrNull() as? Screen.Chat)?.id != chat) {
             AppModel.stack.clear(); AppModel.push(Screen.Chat(chat))

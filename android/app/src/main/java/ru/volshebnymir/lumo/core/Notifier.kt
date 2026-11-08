@@ -22,6 +22,11 @@ object Notifier {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CH_MSG, "Сообщения", NotificationManager.IMPORTANCE_HIGH).apply { description = "Новые сообщения" })
         nm.deleteNotificationChannel("calls")
+        nm.createNotificationChannel(NotificationChannel(CH_QUIET, "Без звука («Не беспокоить»)", NotificationManager.IMPORTANCE_LOW).apply { description = "Сообщения, пока включён режим «Не беспокоить»" })
+        nm.createNotificationChannel(NotificationChannel(CH_URGENT, "Срочные сообщения", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Сообщения с пометкой «Срочно» — приходят со звуком даже в режиме «Не беспокоить»"
+            enableVibration(true); vibrationPattern = longArrayOf(0, 120, 80, 120, 80, 220)
+        })
         nm.createNotificationChannel(NotificationChannel(CH_CALL, "Входящие звонки", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Экран звонка, даже когда телефон заблокирован"
             setSound(null, null); enableVibration(false)
@@ -40,8 +45,20 @@ object Notifier {
         return PendingIntent.getActivity(ctx, req, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
-    fun message(ctx: Context, id: Int, title: String, body: String, chatId: String) {
-        val n = NotificationCompat.Builder(ctx, CH_MSG)
+    const val CH_QUIET = "messages_quiet"
+    const val CH_URGENT = "messages_urgent"
+
+    /** вибрация для срочного сообщения */
+    fun urgentBuzz(ctx: Context) {
+        runCatching {
+            val v = ctx.getSystemService(android.os.Vibrator::class.java)
+            v?.vibrate(android.os.VibrationEffect.createWaveform(longArrayOf(0, 120, 80, 120, 80, 220), -1))
+        }
+    }
+
+    fun message(ctx: Context, id: Int, title: String, body: String, chatId: String, quiet: Boolean = false, urgent: Boolean = false) {
+        val n = NotificationCompat.Builder(ctx, if (urgent) CH_URGENT else if (quiet) CH_QUIET else CH_MSG)
+            .setSilent(quiet && !urgent)
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle(title).setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -52,6 +69,25 @@ object Notifier {
             .setContentIntent(openIntent(ctx, chatId, chatId.hashCode()))
             .build()
         runCatching { NotificationManagerCompat.from(ctx).notify(chatId, id, n) }
+    }
+
+    /** «Ответить позже»: открывает чат на нужном сообщении */
+    fun remind(ctx: Context, msgId: Int, title: String, body: String, chatId: String) {
+        val i = Intent(ctx, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("chat", chatId); putExtra("msg", msgId)
+        }
+        val pi = PendingIntent.getActivity(ctx, 50_000 + (msgId % 1_000_000), i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val n = NotificationCompat.Builder(ctx, CH_MSG)
+            .setSmallIcon(R.drawable.ic_stat)
+            .setContentTitle(title).setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setContentIntent(pi)
+            .build()
+        runCatching { NotificationManagerCompat.from(ctx).notify("remind", msgId, n) }
     }
 
     fun clearChat(ctx: Context, chatId: String) {
