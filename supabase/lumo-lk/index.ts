@@ -1,5 +1,6 @@
 // Lumo: групповые звонки через LiveKit — выдача доступа к комнате и состояние звонка
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { pushUsers } from "./push.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SRK = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -102,7 +103,13 @@ Deno.serve(async (req) => {
         method: "POST", headers: { apikey: SRK, Authorization: "Bearer " + SRK, "Content-Type": "application/json" },
         body: JSON.stringify({ messages: to.map((u) => ({ topic: "lm-gc-" + u, event: "invite", payload })) }),
       });
-      return json({ ok: r.ok, sent: to.length });
+      // уведомление тем, у кого Lumo сейчас закрыт (вкладка, браузер или приложение)
+      const { data: act } = await db.from("lm_profiles").select("id,app_active,last_seen").in("id", to);
+      const away = (act || []).filter((p: { app_active?: boolean; last_seen?: string }) =>
+        !(p.app_active && p.last_seen && Date.now() - new Date(p.last_seen).getTime() < 100000)).map((p: { id: string }) => p.id);
+      const pushed = await pushUsers(away, { title: chat.title || "Групповой звонок", body: `Входящий групповой звонок · ${from?.name || "Участник"} приглашает вас`,
+        tag: "gcall-" + chat_id, chat: chat_id, call: true, gcall: true }, 60);
+      return json({ ok: r.ok, sent: to.length, pushed });
     }
 
     if (mode === "off") return json({ error: "Звонки в этой группе отключены администратором" }, 403);
