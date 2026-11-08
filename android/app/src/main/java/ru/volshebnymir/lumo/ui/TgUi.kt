@@ -568,10 +568,7 @@ fun StoryShareScreen(st: StoryShareState, busy: Boolean, onBack: () -> Unit, onP
         }
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(SBG.copy(alpha = 0.96f)).navigationBarsPadding().padding(16.dp)) {
             val ok = !(st.choice == "only" && st.sel.isEmpty())
-            Box(Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(26.dp)).background(SBLUE.copy(alpha = if (ok) 1f else 0.5f)).bouncy { if (ok && !busy) onPublish() }, contentAlignment = Alignment.Center) {
-                if (busy) CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
-                else Text("Опубликовать историю", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-            }
+            StoryPublishBar(busy, AppModel.storyUpload, ok) { if (ok && !busy) onPublish() }
         }
     }
     when (pick) {
@@ -614,3 +611,29 @@ fun videoThumb(ctx: android.content.Context, uri: android.net.Uri): ByteArray? =
     val b = if (scale < 1f) android.graphics.Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt(), (bmp.height * scale).toInt(), true) else bmp
     java.io.ByteArrayOutputStream().also { b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 72, it) }.toByteArray()
 }.getOrNull()
+
+
+/** Кнопка публикации: во время загрузки заливается слева направо, показывает проценты, потом «Публикуем…» */
+@Composable
+fun StoryPublishBar(busy: Boolean, progress: Float?, enabled: Boolean, onClick: () -> Unit) {
+    val p = (progress ?: if (busy) 1f else 0f).coerceIn(0f, 1f)
+    val anim by animateFloatAsState(p, tween(250), label = "pub")
+    val done = busy && (progress == null || p >= 0.95f)
+    val tr = rememberInfiniteTransition(label = "sh")
+    val sh by tr.animateFloat(-0.3f, 1.3f, infiniteRepeatable(tween(1300, easing = LinearEasing)), label = "shx")
+    BoxWithConstraints(Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(26.dp))
+        .background(if (busy) SBLUE.copy(alpha = 0.35f) else SBLUE.copy(alpha = if (enabled) 1f else 0.5f)).bouncy(onClick)) {
+        if (busy) {
+            val w = maxWidth
+            Box(Modifier.fillMaxHeight().width(maxOf(52.dp, w * anim)).clip(RoundedCornerShape(26.dp)).background(SBLUE)) {
+                Box(Modifier.fillMaxHeight().width(80.dp).offset(x = w * sh - 40.dp)
+                    .background(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.35f), Color.Transparent))))
+            }
+        }
+        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
+            if (done) { CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
+            Text(if (!busy) "Опубликовать историю" else if (done) "Публикуем…" else "Загрузка ${(p * 100 / 0.95f).toInt().coerceAtMost(100)}%",
+                color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+        }
+    }
+}

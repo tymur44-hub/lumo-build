@@ -1154,11 +1154,18 @@ object AppModel {
     }
 
     suspend fun addStory(kind: String, data: ByteArray, ext: String, contentType: String, caption: String, meta: JSONObject, hours: Int = 24, aud: String = "all", allow: List<String> = emptyList(), pinned: Boolean = false, thumb: ByteArray? = null): Boolean = try {
-        val url = Api.upload(data, ext, contentType)
+        storyUpload = 0f
+        val url = try {
+            Api.upload(data, ext, contentType) { p -> val v = p * 0.95f; android.os.Handler(android.os.Looper.getMainLooper()).post { if (storyUpload != null && v > (storyUpload ?: 0f)) storyUpload = v } }
+        } catch (e: Exception) { storyUpload = null; throw e }
         if (thumb != null) runCatching { meta.put("thumb", Api.upload(thumb, "jpg", "image/jpeg")) }
         Api.rpc("lm_story_add3", jsonOf("p_kind" to kind, "p_url" to url, "p_caption" to caption, "p_meta" to meta, "p_hours" to hours, "p_aud" to aud, "p_allow" to JSONArray(allow), "p_pinned" to pinned))
+        storyUpload = null
         loadStories(); loadMe(); say("История опубликована"); true
-    } catch (e: Exception) { say("Ошибка: " + (e.message ?: "")); false }
+    } catch (e: Exception) { storyUpload = null; say("Ошибка: " + (e.message ?: "")); false }
+
+    /** прогресс загрузки истории 0…1, null — ничего не грузится */
+    var storyUpload by androidx.compose.runtime.mutableStateOf<Float?>(null)
 
     // публикации в профиле, архив, близкие друзья, музыка и оформление профиля
     suspend fun profilePosts(uid: String): List<JSONObject> = (runCatching { Api.rpc("lm_profile_posts", jsonOf("p_user" to uid)) }.getOrNull() as? JSONArray).objects()

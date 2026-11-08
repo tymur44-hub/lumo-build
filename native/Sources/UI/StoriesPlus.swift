@@ -117,12 +117,7 @@ struct StoryShareSheet: View {
                 Button {
                     publish()
                 } label: {
-                    ZStack {
-                        if busy { ProgressView().tint(.white) }
-                        else { Text("Опубликовать историю").font(.system(size: 17, weight: .semibold)).foregroundColor(.white) }
-                    }
-                    .frame(maxWidth: .infinity).frame(height: 52)
-                    .background(Capsule().fill(StoryUI.blue))
+                    StoryPublishBar(busy: busy, progress: model.storyUpload)
                 }
                 .buttonStyle(BouncyButtonStyle())
                 .disabled(busy || (choice == "only" && sel.isEmpty))
@@ -527,5 +522,48 @@ struct ProfileMusicEditRow: View {
         let ext = u.pathExtension.lowercased()
         _ = await model.setProfileMusic(data: d, ext: ["m4a", "wav", "mp3"].contains(ext) ? ext : "mp3", title: title, artist: artist, dur: dur.isFinite ? dur : 0)
         busy = false
+    }
+}
+
+
+/// Кнопка публикации: во время загрузки заливается слева направо, показывает проценты и сколько осталось
+struct StoryPublishBar: View {
+    let busy: Bool
+    let progress: Double?
+    @State private var shimmer = false
+
+    var body: some View {
+        let p = min(1, max(0, progress ?? (busy ? 1 : 0)))
+        let done = busy && (progress == nil || p >= 0.95)
+        ZStack(alignment: .leading) {
+            Capsule().fill(busy ? StoryUI.blue.opacity(0.35) : StoryUI.blue)
+            if busy {
+                GeometryReader { g in
+                    Capsule().fill(StoryUI.blue)
+                        .frame(width: max(52, g.size.width * p))
+                        .overlay(
+                            LinearGradient(colors: [.clear, .white.opacity(0.35), .clear], startPoint: .leading, endPoint: .trailing)
+                                .frame(width: 80).offset(x: shimmer ? g.size.width : -80)
+                                .mask(Capsule())
+                        )
+                        .clipShape(Capsule())
+                        .animation(.easeOut(duration: 0.25), value: p)
+                }
+            }
+            HStack(spacing: 8) {
+                if busy {
+                    if done { ProgressView().tint(.white).scaleEffect(0.85) }
+                    Text(done ? "Публикуем…" : "Загрузка \(Int(p * 100 / 0.95))%")
+                        .font(.system(size: 17, weight: .semibold)).monospacedDigit()
+                } else {
+                    Text("Опубликовать историю").font(.system(size: 17, weight: .semibold))
+                }
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+        }
+        .frame(height: 52)
+        .clipShape(Capsule())
+        .onAppear { withAnimation(.linear(duration: 1.3).repeatForever(autoreverses: false)) { shimmer = true } }
     }
 }

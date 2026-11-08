@@ -8,6 +8,8 @@ enum AppTab: Hashable { case contacts, chats, settings }
 /// Состояние приложения: вход, чаты, сообщения, живые обновления, уведомления
 @MainActor
 final class AppModel: ObservableObject {
+    /// прогресс загрузки истории 0…1, nil — ничего не грузится
+    @Published var storyUpload: Double?
     static let shared = AppModel()
 
     @Published var loggedIn: Bool
@@ -1028,8 +1030,12 @@ final class AppModel: ObservableObject {
     }
 
     func addStory(kind: String, data: Data, ext: String, contentType: String, caption: String, meta: JSON, hours: Int = 24, aud: String = "all", allow: [String] = [], pinned: Bool = false, thumb: Data? = nil) async -> Bool {
+        storyUpload = 0
+        defer { storyUpload = nil }
         do {
-            let url = try await API.shared.upload(data, ext: ext, contentType: contentType)
+            let url = try await API.shared.upload(data, ext: ext, contentType: contentType) { p in
+                Task { @MainActor in if let cur = AppModel.shared.storyUpload, p * 0.95 > cur { AppModel.shared.storyUpload = p * 0.95 } }
+            }
             var meta = meta
             if let t = thumb, let tu = try? await API.shared.upload(t, ext: "jpg", contentType: "image/jpeg") { meta["thumb"] = tu }
             _ = try await API.shared.rpc("lm_story_add3", ["p_kind": kind, "p_url": url, "p_caption": caption, "p_meta": meta, "p_hours": hours, "p_aud": aud, "p_allow": allow, "p_pinned": pinned])

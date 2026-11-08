@@ -556,6 +556,7 @@ struct AddStoryView: View {
             StoryShareSheet(choice: $choice, excl: $excl, sel: $sel, pinned: $pinned, shots: $shots, hours: $hours, busy: busy) { publish() }
                 .environmentObject(model)
                 .presentationDetents([.large])
+                .interactiveDismissDisabled(busy)
         }
     }
 

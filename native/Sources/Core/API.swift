@@ -226,11 +226,43 @@ final class API {
         return Config.supabaseURL + "/storage/v1/object/public/\(Config.bucket)/\(path)"
     }
 
+    /// Загрузка с отображением прогресса (0…1)
+    func upload(_ data: Data, ext: String, contentType: String, progress: @escaping @Sendable (Double) -> Void) async throws -> String {
+        guard let uid = userId else { throw APIError(message: "Войдите заново", status: 401) }
+        let path = "\(uid)/\(randomId()).\(ext)"
+        var req = URLRequest(url: URL(string: base + "/storage/v1/object/\(Config.bucket)/\(path)")!, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 300)
+        req.httpMethod = "POST"
+        req.setValue(Config.anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer " + (try await validToken()), forHTTPHeaderField: "Authorization")
+        req.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        req.setValue("false", forHTTPHeaderField: "x-upsert")
+        req.setValue("3600", forHTTPHeaderField: "Cache-Control")
+        let (respData, resp) = try await Net.session.upload(for: req, from: data, delegate: UploadProgress(progress))
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if !(200..<300).contains(code) {
+            let j = (try? JSONSerialization.jsonObject(with: respData)) as? JSON ?? [:]
+            throw APIError(message: j.str("message") ?? j.str("error") ?? "Ошибка загрузки (\(code))", status: code)
+        }
+        progress(1)
+        return Config.supabaseURL + "/storage/v1/object/public/\(Config.bucket)/\(path)"
+    }
+
     func botFunction(_ path: String, body: JSON) async throws -> Any? {
         try await raw("POST", "/functions/v1/lumo-bots" + path, body: body)
     }
 
     func function(_ path: String, body: JSON? = nil) async throws -> Any? {
         try await raw(body == nil ? "GET" : "POST", "/functions/v1/lumo" + path, body: body)
+    }
+}
+
+
+/// Следит, сколько байт уже отправлено
+final class UploadProgress: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    let cb: @Sendable (Double) -> Void
+    init(_ cb: @escaping @Sendable (Double) -> Void) { self.cb = cb }
+    func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+        guard totalBytesExpectedToSend > 0 else { return }
+        cb(Double(totalBytesSent) / Double(totalBytesExpectedToSend))
     }
 }

@@ -227,6 +227,7 @@ object Api {
     suspend fun raw(
         method: String, path: String, query: Map<String, String> = emptyMap(), body: Any? = null,
         headers: Map<String, String> = emptyMap(), auth: Boolean = true, bytes: ByteArray? = null, contentType: String? = null,
+        progress: ((Float) -> Unit)? = null,
     ): Any? {
         val tk = if (auth) token() else null
         return withContext(Dispatchers.IO) {
@@ -236,6 +237,7 @@ object Api {
             if (tk != null) rb.header("Authorization", "Bearer $tk")
             headers.forEach { (k, v) -> rb.header(k, v) }
             val reqBody = when {
+                bytes != null && progress != null -> ProgressBody(bytes, (contentType ?: "application/octet-stream").toMediaType(), progress)
                 bytes != null -> bytes.toRequestBody((contentType ?: "application/octet-stream").toMediaType())
                 body != null -> body.toString().toRequestBody("application/json".toMediaType())
                 method == "GET" -> null
@@ -284,11 +286,11 @@ object Api {
         raw("DELETE", "/rest/v1/$table", match.mapValues { "eq." + it.value }, headers = mapOf("Prefer" to "return=minimal"))
     }
 
-    suspend fun upload(data: ByteArray, ext: String, contentType: String): String {
+    suspend fun upload(data: ByteArray, ext: String, contentType: String, progress: ((Float) -> Unit)? = null): String {
         val uid = userId ?: throw ApiError("Войдите заново", 401)
         val path = "$uid/${UUID.randomUUID().toString().take(8)}.$ext"
         raw("POST", "/storage/v1/object/${Config.BUCKET}/$path", headers = mapOf("x-upsert" to "false", "Cache-Control" to "3600"),
-            bytes = data, contentType = contentType)
+            bytes = data, contentType = contentType, progress = progress)
         return "${Config.SUPABASE}/storage/v1/object/public/${Config.BUCKET}/$path"
     }
 
@@ -309,3 +311,20 @@ fun JSONObject.dbl(k: String): Double? = if (isNull(k) || !has(k)) null else opt
 fun JSONObject.bool(k: String): Boolean = if (isNull(k) || !has(k)) false else opt(k).let { it == true || it == 1 || it == "true" }
 fun JSONObject.obj(k: String): JSONObject = optJSONObject(k) ?: JSONObject()
 fun jsonOf(vararg p: Pair<String, Any?>): JSONObject = JSONObject().apply { p.forEach { (k, v) -> put(k, v ?: JSONObject.NULL) } }
+
+
+/** Тело запроса, которое сообщает, сколько уже отправлено (0…1) */
+class ProgressBody(private val data: ByteArray, private val type: okhttp3.MediaType, private val cb: (Float) -> Unit) : okhttp3.RequestBody() {
+    override fun contentType() = type
+    override fun contentLength() = data.size.toLong()
+    override fun writeTo(sink: okio.BufferedSink) {
+        var off = 0
+        val step = 64 * 1024
+        while (off < data.size) {
+            val n = minOf(step, data.size - off)
+            sink.write(data, off, n); off += n
+            sink.flush()
+            cb(off.toFloat() / data.size)
+        }
+    }
+}
