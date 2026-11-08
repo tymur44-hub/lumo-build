@@ -1461,24 +1461,26 @@ enum ProfileStyle {
     }
 }
 
-/// Фон шапки профиля: цвет + узор кольцами вокруг аватара (как в Telegram)
+/// Фон шапки профиля: цвет + узор кольцами вокруг аватара (как в Telegram).
+/// Узор "@status" — рисуется эмодзи-статусом владельца профиля.
 struct ProfileStyleBackground: View {
     let bg: Int?
     let pattern: String?
+    var status: String? = nil
     var avatarCenterY: CGFloat = 92
 
     private struct Dot: Identifiable { let id: Int; let dx: CGFloat; let dy: CGFloat; let size: CGFloat; let alpha: Double }
 
     private static let dots: [Dot] = {
         var out: [Dot] = []
-        let counts = [8, 12, 16], radii: [CGFloat] = [88, 128, 172], sizes: [CGFloat] = [15, 13, 11]
+        let counts = [7, 11, 15], radii: [CGFloat] = [92, 140, 190], sizes: [CGFloat] = [22, 19, 16]
         var id = 0
         for ring in 0..<3 {
             for k in 0..<counts[ring] {
                 let a = Double(k) / Double(counts[ring]) * Double.pi * 2 + Double(ring) * 0.35
                 let dx = CGFloat(cos(a)) * radii[ring]
-                let dy = CGFloat(sin(a)) * radii[ring] * 0.8
-                out.append(Dot(id: id, dx: dx, dy: dy, size: sizes[ring], alpha: 0.3 - Double(ring) * 0.07))
+                let dy = CGFloat(sin(a)) * radii[ring] * 0.82
+                out.append(Dot(id: id, dx: dx, dy: dy, size: sizes[ring], alpha: 0.42 - Double(ring) * 0.1))
                 id += 1
             }
         }
@@ -1487,21 +1489,144 @@ struct ProfileStyleBackground: View {
 
     var body: some View {
         ZStack {
-            if let g = ProfileStyle.gradient(bg) { g } else { Color.clear }
+            if let g = ProfileStyle.gradient(bg) {
+                g
+                // мягкое свечение за аватаром
+                GeometryReader { geo in
+                    RadialGradient(colors: [Color.white.opacity(0.32), Color.white.opacity(0)], center: .center, startRadius: 10, endRadius: 210)
+                        .frame(width: 420, height: 420)
+                        .position(x: geo.size.width / 2, y: avatarCenterY)
+                }
+            }
             if let p = pattern, !p.isEmpty {
                 GeometryReader { geo in
                     let cx: CGFloat = geo.size.width / 2
+                    let useStatus: Bool = p == "@status" && (status ?? "").isEmpty == false
                     let tint: Color = bg == nil ? Theme.a1 : Color.white
                     ForEach(Self.dots) { d in
-                        Image(systemName: p)
-                            .font(.system(size: d.size))
-                            .foregroundColor(tint.opacity(bg == nil ? d.alpha * 0.75 : d.alpha))
-                            .position(x: cx + d.dx, y: avatarCenterY + d.dy)
+                        Group {
+                            if useStatus { StatusEmojiView(s: status ?? "", size: d.size).saturation(0.15) }
+                            else { Image(systemName: p == "@status" ? "star.fill" : p).font(.system(size: d.size * 0.8)).foregroundColor(tint) }
+                        }
+                        .opacity(useStatus ? d.alpha * 0.9 : (bg == nil ? d.alpha * 0.6 : d.alpha * 0.8))
+                        .position(x: cx + d.dx, y: avatarCenterY + d.dy)
                     }
                 }
             }
         }
         .allowsHitTesting(false)
+    }
+}
+
+/// Сдвиг прокрутки (для растягивания аватара в профиле)
+struct ProfileScrollKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// Шапка профиля как в Telegram: цвет и узор, большая аватарка, имя со статусом.
+/// Потяните вниз — аватар раскрывается на всю ширину; прокрутите вверх — сворачивается.
+struct ProfileTopHero<Top: View, Bottom: View>: View {
+    let name: String
+    let avatarURL: String?
+    let color: Int
+    let status: String?          // эмодзи-статус (если Premium)
+    let premiumStar: Bool
+    let verified: Bool
+    let subtitle: String
+    var subtitleAccent = false
+    let bg: Int?
+    let pattern: String?
+    var storyUid: String? = nil
+    @Binding var expanded: Bool
+    var onAvatar: () -> Void = {}
+    var onStatus: (() -> Void)? = nil
+    @ViewBuilder var top: () -> Top
+    @ViewBuilder var bottom: () -> Bottom
+
+    private var styled: Bool { bg != nil }
+
+    var body: some View {
+        let hasPhoto = (avatarURL ?? "").isEmpty == false
+        VStack(spacing: 0) {
+            if expanded && hasPhoto {
+                ZStack(alignment: .bottomLeading) {
+                    if let u = avatarURL, let link = URL(string: u) {
+                        CachedImage(url: link) { img in img.resizable().scaledToFill() } placeholder: { Theme.panel2 }
+                            .frame(maxWidth: .infinity).frame(height: UIScreen.main.bounds.width)
+                            .clipped()
+                    }
+                    LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
+                    VStack(alignment: .leading, spacing: 4) {
+                        nameRow(white: true, size: 26)
+                        Text(subtitle).font(.system(size: 15)).foregroundColor(.white.opacity(0.85))
+                    }
+                    .padding(.horizontal, 18).padding(.bottom, 16)
+                }
+                .frame(height: UIScreen.main.bounds.width)
+                .overlay(alignment: .top) { top().padding(.horizontal, 14).padding(.top, 8) }
+                .contentShape(Rectangle())
+                .onTapGesture { onAvatar() }
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
+            } else {
+                VStack(spacing: 8) {
+                    top().padding(.horizontal, 14)
+                    Button(action: onAvatar) {
+                        AvatarView(name: name, url: avatarURL, color: color, size: 112, storyUid: storyUid)
+                    }
+                    .buttonStyle(BouncyButtonStyle())
+                    nameRow(white: styled, size: 27).padding(.top, 6)
+                    Text(subtitle).font(.system(size: 16))
+                        .foregroundColor(styled ? .white.opacity(0.85) : (subtitleAccent ? Theme.a2 : Theme.muted))
+                        .multilineTextAlignment(.center).lineLimit(2)
+                    bottom()
+                }
+                .padding(.bottom, styled ? 22 : 6)
+                .frame(maxWidth: .infinity)
+                .background {
+                    ProfileStyleBackground(bg: bg, pattern: pattern, status: status, avatarCenterY: 308)
+                        .padding(.top, -200).padding(.horizontal, -40)
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.spring(response: 0.42, dampingFraction: 0.84), value: expanded)
+    }
+
+    @ViewBuilder private func nameRow(white: Bool, size: CGFloat) -> some View {
+        HStack(spacing: 6) {
+            Text(name).font(.system(size: size, weight: .bold)).foregroundColor(white ? .white : Theme.text)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            if verified { Image(systemName: "checkmark.seal.fill").font(.system(size: size * 0.7)).foregroundColor(white ? .white : Theme.a2) }
+            if let e = status, !e.isEmpty {
+                Button { onStatus?() } label: { StatusEmojiView(s: e, size: size * 0.85) }.buttonStyle(.plain).disabled(onStatus == nil)
+            } else if premiumStar {
+                Button { onStatus?() } label: {
+                    Image(systemName: "star.fill").font(.system(size: size * 0.75)).foregroundColor(white ? .white : Color(hex: 0xffb020))
+                }.buttonStyle(.plain).disabled(onStatus == nil)
+            }
+        }
+    }
+}
+
+/// Круглая «стеклянная» кнопка в шапке профиля
+struct HeroGlassButton: View {
+    let icon: String?
+    var text: String? = nil
+    var light = false
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if let t = text { Text(t).font(.system(size: 17, weight: .semibold)).padding(.horizontal, 16) }
+                else if let i = icon { Image(systemName: i).font(.system(size: 18, weight: .semibold)).frame(width: 44) }
+            }
+            .frame(height: 44)
+            .foregroundColor(light ? .white : Theme.text)
+            .background(Capsule().fill(light ? Color.white.opacity(0.22) : Theme.panel.opacity(0.9)))
+            .overlay(Capsule().stroke(Color.white.opacity(light ? 0.3 : 0), lineWidth: 0.8))
+        }
+        .buttonStyle(BouncyButtonStyle())
     }
 }
 
@@ -1522,7 +1647,7 @@ struct ProfileStyleView: View {
             VStack(spacing: 16) {
                 // превью
                 ZStack {
-                    ProfileStyleBackground(bg: bg, pattern: pattern, avatarCenterY: 92)
+                    ProfileStyleBackground(bg: bg, pattern: pattern, status: me?.emojiStatus, avatarCenterY: 92)
                     VStack(spacing: 8) {
                         AvatarView(name: me?.name ?? "", url: me?.avatarURL, color: me?.color ?? 0, size: 96)
                             .overlay(Circle().stroke(Color.white.opacity(bg == nil ? 0 : 0.6), lineWidth: 3))
@@ -1574,6 +1699,15 @@ struct ProfileStyleView: View {
                             }
                             .overlay(Circle().stroke(pattern == nil ? Theme.text : .clear, lineWidth: 2.5).frame(width: 47, height: 47))
                         }.buttonStyle(BouncyButtonStyle())
+                        if let e = me?.emojiStatus, !e.isEmpty {
+                            Button { if premium { pattern = "@status" } else { showPremium = true } } label: {
+                                ZStack {
+                                    Circle().fill(Theme.panel2).frame(width: 40, height: 40)
+                                    StatusEmojiView(s: e, size: 18)
+                                }
+                                .overlay(Circle().stroke(pattern == "@status" ? Theme.text : .clear, lineWidth: 2.5).frame(width: 47, height: 47))
+                            }.buttonStyle(BouncyButtonStyle())
+                        }
                         ForEach(ProfileStyle.patterns, id: \.self) { p in
                             Button {
                                 if premium { pattern = p } else { showPremium = true }

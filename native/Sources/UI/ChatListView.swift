@@ -25,6 +25,8 @@ struct ChatListView: View {
     @State private var storyStart: String?
     @State private var addStory = false
     @State private var showNet = false
+    @State private var showEmoji = false
+    @State private var storiesOpen = false
     @Namespace private var foldNS
     @FocusState private var searchFocused: Bool
     /// iPad: список слева, чат справа (без собственной навигации)
@@ -90,6 +92,11 @@ struct ChatListView: View {
                     .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 10)
 
                 if query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    if storiesOpen && !model.stories.isEmpty {
+                        StoriesBar(open: { storyStart = $0 }, add: { addStory = true })
+                            .padding(.bottom, 8)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                     folders
                     chatList
                 } else {
@@ -97,6 +104,7 @@ struct ChatListView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: model.netStatus)
+            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: storiesOpen)
             .background(Theme.bg.ignoresSafeArea())
             .onChange(of: query) { q in runSearch(q) }
             .sheet(isPresented: $showNew) { NewChatView().environmentObject(model) }
@@ -119,10 +127,15 @@ struct ChatListView: View {
             }
             Spacer(minLength: 4)
             HStack(spacing: 8) {
-                storyStack
+                if !storiesOpen { storyStack.transition(.scale(scale: 0.5).combined(with: .opacity)) }
                 Text("Чаты").font(.system(size: 19, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
                 if model.me?.premium == true {
-                    Image(systemName: "star.fill").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.a1)
+                    // эмодзи-статус рядом с «Чаты»; нажатие — выбрать другой
+                    Button { showEmoji = true } label: {
+                        if let e = model.me?.emojiStatus, !e.isEmpty { StatusEmojiView(s: e, size: 22) }
+                        else { Image(systemName: "star.fill").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.a1) }
+                    }
+                    .buttonStyle(BouncyButtonStyle())
                 }
             }
             Spacer(minLength: 4)
@@ -146,6 +159,7 @@ struct ChatListView: View {
             }
             .buttonStyle(BouncyButtonStyle())
         }
+        .sheet(isPresented: $showEmoji) { EmojiStatusSheet().environmentObject(model) }
         .alert("Соединение", isPresented: $showNet) {
             Button("Проверить заново") { Task { await Net.pick(force: true); await model.loadChats() } }
             Button("Закрыть", role: .cancel) {}
@@ -216,6 +230,7 @@ struct ChatListView: View {
 
     private var chatList: some View {
         ScrollView {
+            GeometryReader { g in Color.clear.preference(key: ProfileScrollKey.self, value: g.frame(in: .named("clist")).minY) }.frame(height: 0)
             LazyVStack(spacing: 0) {
                 if folder == .all { RemindersBar() }
                 if !model.chatsLoaded {
@@ -264,11 +279,15 @@ struct ChatListView: View {
             }
             .padding(.horizontal, 8)
         }
-        .chatDeletion($deleting)
-        .refreshable {
-            await model.loadChats()
-            await model.loadStories()
+        .coordinateSpace(name: "clist")
+        .onPreferenceChange(ProfileScrollKey.self) { y in
+            // как в Telegram: потянуть вниз — раскрыть ленту историй, прокрутить вверх — свернуть
+            if y > 70, !storiesOpen {
+                Task { await model.loadChats(); await model.loadStories() }
+                if !model.stories.isEmpty { UIImpactFeedbackGenerator(style: .light).impactOccurred(); storiesOpen = true }
+            } else if y < -24, storiesOpen { storiesOpen = false }
         }
+        .chatDeletion($deleting)
     }
 
     /// свайп вправо: «Не прочитан» (крайняя, синяя) и «Закрепить» (зелёная)

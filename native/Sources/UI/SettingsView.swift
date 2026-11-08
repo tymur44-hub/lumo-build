@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var showQR = false
     @State private var showScan = false
     @State private var showEmoji = false
+    @State private var heroExpanded = false
     @State private var share = false
     @State private var limitSheet = false
     @ObservedObject private var accounts = Accounts.shared
@@ -25,6 +26,7 @@ struct SettingsView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 12) {
+                    GeometryReader { g in Color.clear.preference(key: ProfileScrollKey.self, value: g.frame(in: .named("setscroll")).minY) }.frame(height: 0)
                     hero
                     SettingsGroup {
                         ForEach(accounts.list.filter { $0.id != model.myId }) { a in
@@ -160,6 +162,11 @@ struct SettingsView: View {
                 }
                 .padding(.top, 8)
             }
+            .coordinateSpace(name: "setscroll")
+            .onPreferenceChange(ProfileScrollKey.self) { y in
+                if y > 90, !heroExpanded, model.me?.avatarURL != nil { UIImpactFeedbackGenerator(style: .light).impactOccurred(); heroExpanded = true }
+                else if y < -40, heroExpanded { heroExpanded = false }
+            }
             .background(Theme.bg.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: SettingsPage.self) { p in
@@ -217,45 +224,44 @@ struct SettingsView: View {
 
     private var hero: some View {
         let me = model.me
-        return VStack(spacing: 4) {
-            PhotosPicker(selection: $avatarPick, matching: .images) {
-                ZStack(alignment: .bottomTrailing) {
-                    AvatarView(name: me?.name ?? "", url: me?.avatarURL, color: me?.color ?? 0, size: 110)
-                    Image(systemName: "camera.fill").font(.system(size: 13, weight: .bold)).foregroundColor(.white)
-                        .frame(width: 34, height: 34).background(Circle().fill(Theme.a1))
-                        .overlay(Circle().stroke(Theme.bg, lineWidth: 3))
+        let styled = me?.profileBg != nil
+        let phone = MyProfileView.fmtPhone(PhoneStore.shared.phone)
+        return VStack(spacing: 12) {
+            ProfileTopHero(name: me?.name ?? "", avatarURL: me?.avatarURL, color: me?.color ?? 0,
+                           status: me?.premium == true ? me?.emojiStatus : nil, premiumStar: me?.premium == true, verified: me?.verified == true,
+                           subtitle: [phone, "@" + (me?.username ?? "")].compactMap { $0 }.joined(separator: " • "),
+                           bg: me?.profileBg, pattern: me?.profilePattern,
+                           expanded: $heroExpanded,
+                           onAvatar: { if me?.avatarURL != nil { path.append(.profile) } },
+                           onStatus: { if me?.premium == true { showEmoji = true } else { path.append(.premium) } },
+                           top: {
+                               HStack {
+                                   HeroGlassButton(icon: "qrcode", light: styled) { showQR = true }
+                                   Spacer()
+                                   HeroGlassButton(icon: nil, text: "Изм.", light: styled) { path.append(.profileEdit) }
+                               }
+                           }, bottom: { EmptyView() })
+            SettingsGroup {
+                Button { if me?.premium == true { showEmoji = true } else { path.append(.premium) } } label: {
+                    heroAction("face.smiling", (me?.emojiStatus ?? "").isEmpty ? "Установить эмодзи-статус" : "Изменить эмодзи-статус")
                 }
+                .buttonStyle(BouncyButtonStyle())
+                Divider().overlay(Theme.line).padding(.leading, 48)
+                Button { path.append(.profileStyle) } label: { heroAction("paintpalette", "Изменить цвет профиля") }
+                    .buttonStyle(BouncyButtonStyle())
+                Divider().overlay(Theme.line).padding(.leading, 48)
+                PhotosPicker(selection: $avatarPick, matching: .images) { heroAction("camera", "Изменить фотографию") }
             }
-            HStack(spacing: 6) {
-                Text(me?.name ?? "").font(.system(size: 24, weight: .heavy)).foregroundColor(Theme.text)
-                if me?.verified == true { Image(systemName: "checkmark.seal.fill").foregroundColor(Theme.a2) }
-                if me?.premium == true { Button { showEmoji = true } label: { if let e = me?.emojiStatus { StatusEmojiView(s: e, size: 22) } else { Image(systemName: "star.fill").foregroundColor(Color(hex: 0xffb020)) } } }
-            }
-            .padding(.top, 8)
-            Text("@" + (me?.username ?? "")).font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.muted)
-            if let b = me?.bio, !b.isEmpty {
-                Text(b).font(.system(size: 14.5)).foregroundColor(Theme.text).multilineTextAlignment(.center).padding(.top, 4).padding(.horizontal, 14)
-            }
-            HStack(spacing: 8) {
-                NavigationLink(value: SettingsPage.profile) {
-                    Label("Изменить профиль", systemImage: "pencil").font(.system(size: 14, weight: .bold))
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(Capsule().fill(Theme.panel2))
-                }
-                Button { showQR = true } label: {
-                    Label("QR-код", systemImage: "qrcode").font(.system(size: 14, weight: .bold))
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(Capsule().fill(Theme.panel2))
-                }
-            }
-            .foregroundColor(Theme.text)
-            .padding(.top, 10)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 18).padding(.horizontal, 10)
-        .background(RoundedRectangle(cornerRadius: 26).fill(LinearGradient(colors: [Theme.a1.opacity(0.16), Theme.a2.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)))
-        .overlay(RoundedRectangle(cornerRadius: 26).stroke(Theme.line))
-        .padding(.horizontal, 14)
+    }
+
+    private func heroAction(_ icon: String, _ t: String) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon).font(.system(size: 21)).foregroundColor(Theme.a1).frame(width: 30)
+            Text(t).font(.system(size: 17)).foregroundColor(Theme.a1)
+            Spacer()
+        }
+        .padding(.vertical, 9).padding(.horizontal, 4).contentShape(Rectangle())
     }
 }
 
@@ -313,6 +319,12 @@ struct MyProfileView: View {
     @State private var avatarFull: IdentifiedURL?
     @State private var uploading = false
     @ObservedObject private var phoneStore = PhoneStore.shared
+    @State private var heroExpanded = false
+
+    private func heroPull(_ y: CGFloat) {
+        if y > 90, !heroExpanded, model.me?.avatarURL != nil { UIImpactFeedbackGenerator(style: .light).impactOccurred(); heroExpanded = true }
+        else if y < -40, heroExpanded { heroExpanded = false }
+    }
 
     static func fmtPhone(_ raw: String?) -> String? {
         guard let raw = raw else { return nil }
@@ -326,30 +338,13 @@ struct MyProfileView: View {
         let me = model.me
         ScrollView {
             VStack(spacing: 16) {
-                VStack(spacing: 8) {
-                    Button {
-                        if let u = me?.avatarURL.flatMap(URL.init(string:)) { avatarFull = IdentifiedURL(url: u) } else { showPicker = true }
-                    } label: {
-                        ZStack {
-                            AvatarView(name: me?.name ?? "", url: me?.avatarURL, color: me?.color ?? 0, size: 120)
-                            if uploading { Circle().fill(Color.black.opacity(0.4)).frame(width: 120, height: 120); ProgressView().tint(.white) }
-                        }
-                    }
-                    .buttonStyle(BouncyButtonStyle())
-                    .padding(.bottom, 6)
-                    HStack(spacing: 6) {
-                        Text(me?.name ?? "").font(.system(size: 28, weight: .bold)).foregroundColor(me?.profileBg != nil ? .white : Theme.text)
-                            .multilineTextAlignment(.center)
-                        if me?.premium == true, let e = me?.emojiStatus, !e.isEmpty { StatusEmojiView(s: e, size: 26) }
-                    }
-                    Text("в сети").font(.system(size: 16)).foregroundColor(me?.profileBg != nil ? .white.opacity(0.85) : Theme.a2)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 4).padding(.bottom, me?.profileBg != nil ? 16 : 0)
-                .background {
-                    ProfileStyleBackground(bg: me?.profileBg, pattern: me?.profilePattern, avatarCenterY: 264)
-                        .padding(.top, -200).padding(.horizontal, -40)
-                }
+                GeometryReader { g in Color.clear.preference(key: ProfileScrollKey.self, value: g.frame(in: .named("myprof")).minY) }.frame(height: 0)
+                ProfileTopHero(name: me?.name ?? "", avatarURL: me?.avatarURL, color: me?.color ?? 0,
+                               status: me?.premium == true ? me?.emojiStatus : nil, premiumStar: me?.premium == true, verified: me?.verified == true,
+                               subtitle: "в сети", subtitleAccent: true, bg: me?.profileBg, pattern: me?.profilePattern,
+                               expanded: $heroExpanded,
+                               onAvatar: { if let u = me?.avatarURL.flatMap(URL.init(string:)) { avatarFull = IdentifiedURL(url: u) } else { showPicker = true } },
+                               top: { EmptyView() }, bottom: { if uploading { ProgressView() } })
 
                 VStack(spacing: 0) {
                     HStack {
@@ -412,8 +407,11 @@ struct MyProfileView: View {
                 Color.clear.frame(height: 30)
             }
         }
+        .coordinateSpace(name: "myprof")
+        .onPreferenceChange(ProfileScrollKey.self) { y in heroPull(y) }
         .task { if !phoneStore.loaded { await phoneStore.load() } }
         .background(Theme.bg.ignoresSafeArea())
+        .toolbarBackground(.hidden, for: .navigationBar)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

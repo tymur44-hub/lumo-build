@@ -35,6 +35,7 @@ struct ChatInfoView: View {
     @State private var showQR = false
     @State private var showBub = false
     @State private var showWall = false
+    @State private var heroExpanded = false
     @ObservedObject private var prot = ProtStore.shared
     @EnvironmentObject var look: Appearance
 
@@ -45,7 +46,8 @@ struct ChatInfoView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                hero
+                GeometryReader { g in Color.clear.preference(key: ProfileScrollKey.self, value: g.frame(in: .named("pscroll")).minY) }.frame(height: 0)
+                if chat?.isPrivate == true, !saved { peerHero } else { hero }
                 actions
                 if let c = chat {
                     if c.isPrivate { privateSections(c) } else { groupSections(c) }
@@ -60,7 +62,14 @@ struct ChatInfoView: View {
             }
             .padding(.top, 4)
         }
+        .coordinateSpace(name: "pscroll")
+        .onPreferenceChange(ProfileScrollKey.self) { y in
+            guard chat?.isPrivate == true, !saved, chat?.displayAvatar != nil else { return }
+            if y > 90, !heroExpanded { UIImpactFeedbackGenerator(style: .light).impactOccurred(); heroExpanded = true }
+            else if y < -40, heroExpanded { heroExpanded = false }
+        }
         .background(Theme.bg.ignoresSafeArea())
+        .toolbarBackground(.hidden, for: .navigationBar)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -177,6 +186,31 @@ struct ChatInfoView: View {
                     .padding(.top, -200).padding(.horizontal, -40)
             }
         }
+    }
+
+    /// личный профиль как в Telegram: цветная шапка, узор из эмодзи-статуса, оттягивание раскрывает фото
+    private var peerHero: some View {
+        let c = chat
+        let p = peer
+        let prem = (p?.premium == true || c?.peerPremium == true) && !(c?.peerBot ?? false)
+        var sub = c?.peerBot == true ? "бот" : model.lastSeenText(c?.peerId, fallback: c?.peerLastSeen)
+        if let id = c?.id, let t = model.typingText(id) { sub = t }
+        return ProfileTopHero(name: c?.displayName ?? "", avatarURL: c?.displayAvatar, color: c?.displayColor ?? 0,
+                              status: prem ? p?.emojiStatus : nil, premiumStar: prem, verified: p?.verified == true,
+                              subtitle: sub, subtitleAccent: model.isOnline(c?.peerId),
+                              bg: p?.profileBg, pattern: p?.profilePattern, storyUid: c?.peerId,
+                              expanded: $heroExpanded,
+                              onAvatar: {
+                                  if heroExpanded, let u = c?.displayAvatar.flatMap(URL.init(string:)) { avatarFull = IdentifiedURL(url: u) }
+                                  else if c?.displayAvatar != nil { heroExpanded = true }
+                              },
+                              top: { EmptyView() },
+                              bottom: {
+                                  if p?.banned == true {
+                                      Text(model.peerBlockText(c?.peerId) ?? "").font(.subheadline.weight(.bold)).foregroundColor(Theme.danger)
+                                          .multilineTextAlignment(.center).padding(.horizontal, 20)
+                                  }
+                              })
     }
 
     /// у собеседника выбран цвет профиля — текст в шапке белый
