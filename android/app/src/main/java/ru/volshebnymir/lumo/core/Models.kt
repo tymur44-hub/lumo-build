@@ -242,11 +242,12 @@ data class SearchResult(val id: String, val kind: String, val name: String, val 
 data class StoryItem(
     val id: Int, val userId: String, val name: String, val username: String, val avatarUrl: String?, val color: Int,
     val kind: String, val mediaUrl: String, val caption: String, val createdAt: Date, val seen: Boolean, val views: Int,
+    val liked: Boolean = false,
 ) {
     companion object {
         fun from(j: JSONObject) = StoryItem(
             j.int("id") ?: 0, j.str("user_id") ?: "", j.str("name") ?: "", j.str("username") ?: "", j.str("avatar_url"), j.int("color") ?: 0,
-            j.str("kind") ?: "image", j.str("media_url") ?: "", j.str("caption") ?: "", j.date("created_at") ?: Date(), j.bool("seen"), j.int("views") ?: 0,
+            j.str("kind") ?: "image", j.str("media_url") ?: "", j.str("caption") ?: "", j.date("created_at") ?: Date(), j.bool("seen"), j.int("views") ?: 0, j.bool("liked"),
         )
     }
 }

@@ -1,14 +1,13 @@
 import SwiftUI
 
 enum ChatFolder: String, CaseIterable {
-    case all, privateChats, groups, channels, unread
+    case all, privateChats, groups, channels
     var title: String {
         switch self {
         case .all: return "Все"
-        case .privateChats: return "Чаты"
+        case .privateChats: return "Частный"
         case .groups: return "Группы"
         case .channels: return "Каналы"
-        case .unread: return "Непрочитанные"
         }
     }
 }
@@ -25,6 +24,8 @@ struct ChatListView: View {
     @ObservedObject private var marks = UnreadMarks.shared
     @State private var storyStart: String?
     @State private var addStory = false
+    @State private var showNet = false
+    @Namespace private var foldNS
     @FocusState private var searchFocused: Bool
     /// iPad: список слева, чат справа (без собственной навигации)
     var sidebar = false
@@ -35,19 +36,20 @@ struct ChatListView: View {
         case .privateChats: return model.chats.filter { $0.isPrivate }
         case .groups: return model.chats.filter { $0.type == "group" }
         case .channels: return model.chats.filter { $0.isChannel }
-        case .unread: return model.chats.filter { $0.unread > 0 }
         }
     }
 
-    private func count(_ f: ChatFolder) -> Int {
-        let u = model.chats.filter { $0.unread > 0 && !$0.muted }
+    /// число непрочитанных чатов в папке и есть ли среди них не заглушённые (тогда значок синий, иначе серый)
+    private func count(_ f: ChatFolder) -> (Int, Bool) {
+        let u = model.chats.filter { $0.unread > 0 }
+        let l: [ChatItem]
         switch f {
-        case .all: return 0
-        case .privateChats: return u.filter { $0.isPrivate }.count
-        case .groups: return u.filter { $0.type == "group" }.count
-        case .channels: return u.filter { $0.isChannel }.count
-        case .unread: return u.count
+        case .all: return (0, false)
+        case .privateChats: l = u.filter { $0.isPrivate }
+        case .groups: l = u.filter { $0.type == "group" }
+        case .channels: l = u.filter { $0.isChannel }
         }
+        return (l.count, l.contains { !$0.muted })
     }
 
     var body: some View {
@@ -82,17 +84,10 @@ struct ChatListView: View {
                     .padding(.top, 4)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                HStack(spacing: 10) {
-                    SearchField(placeholder: "Поиск", text: $query, focused: $searchFocused)
-                    Button { showNew = true } label: {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(Theme.text)
-                            .frame(width: 48, height: 48)
-                            .lumoGlass(RoundedRectangle(cornerRadius: 18), interactive: true)
-                    }
-                }
-                .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 8)
+                header
+                    .padding(.horizontal, 14).padding(.top, 6)
+                SearchField(placeholder: "Поиск", text: $query, focused: $searchFocused)
+                    .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 10)
 
                 if query.trimmingCharacters(in: .whitespaces).isEmpty {
                     folders
@@ -111,33 +106,110 @@ struct ChatListView: View {
             .sheet(isPresented: $addStory) { AddStoryView().environmentObject(model) }
     }
 
-    private var folders: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
-                ForEach(ChatFolder.allCases, id: \.self) { f in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) { folder = f }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(f.title).font(.system(size: 14, weight: .bold))
-                            let n = count(f)
-                            if n > 0 {
-                                Text("\(n)").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
-                                    .padding(.horizontal, 6).frame(minHeight: 18)
-                                    .background(Capsule().fill(Theme.a1))
-                            }
-                        }
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .foregroundColor(Theme.text)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(folder == f ? Theme.panel : Color.clear))
-                        .shadow(color: folder == f ? .black.opacity(0.12) : .clear, radius: 3, y: 1)
-                    }
-                    .buttonStyle(BouncyButtonStyle())
+    /// Шапка как в Telegram: «Изм.», истории + «Чаты», кнопки справа и синяя «Новый чат»
+    private var header: some View {
+        HStack(spacing: 10) {
+            Menu {
+                Button { model.markAllRead() } label: { Label("Прочитать все", systemImage: "checkmark.message") }
+                Button { showNew = true } label: { Label("Новый чат, группа или канал", systemImage: "square.and.pencil") }
+            } label: {
+                Text("Изм.").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text)
+                    .padding(.horizontal, 16).frame(height: 44)
+                    .lumoGlass(Capsule(), interactive: true)
+            }
+            Spacer(minLength: 4)
+            HStack(spacing: 8) {
+                storyStack
+                Text("Чаты").font(.system(size: 19, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
+                if model.me?.premium == true {
+                    Image(systemName: "star.fill").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.a1)
                 }
             }
-            .padding(4)
+            Spacer(minLength: 4)
+            HStack(spacing: 0) {
+                Button { showNet = true } label: {
+                    Image(systemName: Net.mode == .direct ? "checkmark.shield" : "bolt.shield")
+                        .font(.system(size: 18, weight: .semibold)).foregroundColor(Theme.text).frame(width: 40, height: 44)
+                }
+                Button { addStory = true } label: {
+                    Image(systemName: "plus.circle.dashed")
+                        .font(.system(size: 19, weight: .semibold)).foregroundColor(Theme.text).frame(width: 40, height: 44)
+                }
+            }
+            .padding(.horizontal, 4)
+            .lumoGlass(Capsule(), interactive: true)
+            Button { showNew = true } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 19, weight: .semibold)).foregroundColor(.white)
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(Theme.a1))
+            }
+            .buttonStyle(BouncyButtonStyle())
         }
-        .lumoGlass(RoundedRectangle(cornerRadius: 22))
+        .alert("Соединение", isPresented: $showNet) {
+            Button("Проверить заново") { Task { await Net.pick(force: true); await model.loadChats() } }
+            Button("Закрыть", role: .cancel) {}
+        } message: {
+            Text(Net.mode == .direct ? "Прямое подключение к серверу Lumo." : (Net.mode == .proxy ? "Подключение через зеркало Lumo — прямой путь сейчас недоступен." : "Подключение через защищённый узел — прямой путь сейчас режется."))
+        }
+    }
+
+    /// стопка аватаров с историями рядом с заголовком
+    @ViewBuilder private var storyStack: some View {
+        let groups = model.stories.sorted { a, b in
+            if (a.userId == model.myId) != (b.userId == model.myId) { return a.userId == model.myId }
+            return a.unseen && !b.unseen
+        }
+        if !groups.isEmpty {
+            Button { storyStart = groups.first(where: { $0.userId != model.myId && $0.unseen })?.userId ?? groups[0].userId } label: {
+                HStack(spacing: -12) {
+                    if groups.count > 2 {
+                        Text("\(groups.count)").font(.system(size: 13, weight: .bold)).foregroundColor(.white)
+                            .frame(width: 30, height: 30)
+                            .background(Circle().fill(LinearGradient(colors: [Color(hex: 0x6fb8ff), Theme.a1], startPoint: .top, endPoint: .bottom)))
+                            .padding(2).overlay(Circle().strokeBorder(Color(hex: 0x34c759), lineWidth: 2))
+                            .zIndex(3)
+                    }
+                    ForEach(Array(groups.prefix(2).enumerated()), id: \.offset) { i, g in
+                        AvatarView(name: g.name, url: g.avatarURL, color: g.color, size: 30)
+                            .padding(2)
+                            .overlay(StoryRing(unseen: g.unseen, mine: g.userId == model.myId).scaleEffect(1.0))
+                            .background(Circle().fill(Theme.bg))
+                            .zIndex(Double(2 - i))
+                    }
+                }
+            }
+            .buttonStyle(BouncyButtonStyle())
+        }
+    }
+
+    private var folders: some View {
+        HStack(spacing: 2) {
+            ForEach(ChatFolder.allCases, id: \.self) { f in
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { folder = f }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(f.title).font(.system(size: 15, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                        let (n, loud) = count(f)
+                        if n > 0 {
+                            Text(n > 999 ? "999+" : "\(n)").font(.system(size: 11.5, weight: .bold)).foregroundColor(.white)
+                                .padding(.horizontal, 6).frame(minWidth: 20, minHeight: 20)
+                                .background(Capsule().fill(loud ? Theme.a1 : Color(hex: 0xa3a6b8)))
+                        }
+                    }
+                    .frame(maxWidth: .infinity).frame(height: 38)
+                    .foregroundColor(Theme.text)
+                    .background {
+                        if folder == f { Capsule().fill(Theme.text.opacity(0.08)).matchedGeometryEffect(id: "fold", in: foldNS) }
+                    }
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .lumoGlass(Capsule())
         .padding(.horizontal, 14)
         .padding(.bottom, 6)
     }
@@ -145,7 +217,6 @@ struct ChatListView: View {
     private var chatList: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                if folder == .all { StoriesBar(open: { storyStart = $0 }, add: { addStory = true }) }
                 if folder == .all { RemindersBar() }
                 if !model.chatsLoaded {
                     ProgressView().padding(40)
@@ -362,6 +433,10 @@ struct ChatRow: View {
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .contentShape(Rectangle())
+        .overlay(alignment: .bottom) {
+            // тонкая полоска между чатами, от текста до края (как в Telegram)
+            Rectangle().fill(Color(UIColor.separator).opacity(0.55)).frame(height: 0.5).padding(.leading, 76)
+        }
     }
 }
 

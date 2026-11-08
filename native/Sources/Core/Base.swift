@@ -240,7 +240,11 @@ enum Net {
         return .direct
     }()
     private static var lastPick = Date.distantPast
-    static var diag = "проверка не запускалась"
+    private static var _diag = "проверка не запускалась"
+    static var diag: String {
+        get { whyLock.lock(); defer { whyLock.unlock() }; return _diag }
+        set { whyLock.lock(); _diag = newValue; whyLock.unlock() }
+    }
     static var lastErr = "-"
     private static let flyLock = NSLock()
     private static var fly: [String: (String, Date)] = [:]
@@ -263,7 +267,11 @@ enum Net {
         return t
     }
     static var lastOk = "-"
-    private static var why: [String: String] = [:]
+    /// результаты проверок путей; пишутся из параллельных задач — только под замком (иначе вылет)
+    private static let whyLock = NSLock()
+    private static var _why: [String: String] = [:]
+    private static func setWhy(_ k: String, _ v: String) { whyLock.lock(); _why[k] = v; whyLock.unlock() }
+    private static func getWhy(_ k: String) -> String { whyLock.lock(); defer { whyLock.unlock() }; return _why[k] ?? "-" }
 
     static var base: String {
         get { lock.lock(); defer { lock.unlock() }; return _base }
@@ -306,11 +314,11 @@ enum Net {
             let (data, resp) = try await s.data(for: r)
             let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
             let good = code == 200 && data.count > 40000
-            why[key] = good ? "ок" : "код \(code), \(data.count) байт"
+            setWhy(key, good ? "ок" : "код \(code), \(data.count) байт")
             return good
         } catch {
             let e = error as NSError
-            why[key] = "\(e.domain.suffix(8)) \(e.code)"
+            setWhy(key, "\(e.domain.suffix(8)) \(e.code)")
             return false
         }
     }
@@ -324,8 +332,10 @@ enum Net {
     /// берётся первый ответивший — не ждём медленные (раньше старт ждал все три проверки по 10 с).
     /// Если недавно запросы зависали напрямую — держимся за узел (проверка «прямой: ок» обманчива: режутся только большие ответы).
     static func pick(force: Bool = false) async {
-        if !force && Date().timeIntervalSince(lastPick) < 20 { return }
+        lock.lock()
+        if !force && Date().timeIntervalSince(lastPick) < 20 { lock.unlock(); return }
         lastPick = Date()
+        lock.unlock()
         let sticky = Date() < tunUntil
         let chosen: Mode? = await withTaskGroup(of: (Mode, Bool).self) { g -> Mode? in
             g.addTask { (.proxy, await ok(Config.proxyURL)) }
@@ -345,7 +355,7 @@ enum Net {
         case .tunnel: set(.tunnel, Config.supabaseURL)
         case nil: break
         }
-        diag = "прямой: \(why["прямой"] ?? "-")\nзеркало: \(why["зеркало"] ?? "-")\nузел: \(Fast.isRunning ? "запущен" : "нет") (\(Fast.lastMsg.prefix(330)))\nчерез узел: \(why["узел"] ?? "-")\nрежим: \(mode)"
+        diag = "прямой: \(getWhy("прямой"))\nзеркало: \(getWhy("зеркало"))\nузел: \(Fast.isRunning ? "запущен" : "нет") (\(Fast.lastMsg.prefix(330)))\nчерез узел: \(getWhy("узел"))\nрежим: \(mode)"
     }
 
     /// Выбрать путь, но ждать не дольше limit секунд (чтобы старт не висел без сети)
@@ -371,7 +381,7 @@ enum Net {
             guard !prev.isEmpty, prev != sig, path.status == .satisfied else { return }
             Task {
                 await pick(force: true)
-                await MainActor.run { Realtime.shared.restart() }
+                await MainActor.run { Realtime.shared.restart(); CallManager.shared.networkChanged() }
             }
         }
         m.start(queue: DispatchQueue(label: "lumo.net"))

@@ -194,8 +194,15 @@ struct StoryViewer: View {
                     .overlay(Capsule().stroke(Color.white.opacity(0.4), lineWidth: 1.5))
                     .onChange(of: replyFocused) { f in paused = f }
                     .onSubmit { sendReply(s) }
-                Button { Task { await model.reactStory(s) } } label: {
-                    Image(systemName: "heart.fill").font(.title3).foregroundColor(Color(hex: 0xff3b5c)).frame(width: 44, height: 44)
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Task { await model.reactStory(s) }
+                } label: {
+                    Image(systemName: s.liked ? "heart.fill" : "heart").font(.title3)
+                        .foregroundColor(s.liked ? Color(hex: 0xff3b5c) : .white)
+                        .frame(width: 44, height: 44)
+                        .scaleEffect(s.liked ? 1.12 : 1)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.5), value: s.liked)
                 }
                 if !reply.isEmpty {
                     Button { sendReply(s) } label: {

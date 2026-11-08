@@ -244,7 +244,7 @@ fun StoryViewer(startUser: String, onClose: () -> Unit) {
                 Spacer(Modifier.width(8.dp))
                 if (reply.isNotBlank()) RoundIcon(Icons.AutoMirrored.Filled.Send, tint = Color.White, bg = p.a1) {
                     val t = reply.trim(); reply = ""; paused = false; scope.launch { AppModel.replyStory(s, t) }
-                } else RoundIcon(Icons.Filled.Favorite, tint = Color(0xFFFF3B5C)) { scope.launch { AppModel.reactStory(s) } }
+                } else RoundIcon(if (s.liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, tint = if (s.liked) Color(0xFFFF3B5C) else Color.White) { scope.launch { AppModel.reactStory(s) } }
             }
         }
     }

@@ -1440,3 +1440,171 @@ struct StreakSystemPill: View {
         .sheet(isPresented: $open) { StreakSheet(chatId: m.chatId) }
     }
 }
+
+// MARK: - Оформление профиля (цвет шапки и узор)
+
+enum ProfileStyle {
+    /// цвета шапки профиля (верх → низ градиента)
+    static let colors: [(UInt32, UInt32)] = [
+        (0x6f8cff, 0x3d4fd8), (0xb06bff, 0x6a2fd8), (0xff6fae, 0xd8336f), (0xff8a4c, 0xe0442a),
+        (0xffc24c, 0xe08a12), (0x4cd98a, 0x1f9e5c), (0x3cc6e0, 0x1a7fa8), (0x7a8296, 0x434a5e),
+        (0xff5f6d, 0xc0263a), (0x9be15d, 0x4caf2e), (0x5ee7df, 0x2a9d8f), (0x2b2d42, 0x101120),
+    ]
+    /// узоры (Premium): значки, рассыпанные вокруг аватара
+    static let patterns: [String] = ["star.fill", "heart.fill", "sparkles", "moon.stars.fill", "leaf.fill", "bolt.fill",
+                                     "music.note", "pawprint.fill", "snowflake", "flame.fill", "gamecontroller.fill", "crown.fill",
+                                     "cloud.fill", "camera.fill", "airplane", "sun.max.fill"]
+
+    static func gradient(_ i: Int?) -> LinearGradient? {
+        guard let i, colors.indices.contains(i) else { return nil }
+        return LinearGradient(colors: [Color(hex: colors[i].0), Color(hex: colors[i].1)], startPoint: .top, endPoint: .bottom)
+    }
+}
+
+/// Фон шапки профиля: цвет + узор кольцами вокруг аватара (как в Telegram)
+struct ProfileStyleBackground: View {
+    let bg: Int?
+    let pattern: String?
+    var avatarCenterY: CGFloat = 92
+    var body: some View {
+        ZStack {
+            if let g = ProfileStyle.gradient(bg) { g } else { Color.clear }
+            if let p = pattern, !p.isEmpty {
+                GeometryReader { geo in
+                    let cx = geo.size.width / 2
+                    ForEach(0..<3, id: \.self) { ring in
+                        let n = [8, 12, 16][ring]
+                        let r = CGFloat([88, 128, 172][ring])
+                        ForEach(0..<n, id: \.self) { k in
+                            let a = Double(k) / Double(n) * .pi * 2 + Double(ring) * 0.35
+                            Image(systemName: p)
+                                .font(.system(size: CGFloat([15, 13, 11][ring])))
+                                .foregroundColor(bg == nil ? Theme.a1.opacity(0.22 - Double(ring) * 0.05) : Color.white.opacity(0.3 - Double(ring) * 0.07))
+                                .position(x: cx + CGFloat(cos(a)) * r, y: avatarCenterY + CGFloat(sin(a)) * r * 0.8)
+                        }
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Настройка оформления профиля
+struct ProfileStyleView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var bg: Int?
+    @State private var pattern: String?
+    @State private var loaded = false
+    @State private var busy = false
+    @State private var showPremium = false
+
+    var body: some View {
+        let me = model.me
+        let premium = me?.premium == true
+        ScrollView {
+            VStack(spacing: 16) {
+                // превью
+                ZStack {
+                    ProfileStyleBackground(bg: bg, pattern: pattern, avatarCenterY: 92)
+                    VStack(spacing: 8) {
+                        AvatarView(name: me?.name ?? "", url: me?.avatarURL, color: me?.color ?? 0, size: 96)
+                            .overlay(Circle().stroke(Color.white.opacity(bg == nil ? 0 : 0.6), lineWidth: 3))
+                        HStack(spacing: 6) {
+                            Text(me?.name ?? "").font(.system(size: 22, weight: .bold)).foregroundColor(bg == nil ? Theme.text : .white)
+                            if premium, let e = me?.emojiStatus, !e.isEmpty { StatusEmojiView(s: e, size: 20) }
+                        }
+                        Text("в сети").font(.system(size: 14)).foregroundColor(bg == nil ? Theme.a2 : .white.opacity(0.8))
+                    }
+                    .padding(.top, 44)
+                }
+                .frame(height: 240)
+                .frame(maxWidth: .infinity)
+                .background(Theme.panel)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .padding(.horizontal, 16)
+                .animation(.easeInOut(duration: 0.25), value: bg)
+                .animation(.easeInOut(duration: 0.25), value: pattern)
+
+                section("ЦВЕТ ПРОФИЛЯ") {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
+                        Button { bg = nil } label: {
+                            ZStack {
+                                Circle().fill(Theme.panel2).frame(width: 40, height: 40)
+                                Image(systemName: "nosign").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.muted)
+                            }
+                            .overlay(Circle().stroke(bg == nil ? Theme.text : .clear, lineWidth: 2.5).frame(width: 47, height: 47))
+                        }.buttonStyle(BouncyButtonStyle())
+                        ForEach(ProfileStyle.colors.indices, id: \.self) { i in
+                            Button { bg = i } label: {
+                                ZStack {
+                                    Circle().fill(ProfileStyle.gradient(i)!).frame(width: 40, height: 40)
+                                    if bg == i { Image(systemName: "checkmark").font(.system(size: 15, weight: .bold)).foregroundColor(.white) }
+                                }
+                                .overlay(Circle().stroke(bg == i ? Theme.text : .clear, lineWidth: 2.5).frame(width: 47, height: 47))
+                            }.buttonStyle(BouncyButtonStyle())
+                        }
+                    }
+                    .padding(.vertical, 14).padding(.horizontal, 8)
+                    .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
+                }
+
+                section(premium ? "УЗОР" : "УЗОР · LUMO PREMIUM") {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
+                        Button { pattern = nil } label: {
+                            ZStack {
+                                Circle().fill(Theme.panel2).frame(width: 40, height: 40)
+                                Image(systemName: "nosign").font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.muted)
+                            }
+                            .overlay(Circle().stroke(pattern == nil ? Theme.text : .clear, lineWidth: 2.5).frame(width: 47, height: 47))
+                        }.buttonStyle(BouncyButtonStyle())
+                        ForEach(ProfileStyle.patterns, id: \.self) { p in
+                            Button {
+                                if premium { pattern = p } else { showPremium = true }
+                            } label: {
+                                ZStack {
+                                    Circle().fill(Theme.panel2).frame(width: 40, height: 40)
+                                    Image(systemName: p).font(.system(size: 16, weight: .semibold)).foregroundColor(premium ? Theme.a1 : Theme.muted)
+                                    if !premium { Image(systemName: "lock.fill").font(.system(size: 9, weight: .bold)).foregroundColor(.white)
+                                        .padding(3).background(Circle().fill(Theme.a1)).offset(x: 14, y: 14) }
+                                }
+                                .overlay(Circle().stroke(pattern == p ? Theme.text : .clear, lineWidth: 2.5).frame(width: 47, height: 47))
+                            }.buttonStyle(BouncyButtonStyle())
+                        }
+                    }
+                    .padding(.vertical, 14).padding(.horizontal, 8)
+                    .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
+                    if !premium {
+                        Text("Узоры вокруг аватара доступны с Lumo Premium.").font(.system(size: 13)).foregroundColor(Theme.muted).padding(.leading, 4)
+                    }
+                }
+                Button {
+                    busy = true
+                    Task { if await model.setProfileStyle(bg: bg, pattern: pattern) { model.say("Оформление сохранено"); dismiss() }; busy = false }
+                } label: {
+                    HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Сохранить") }
+                        .font(.system(size: 17, weight: .bold)).foregroundColor(.white)
+                        .frame(maxWidth: .infinity).frame(height: 52)
+                        .background(Theme.a1, in: RoundedRectangle(cornerRadius: 16))
+                }
+                .buttonStyle(BouncyButtonStyle()).disabled(busy).padding(.horizontal, 16)
+            }
+            .padding(.vertical, 16)
+        }
+        .background(Theme.bg.ignoresSafeArea())
+        .navigationTitle("Оформление профиля").navigationBarTitleDisplayMode(.inline)
+        .onAppear { if !loaded { loaded = true; bg = model.me?.profileBg; pattern = model.me?.profilePattern } }
+        .alert("Lumo Premium", isPresented: $showPremium) {
+            Button("Понятно", role: .cancel) {}
+        } message: { Text("Узоры профиля доступны с подпиской Lumo Premium. Оформить её можно в настройках.") }
+    }
+
+    private func section<C: View>(_ t: String, @ViewBuilder _ c: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(t).font(.system(size: 12, weight: .bold)).foregroundColor(Theme.muted).padding(.leading, 4)
+            c()
+        }
+        .padding(.horizontal, 16)
+    }
+}

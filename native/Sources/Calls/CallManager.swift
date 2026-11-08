@@ -74,6 +74,8 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
     }
     private var ringTimer: Timer?
     private var iceServers: [RTCIceServer]?
+    /// когда получены TURN-серверы (их пароли живут сутки — обновляем каждые 6 часов)
+    private var iceAt = Date.distantPast
     private let provider: CXProvider
     private let controller = CXCallController()
 
@@ -768,7 +770,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
     }
 
     private func loadIce() async -> [RTCIceServer] {
-        if let s = iceServers { return s }
+        if let s = iceServers, Date().timeIntervalSince(iceAt) < 6 * 3600 { return s }
         var list: [RTCIceServer] = []
         if let j = (try? await API.shared.function("/ice")) as? JSON, let arr = j["iceServers"] as? [JSON] {
             for s in arr {
@@ -779,6 +781,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
             }
         }
         if list.isEmpty { list = [RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302", "stun:stun.cloudflare.com:3478"])] }
+        else { iceAt = Date() }
         iceServers = list
         return list
     }
@@ -792,6 +795,11 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         cfg.sdpSemantics = .unifiedPlan
         cfg.continualGatheringPolicy = .gatherContinually
         cfg.iceCandidatePoolSize = 4
+        // один транспорт на звук и видео, TCP-кандидаты — для сетей, где UDP режется
+        cfg.bundlePolicy = .maxBundle
+        cfg.rtcpMuxPolicy = .require
+        cfg.tcpCandidatePolicy = .enabled
+        cfg.candidateNetworkPolicy = .all
         let cons = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: ["DtlsSrtpKeyAgreement": "true"])
         guard let p = Self.factory.peerConnection(with: cfg, constraints: cons, delegate: self) else { return }
         pc = p
@@ -870,6 +878,9 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
                 var q = l
                 if !q.contains("useinbandfec") { q += ";useinbandfec=1" }
                 if !q.contains("maxaveragebitrate") { q += ";maxaveragebitrate=48000" }
+                // без пропусков тишины (иначе «заикание» на плохой сети) и моно — меньше трафика
+                if !q.contains("usedtx") { q += ";usedtx=0" }
+                if !q.contains("stereo") { q += ";stereo=0;sprop-stereo=0" }
                 out.append(q)
             } else { out.append(l) }
         }
@@ -891,16 +902,24 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         case .failed, .disconnected:
             p2p = false
             updateAudio()
-            let delay: UInt64 = s == .failed ? 500_000_000 : 4_000_000_000
+            let delay: UInt64 = s == .failed ? 300_000_000 : 2_000_000_000
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: delay)
-                guard self.pc === p, p.connectionState != .connected, p.connectionState != .closed, self.restarts < 3 else { return }
+                guard self.pc === p, p.connectionState != .connected, p.connectionState != .closed, self.restarts < 8 else { return }
                 self.restarts += 1
                 if self.role == "caller" { self.createOffer(restart: true) } else { self.sig(self.peerId ?? "", ["t": "restart"]) }
             }
         default:
             break
         }
+    }
+
+    /// Сменилась сеть (Wi-Fi ↔ LTE, VPN) во время звонка — сразу перезапускаем ICE, а не ждём обрыва
+    func networkChanged() {
+        guard state == .connecting || state == .active, pc != nil else { return }
+        restarts = 0
+        iceServers = nil
+        if role == "caller" { createOffer(restart: true) } else { sig(peerId ?? "", ["t": "restart"]) }
     }
 
     /// Разговор начался (прямое соединение или резервный канал)

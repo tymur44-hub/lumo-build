@@ -166,6 +166,8 @@ final class AppModel: ObservableObject {
         if me == nil, let id = myId, let r = LocalCache.loadMe(id) { let p = Profile(json: r); me = p; profiles[id] = p }
         // ключ шифрования с устройства — сразу, до сети: сохранённые сообщения расшифровываются и без интернета
         if let id = myId { E2E.shared.installLocal(id) }
+        // список чатов из кэша — сразу, до сети (потом обновится с сервера)
+        if chats.isEmpty, let cached = LocalCache.loadChats() { await applyChats(cached, prefetch: false) }
         netStatus = "Соединение…"
         Net.watch()
         await Net.pickQuick()
@@ -500,6 +502,14 @@ final class AppModel: ObservableObject {
         await loadMe()
     }
 
+    func setProfileStyle(bg: Int?, pattern: String?) async -> Bool {
+        do {
+            _ = try await API.shared.rpc("lm_set_profile_style", ["p_bg": bg as Any? ?? NSNull(), "p_pattern": pattern as Any? ?? NSNull()])
+            await loadMe()
+            return true
+        } catch { say(error.localizedDescription); return false }
+    }
+
     func setColor(_ c: Int) async {
         guard let id = myId else { return }
         try? await API.shared.update("lm_profiles", match: ["id": id], ["color": c])
@@ -743,9 +753,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func applyChats(_ rows: [JSON]) async {
+    private func applyChats(_ rows: [JSON], prefetch: Bool = true) async {
         var list = rows.map { ChatItem(json: $0) }
-        await E2E.shared.prefetch(list.filter { $0.isPrivate }.compactMap { $0.peerId })
+        if prefetch { await E2E.shared.prefetch(list.filter { $0.isPrivate }.compactMap { $0.peerId }) }
         for i in list.indices {
             if let p = list[i].peerId, let a = aliases[p], !a.isEmpty { list[i].peerName = a }
             if let p = list[i].peerId, let ph = contactPhotos[p] { list[i].peerAvatar = ph }
@@ -1038,9 +1048,18 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// сердечко на истории: повторное нажатие снимает
     func reactStory(_ s: StoryItem) async {
-        _ = try? await API.shared.rpc("lm_story_react", ["p_id": s.id, "p_emoji": "❤️"])
-        say("Реакция отправлена")
+        let want = !s.liked
+        setStoryLiked(s.id, want)
+        guard let r = try? await API.shared.rpc("lm_story_react", ["p_id": s.id, "p_emoji": "❤️"]) else { setStoryLiked(s.id, !want); return }
+        if let b = r as? Bool { setStoryLiked(s.id, b) }
+    }
+
+    private func setStoryLiked(_ id: Int, _ v: Bool) {
+        for gi in stories.indices {
+            if let ii = stories[gi].items.firstIndex(where: { $0.id == id }) { stories[gi].items[ii].liked = v }
+        }
     }
 
     func deleteStory(_ s: StoryItem) async {
@@ -1112,6 +1131,13 @@ final class AppModel: ObservableObject {
 
     func loadMessages(_ chatId: String, older: Bool = false) async {
         guard let me = myId else { return }
+        // сразу показываем сохранённую переписку (без ожидания сети), потом обновляем с сервера
+        if !older, (messages[chatId] ?? []).isEmpty, let cached = LocalCache.loadMessages(chatId) {
+            if let c = chat(chatId), c.isPrivate { await E2E.shared.prepare(chatId, peer: c.peerId) }
+            if (messages[chatId] ?? []).isEmpty {
+                messages[chatId] = Array(cached.map { dec(Message(json: $0)) }.reversed()).filter { !hidden.contains($0.id) }
+            }
+        }
         await prep(chatId)
         if cleared[chatId] == nil {
             let r = try? await API.shared.select("lm_members", ["select": "cleared_at", "chat_id": "eq." + chatId, "user_id": "eq." + me]).first
@@ -1122,10 +1148,12 @@ final class AppModel: ObservableObject {
         let current = messages[chatId] ?? []
         if older, let first = current.first(where: { $0.id > 0 }) { q["id"] = "lt.\(first.id)" }
         let rows: [JSON]
+        // сообщения и «удалённые у себя» — параллельно
+        async let hiddenRows = try? API.shared.select("lm_hidden", ["select": "message_id", "chat_id": "eq." + chatId])
         do { rows = try await API.shared.select("lm_messages", q) }
         catch {
             // нет сети — показываем последнюю сохранённую переписку этого чата
-            if !older, current.isEmpty, let cached = LocalCache.loadMessages(chatId) {
+            if !older, (messages[chatId] ?? []).isEmpty, let cached = LocalCache.loadMessages(chatId) {
                 let arr = Array(cached.map { dec(Message(json: $0)) }.reversed()).filter { !hidden.contains($0.id) }
                 messages[chatId] = arr
                 hasMore[chatId] = false
@@ -1134,7 +1162,7 @@ final class AppModel: ObservableObject {
         }
         if !older { LocalCache.saveMessages(chatId, rows) }
         // сообщения, которые я удалил только у себя
-        if let hr = try? await API.shared.select("lm_hidden", ["select": "message_id", "chat_id": "eq." + chatId]) {
+        if let hr = await hiddenRows {
             for r in hr { if let id = r.int("message_id") { hidden.insert(id) } }
         }
         let arr = Array(rows.map { dec(Message(json: $0)) }.reversed()).filter { !hidden.contains($0.id) }
@@ -1149,11 +1177,14 @@ final class AppModel: ObservableObject {
         await loadProfiles(arr.compactMap { $0.senderId })
         let ids = arr.map { $0.id }
         if !ids.isEmpty {
-            let rr = (try? await API.shared.select("lm_reactions", ["select": "message_id,user_id,emoji", "message_id": "in.(" + ids.map(String.init).joined(separator: ",") + ")"])) ?? []
+            let inIds = "in.(" + ids.map(String.init).joined(separator: ",") + ")"
+            async let rrT = try? API.shared.select("lm_reactions", ["select": "message_id,user_id,emoji", "message_id": inIds])
+            async let rxT = try? API.shared.select("lm_reactions_extra", ["select": "message_id,user_id,emoji", "message_id": inIds])
+            let rr = (await rrT) ?? []
+            let rx = (await rxT) ?? []
             var map = reactions
             for id in ids { map[id] = [] }
             for r in rr { let x = Reaction(json: r); map[x.messageId, default: []].append(x) }
-            let rx = (try? await API.shared.select("lm_reactions_extra", ["select": "message_id,user_id,emoji", "message_id": "in.(" + ids.map(String.init).joined(separator: ",") + ")"])) ?? []
             for r in rx { var x = Reaction(json: r); x.extra = true; map[x.messageId, default: []].append(x) }
             reactions = map
         }
@@ -1188,6 +1219,21 @@ final class AppModel: ObservableObject {
         let list = rows.map { Message(json: $0) }
         for m in list { replyCache[m.id] = m }
         return list
+    }
+
+    /// «Прочитать все»: сразу на экране, на сервер — по каждому чату
+    func markAllRead() {
+        guard let me = myId else { return }
+        let now = Date()
+        for i in chats.indices where chats[i].unread > 0 {
+            chats[i].unread = 0
+            chats[i].lastReadAt = now
+            let id = chats[i].id
+            Notifier.clear(chat: id)
+            UnreadMarks.shared.set(id, false)
+            Task { try? await API.shared.update("lm_members", match: ["chat_id": id, "user_id": me], ["last_read_at": DateParser.string(now)]) }
+        }
+        Notifier.setBadge(0)
     }
 
     func markRead(_ chatId: String) {

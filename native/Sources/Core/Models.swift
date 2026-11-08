@@ -25,6 +25,9 @@ struct Profile: Identifiable, Equatable {
     var premium = false
     var isBot = false
     var emojiStatus: String?
+    /// оформление профиля: цвет фона шапки и узор (узор — Premium)
+    var profileBg: Int?
+    var profilePattern: String?
 
     /// Имя без фамилии (в name хранится полное имя)
     var firstName: String { !lastName.isEmpty && name.hasSuffix(" " + lastName) ? String(name.dropLast(lastName.count + 1)) : name }
@@ -65,6 +68,8 @@ struct Profile: Identifiable, Equatable {
         premium = j.bool("premium")
         isBot = j.bool("is_bot")
         emojiStatus = j.str("emoji_status")
+        profileBg = j.int("profile_bg")
+        profilePattern = j.str("profile_pattern")
     }
 }
 
@@ -387,9 +392,12 @@ struct StoryItem: Identifiable, Equatable {
     var createdAt: Date
     var seen: Bool
     var views: Int
+    /// я поставил сердечко
+    var liked = false
 
     init(json j: JSON) {
         id = j.int("id") ?? 0
+        liked = j.bool("liked")
         userId = j.str("user_id") ?? ""
         name = j.str("name") ?? ""
         username = j.str("username") ?? ""

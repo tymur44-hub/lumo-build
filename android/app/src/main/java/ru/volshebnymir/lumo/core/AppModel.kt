@@ -1100,7 +1100,20 @@ object AppModel {
         }
     }
 
-    suspend fun reactStory(s: StoryItem) { runCatching { Api.rpc("lm_story_react", jsonOf("p_id" to s.id, "p_emoji" to "❤️")) }; say("Реакция отправлена") }
+    /** сердечко на истории: повторное нажатие снимает */
+    suspend fun reactStory(s: StoryItem) {
+        val want = !s.liked
+        setStoryLiked(s.id, want)
+        val r = runCatching { Api.rpc("lm_story_react", jsonOf("p_id" to s.id, "p_emoji" to "❤️")) }
+        if (r.isFailure) setStoryLiked(s.id, !want) else (r.getOrNull() as? Boolean)?.let { setStoryLiked(s.id, it) }
+    }
+
+    private fun setStoryLiked(id: Int, v: Boolean) {
+        for (gi in stories.indices) {
+            val g = stories[gi]
+            if (g.items.any { it.id == id }) stories[gi] = g.copy(items = g.items.map { if (it.id == id) it.copy(liked = v) else it })
+        }
+    }
 
     suspend fun deleteStory(s: StoryItem) {
         runCatching { Api.rpc("lm_story_delete", jsonOf("p_id" to s.id)); loadStories() }.onSuccess { say("История удалена") }.onFailure { say(it.message ?: "Ошибка") }

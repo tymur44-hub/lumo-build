@@ -140,9 +140,14 @@ struct ChatInfoView: View {
             .padding(.bottom, 6)
             HStack(spacing: 6) {
                 Text(saved ? "Избранное" : (c?.displayName ?? ""))
-                    .font(.system(size: 28, weight: .bold)).foregroundColor(Theme.text)
+                    .font(.system(size: 28, weight: .bold)).foregroundColor(styled ? .white : Theme.text)
                     .multilineTextAlignment(.center)
                 if peer?.verified == true { Image(systemName: "checkmark.seal.fill").foregroundColor(Theme.a2) }
+                // эмодзи-статус / значок Premium рядом с именем
+                if c?.isPrivate == true, !saved, let p = peer, p.premium || c?.peerPremium == true, !(c?.peerBot ?? false) {
+                    if let e = p.emojiStatus, !e.isEmpty { StatusEmojiView(s: e, size: 26) }
+                    else { Image(systemName: "star.fill").font(.system(size: 22)).foregroundColor(Color(hex: 0xffb020)) }
+                }
             }
             if let c = c {
                 if c.isPrivate, !saved {
@@ -151,7 +156,7 @@ struct ChatInfoView: View {
                         Text(t).font(.system(size: 16)).foregroundColor(Theme.a2)
                     } else {
                         Text(c.peerBot ? "бот" : model.lastSeenText(c.peerId, fallback: c.peerLastSeen))
-                            .font(.system(size: 16)).foregroundColor(online ? Theme.a2 : Theme.muted)
+                            .font(.system(size: 16)).foregroundColor(styled ? .white.opacity(0.85) : (online ? Theme.a2 : Theme.muted))
                     }
                     if peer?.banned == true {
                         Text(model.peerBlockText(c.peerId) ?? "").font(.subheadline.weight(.bold)).foregroundColor(Theme.danger)
@@ -165,7 +170,17 @@ struct ChatInfoView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
+        .padding(.bottom, styled ? 16 : 0)
+        .background {
+            if c?.isPrivate == true, !saved {
+                ProfileStyleBackground(bg: peer?.profileBg, pattern: peer?.profilePattern, avatarCenterY: 260)
+                    .padding(.top, -200).padding(.horizontal, -40)
+            }
+        }
     }
+
+    /// у собеседника выбран цвет профиля — текст в шапке белый
+    private var styled: Bool { chat?.isPrivate == true && !saved && peer?.profileBg != nil }
 
     // MARK: кнопки: звонок, видео, звук, поиск, ещё
 

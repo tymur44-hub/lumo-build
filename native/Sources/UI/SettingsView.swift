@@ -6,7 +6,7 @@ import UIKit
 enum SettingsPage: Hashable {
     case premium, profile, profileEdit, calls, notifications, privacy, about, blocked, look, username, colors, devices, language
     case privacyKey(String)
-    case msgPrivacy, phone, twofa, wallet, gifts, dnd, capsules, streaks
+    case msgPrivacy, phone, twofa, wallet, gifts, dnd, capsules, streaks, profileStyle
 }
 
 struct SettingsView: View {
@@ -186,6 +186,7 @@ struct SettingsView: View {
                 case .dnd: DNDSettingsView()
                 case .capsules: CapsuleBoxView()
                 case .streaks: StreakInfoView()
+                case .profileStyle: ProfileStyleView()
                 }
             }
             .onChange(of: avatarPick) { item in
@@ -336,12 +337,19 @@ struct MyProfileView: View {
                     }
                     .buttonStyle(BouncyButtonStyle())
                     .padding(.bottom, 6)
-                    Text(me?.name ?? "").font(.system(size: 28, weight: .bold)).foregroundColor(Theme.text)
-                        .multilineTextAlignment(.center)
-                    Text("в сети").font(.system(size: 16)).foregroundColor(Theme.a2)
+                    HStack(spacing: 6) {
+                        Text(me?.name ?? "").font(.system(size: 28, weight: .bold)).foregroundColor(me?.profileBg != nil ? .white : Theme.text)
+                            .multilineTextAlignment(.center)
+                        if me?.premium == true, let e = me?.emojiStatus, !e.isEmpty { StatusEmojiView(s: e, size: 26) }
+                    }
+                    Text("в сети").font(.system(size: 16)).foregroundColor(me?.profileBg != nil ? .white.opacity(0.85) : Theme.a2)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.top, 4)
+                .padding(.top, 4).padding(.bottom, me?.profileBg != nil ? 16 : 0)
+                .background {
+                    ProfileStyleBackground(bg: me?.profileBg, pattern: me?.profilePattern, avatarCenterY: 264)
+                        .padding(.top, -200).padding(.horizontal, -40)
+                }
 
                 VStack(spacing: 0) {
                     HStack {
@@ -583,6 +591,11 @@ struct ProfileEditView: View {
                     Divider().overlay(Theme.line).padding(.leading, 68)
                     NavigationLink(value: SettingsPage.colors) {
                         TGIconRow(icon: "paintbrush.pointed.fill", color: Color(hex: 0x3ab8ff), title: "Персональные цвета")
+                    }
+                    .buttonStyle(RowButtonStyle())
+                    Divider().overlay(Theme.line).padding(.leading, 68)
+                    NavigationLink(value: SettingsPage.profileStyle) {
+                        TGIconRow(icon: "paintpalette.fill", color: Color(hex: 0xff6fae), title: "Оформление профиля", value: model.me?.profileBg != nil || model.me?.profilePattern != nil ? "Своё" : "Стандартное")
                     }
                     .buttonStyle(RowButtonStyle())
                     Divider().overlay(Theme.line).padding(.leading, 68)
