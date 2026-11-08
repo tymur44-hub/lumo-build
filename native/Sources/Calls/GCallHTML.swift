@@ -26,7 +26,7 @@ const css = `
 #gcw{position:fixed;inset:0;z-index:2147483000;background:#0b0b10;color:#fff;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;animation:gcin .32s cubic-bezier(.2,.9,.3,1)}
 @keyframes gcin{from{opacity:0;transform:scale(.97)}}
 #gcw.out{animation:gcout .26s ease forwards}@keyframes gcout{to{opacity:0;transform:scale(.97)}}
-#gcw .hd{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 16px 8px}
+#gcw .hd{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 130px 8px 16px}
 #gcw .hd b{font-size:17px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #gcw .hd small{font-size:13px;opacity:.65}
 #gcw .grid{flex:1;min-height:0;display:grid;gap:8px;padding:8px 10px;grid-auto-rows:1fr}
@@ -58,7 +58,7 @@ const css = `
 #gcw .sheet .ls{overflow:auto;padding:0 8px 8px}
 #gcw .sheet .r{display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:14px;cursor:pointer}
 #gcw .sheet .r:active{background:rgba(255,255,255,.06)}
-#gcw .sheet .r .av{width:42px;height:42px;font-size:16px;box-shadow:none}
+#gcw .sheet .r .av{width:42px;height:42px;font-size:16px;box-shadow:none;border-radius:50%;display:grid;place-items:center;font-weight:800;background-size:cover;background-position:center;flex:none}
 #gcw .sheet .r b{flex:1;font-weight:600;font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #gcw .sheet .r small{color:#34c759;font-size:12.5px;font-weight:700}
 #gcw .sheet .r .ck{width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,.35);display:grid;place-items:center;flex:none}
