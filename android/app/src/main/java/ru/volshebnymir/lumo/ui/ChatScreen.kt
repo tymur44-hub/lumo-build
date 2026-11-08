@@ -695,8 +695,11 @@ private fun MessageRow(
     }
     if (m.kind == "system") {
         Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
-            Text(m.body ?: "", color = p.text, fontSize = 13.sp, textAlign = TextAlign.Center,
-                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(p.panel.copy(alpha = 0.8f)).padding(horizontal = 12.dp, vertical = 5.dp))
+            // как плашка с датой: тёмная подложка и белый текст — читается на любых обоях
+            Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.38f)).padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (m.meta.has("gcall")) { Icon(Icons.Filled.Call, null, tint = Color.White, modifier = Modifier.size(13.dp)); Spacer(Modifier.width(6.dp)) }
+                Text(m.body ?: "", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+            }
         }
         return
     }

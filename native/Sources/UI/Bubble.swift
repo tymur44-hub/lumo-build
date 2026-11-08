@@ -139,14 +139,17 @@ struct MessageRow: View {
         } else if m.kind == "system" && (m.meta.keys.contains("streak") || m.meta.keys.contains("streak_lost")) {
             StreakSystemPill(m: m)
         } else if m.kind == "system" {
-            Text(m.body ?? "")
-                .font(.system(size: 13, weight: .semibold))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(.ultraThinMaterial, in: Capsule())
-                .foregroundColor(Theme.muted)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
+            // как плашка с датой: тёмная полупрозрачная подложка и белый текст — читается на любых обоях
+            HStack(spacing: 6) {
+                if m.meta["gcall"] != nil { Image(systemName: "phone.fill").font(.system(size: 11, weight: .bold)) }
+                Text(m.body ?? "").multilineTextAlignment(.center)
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(Capsule().fill(Color.black.opacity(0.38)))
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
         } else {
             HStack(alignment: .bottom, spacing: 6) {
                 if mine { Spacer(minLength: 44) }

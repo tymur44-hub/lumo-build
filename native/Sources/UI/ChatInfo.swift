@@ -27,6 +27,7 @@ struct ChatInfoView: View {
     @State private var showRequests = false
     @State private var inviteLink: String?
     @State private var editChat = false
+    @State private var showGcSettings = false
     @State private var confirmLeave = false
     @State private var confirmClear = false
     @State private var deleting: ChatItem?
@@ -106,6 +107,7 @@ struct ChatInfoView: View {
             .environmentObject(model)
         }
         .fullScreenCover(isPresented: $editChat) { EditChatView(chatId: chatId).environmentObject(model) }
+        .sheet(isPresented: $showGcSettings) { GroupCallSettingsSheet(chatId: chatId).environmentObject(model) }
         .fullScreenCover(item: $avatarFull) { ImageScreen(url: $0.url) }
         .sheet(isPresented: $showQR) {
             if let c = chat {
@@ -411,6 +413,10 @@ struct ChatInfoView: View {
                 } label: { SettingsRow(icon: "link.badge.plus", color: Color(hex: 0x3a7bff), title: "Ссылка-приглашение", subtitle: "Нажмите, чтобы скопировать", chevron: false) }
                 Divider().overlay(Theme.line)
                 Button { showRequests = true } label: { SettingsRow(icon: "person.crop.circle.badge.questionmark", color: Color(hex: 0xff8a3d), title: "Заявки на вступление") }
+                if !c.isChannel {
+                    Divider().overlay(Theme.line)
+                    Button { showGcSettings = true } label: { SettingsRow(icon: "phone.fill", color: Color(hex: 0x2bd67b), title: "Групповые звонки", subtitle: "Кто может начинать звонок") }
+                }
             }
         }
         if !c.isChannel || c.isAdmin {
@@ -611,7 +617,7 @@ struct EditChatView: View {
         }
         .padding(.top, 14)
         if !isChannel {
-            GroupCallModeSection(chatId: chatId).padding(.top, 18).padding(.horizontal, 2)
+            GroupCallModeSection(chatId: chatId, showLoading: true).padding(.top, 18).padding(.horizontal, 2)
         }
     }
 

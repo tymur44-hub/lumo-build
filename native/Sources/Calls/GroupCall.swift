@@ -270,6 +270,7 @@ struct IncomingGroupCallView: View {
 struct GroupCallModeSection: View {
     @EnvironmentObject var model: AppModel
     let chatId: String
+    var showLoading = false
     @State private var mode = "all"
     @State private var admin = false
     @State private var loaded = false
@@ -291,6 +292,11 @@ struct GroupCallModeSection: View {
                         .font(.footnote).foregroundColor(Theme.muted).padding(.horizontal, 16)
                 }
                 .padding(.horizontal, 14)
+            } else if loaded {
+                Text("Настройки звонков может менять только владелец или администратор группы.")
+                    .font(.footnote).foregroundColor(Theme.muted).padding(.horizontal, 30)
+            } else if showLoading {
+                ProgressView().tint(Theme.muted).frame(maxWidth: .infinity).padding(.vertical, 20)
             }
         }
         .task {
@@ -313,5 +319,31 @@ struct GroupCallModeSection: View {
             .padding(.horizontal, 16).frame(height: 48).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+
+/// Отдельный экран «Групповые звонки» — открывается из профиля группы
+struct GroupCallSettingsSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    let chatId: String
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Text("Групповые звонки").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text)
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text)
+                            .frame(width: 40, height: 40).background(.ultraThinMaterial, in: Circle())
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 14)
+            ScrollView { GroupCallModeSection(chatId: chatId, showLoading: true).padding(.top, 6) }
+        }
+        .background(Theme.bg.ignoresSafeArea())
+        .presentationDetents([.medium, .large])
     }
 }

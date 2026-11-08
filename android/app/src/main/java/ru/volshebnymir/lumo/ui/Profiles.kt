@@ -393,6 +393,8 @@ fun InfoScreen(chatId: String) {
     var adding by remember { mutableStateOf(false) }
     var report by remember { mutableStateOf(false) }
     var memberMenu by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var gcSettings by remember { mutableStateOf(false) }
+    if (gcSettings) GroupCallSettingsDialog(chatId) { gcSettings = false }
     suspend fun reload() { members = AppModel.members(chatId) }
     LaunchedEffect(chatId) { reload() }
     val admin = c?.isAdmin == true
@@ -436,6 +438,7 @@ fun InfoScreen(chatId: String) {
                     Divider()
                     SettingsRow(Icons.Filled.CameraAlt, Color(0xFF22A6FF), "Сменить фото") { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                     if (c?.type == "group") { Divider(); SettingsRow(Icons.Filled.PersonAdd, Color(0xFF2BD67B), "Добавить участников") { adding = true } }
+                    if (c?.type == "group" && c.isChannel != true) { Divider(); SettingsRow(Icons.Filled.Call, Color(0xFF2BD67B), "Групповые звонки") { gcSettings = true } }
                 }
                 Spacer(Modifier.height(14.dp))
             }

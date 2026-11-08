@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.*
 import androidx.compose.ui.graphics.graphicsLayer
@@ -235,8 +236,16 @@ fun GroupCallModeSection(chatId: String) {
     val scope = rememberCoroutineScope()
     var mode by remember { mutableStateOf("all") }
     var admin by remember { mutableStateOf(false) }
-    LaunchedEffect(chatId) { val r = GroupCalls.mode(chatId); mode = r.first; admin = r.third }
-    if (!admin) return
+    var loaded by remember { mutableStateOf(false) }
+    LaunchedEffect(chatId) { val r = GroupCalls.mode(chatId); mode = r.first; admin = r.third; loaded = true }
+    if (!loaded) {
+        Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) { androidx.compose.material3.CircularProgressIndicator(color = p.muted, strokeWidth = 2.dp, modifier = Modifier.size(22.dp)) }
+        return
+    }
+    if (!admin) {
+        Text("Настройки звонков может менять только владелец или администратор группы.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 32.dp, vertical = 12.dp))
+        return
+    }
     Text("ГРУППОВЫЕ ЗВОНКИ", color = p.muted, fontSize = 12.5.sp, modifier = Modifier.padding(start = 32.dp, top = 14.dp, bottom = 6.dp))
     Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(16.dp)).background(p.panel)) {
         listOf("all" to "Все могут начать звонок", "admins" to "Только администраторы начинают", "off" to "Звонки отключены").forEachIndexed { i, (k, t) ->
@@ -250,4 +259,20 @@ fun GroupCallModeSection(chatId: String) {
     }
     Text(when (mode) { "admins" -> "Участники смогут присоединиться, когда звонок начнёт администратор."; "off" -> "Никто не сможет звонить в этой группе."; else -> "Любой участник может начать звонок." },
         color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 32.dp, vertical = 6.dp))
+}
+
+
+/** Окно «Групповые звонки» из профиля группы */
+@Composable
+fun GroupCallSettingsDialog(chatId: String, onClose: () -> Unit) {
+    val p = P
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(p.bg).padding(vertical = 14.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Групповые звонки", color = p.text, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, modifier = Modifier.weight(1f))
+                Icon(Icons.Filled.Close, null, tint = p.muted, modifier = Modifier.size(24.dp).clickable { onClose() })
+            }
+            GroupCallModeSection(chatId)
+        }
+    }
 }
