@@ -385,7 +385,19 @@ final class DNDStore: ObservableObject {
         return "до " + f.string(from: d)
     }
 
-    /// «😴 Спит до 08:00 · сообщения придут без звука»
+    /// значок статуса «Не беспокоить»
+    static func icon(_ text: String?) -> String {
+        let t = (text ?? "").lowercased()
+        if t.contains("сплю") || t.contains("сон") { return "moon.zzz.fill" }
+        if t.contains("встреч") { return "calendar" }
+        if t.contains("рул") { return "car.fill" }
+        if t.contains("занят") { return "headphones" }
+        if t.contains("дорог") || t.contains("полёт") || t.contains("самол") { return "airplane" }
+        if t == "свой" { return "pencil" }
+        return "moon.fill"
+    }
+
+    /// «Сплю до 08:00 · без звука»
     static func peerLine(_ p: PeerDND) -> String {
         let t = (p.text?.isEmpty == false ? p.text! : "Не беспокоить")
         return t + " " + untilText(p.until) + " · без звука"
@@ -395,13 +407,13 @@ final class DNDStore: ObservableObject {
 /// Настройка «Не беспокоить»
 struct DNDSettingsView: View {
     @ObservedObject var dnd = DNDStore.shared
-    @State private var status = "😴 Сплю"
+    @State private var status = "Сплю"
     @State private var custom = ""
     @State private var dur = 1
     @State private var urgent = "contacts"
     @State private var busy = false
 
-    private let statuses = ["😴 Сплю", "📅 На встрече", "🚗 За рулём", "🎧 Занят", "✈️ В дороге", "✏️ Свой"]
+    private let statuses = ["Сплю", "На встрече", "За рулём", "Занят", "В дороге", "Свой"]
     private let durations: [(String, Int)] = [("1 час", 1), ("2 часа", 2), ("4 часа", 4), ("До утра", -1), ("До завтра", 24)]
 
     private func untilDate() -> Date {
@@ -442,10 +454,10 @@ struct DNDSettingsView: View {
                         .font(.system(size: 14)).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(.horizontal, 24)
                     section("СТАТУС") {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                            ForEach(statuses, id: \.self) { s in chip(s, status == s) { status = s } }
+                            ForEach(statuses, id: \.self) { s in chip(s, status == s, icon: DNDStore.icon(s)) { status = s } }
                         }
-                        if status == "✏️ Свой" {
-                            TextField("Например: 🏋️ На тренировке", text: $custom)
+                        if status == "Свой" {
+                            TextField("Например: На тренировке", text: $custom)
                                 .padding(.horizontal, 14).frame(height: 46).background(Theme.panel2, in: RoundedRectangle(cornerRadius: 14))
                                 .foregroundColor(Theme.text).padding(.top, 4)
                         }
@@ -458,7 +470,7 @@ struct DNDSettingsView: View {
                             .font(.system(size: 13)).foregroundColor(Theme.muted).frame(maxWidth: .infinity, alignment: .leading)
                     }
                     Button {
-                        let t = status == "✏️ Свой" ? custom.trimmingCharacters(in: .whitespaces) : status
+                        let t = status == "Свой" ? custom.trimmingCharacters(in: .whitespaces) : status
                         busy = true
                         Task { _ = await dnd.set(until: untilDate(), text: t.isEmpty ? "Не беспокоить" : t, urgent: urgent); busy = false }
                     } label: {
@@ -485,7 +497,7 @@ struct DNDSettingsView: View {
                         }
                     }
                     .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-                    Text("⚡ Срочное сообщение приходит со звуком даже в этом режиме. Каждый может отправить вам не больше одного срочного в сутки. Если сообщение было не срочным — нажмите на него и выберите «Это было не срочно»: человек на неделю потеряет эту возможность.")
+                    Text("Срочное сообщение приходит со звуком даже в этом режиме. Каждый может отправить вам не больше одного срочного в сутки. Если сообщение было не срочным — нажмите на него и выберите «Это было не срочно»: человек на неделю потеряет эту возможность.")
                         .font(.system(size: 12.5)).foregroundColor(Theme.muted)
                 }
             }
@@ -504,10 +516,13 @@ struct DNDSettingsView: View {
         .padding(.horizontal, 16)
     }
 
-    private func chip(_ t: String, _ on: Bool, _ a: @escaping () -> Void) -> some View {
+    private func chip(_ t: String, _ on: Bool, icon: String? = nil, _ a: @escaping () -> Void) -> some View {
         Button(action: a) {
-            Text(t).font(.system(size: 15, weight: .semibold)).foregroundColor(on ? .white : Theme.text)
-                .lineLimit(1).minimumScaleFactor(0.8)
+            HStack(spacing: 6) {
+                if let i = icon { Image(systemName: i).font(.system(size: 14, weight: .semibold)) }
+                Text(t).lineLimit(1).minimumScaleFactor(0.8)
+            }
+                .font(.system(size: 15, weight: .semibold)).foregroundColor(on ? .white : Theme.text)
                 .frame(maxWidth: .infinity).frame(height: 42)
                 .background(on ? AnyShapeStyle(LinearGradient(colors: [Color(hex: 0x7c5cff), Color(hex: 0x4f7cff)], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(Theme.panel),
                             in: RoundedRectangle(cornerRadius: 13))
@@ -550,7 +565,7 @@ final class CapsuleStore: ObservableObject {
             await AppModel.shared.prep(m.chatId)
             func dec(_ s: String?) -> String? {
                 guard let s = s else { return nil }
-                return E2E.isEnc(s) ? (E2E.shared.decrypt(m.chatId, s) ?? "🔒") : s
+                return E2E.isEnc(s) ? (E2E.shared.decrypt(m.chatId, s) ?? "Зашифровано") : s
             }
             opened[m.id] = CapsuleContent(kind: p.str("kind") ?? "text", text: dec(p.str("text")), image: dec(p.str("image")))
             views[m.id] = j.int("views") ?? 0
@@ -736,7 +751,7 @@ struct CapsuleBubble: View {
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
             withAnimation(.default) { shake = 12 }
             withAnimation(.interpolatingSpring(stiffness: 600, damping: 6).delay(0.05)) { shake = 0 }
-            model.say("Ещё рано 🙂 Откроется " + CapsuleStore.dateText(openAt))
+            model.say("Ещё рано. Откроется " + CapsuleStore.dateText(openAt))
             return
         }
         guard !opening else { return }
@@ -951,7 +966,7 @@ struct DNDSummaryModifier: ViewModifier {
 // MARK: - Серия (огонёк)
 
 struct Streak: Equatable {
-    let chatId: String; let count: Int; let best: Int; let level: Int; let done: Bool; let mine: Bool; let peer: Bool
+    let chatId: String; let count: Int; let best: Int; let level: Int; let done: Bool; let mine: Bool; let peer: Bool; let enabled: Bool
 }
 
 @MainActor
@@ -959,7 +974,10 @@ final class Streaks: ObservableObject {
     static let shared = Streaks()
     static let levels = [3, 10, 30, 100, 200]
     @Published var map: [String: Streak] = [:]
+    /// праздник «огонёк загорелся» поверх всего приложения
+    @Published var celebrate: Streak?
     private var last = Date.distantPast
+    private let seenKey = "lm_streak_seen"
 
     func load(force: Bool = true) async {
         if !force && Date().timeIntervalSince(last) < 20 { return }
@@ -969,15 +987,43 @@ final class Streaks: ObservableObject {
         for j in a {
             guard let c = j.str("chat_id") else { continue }
             m[c] = Streak(chatId: c, count: j.int("count") ?? 0, best: j.int("best") ?? 0, level: j.int("level") ?? 0,
-                          done: j.bool("done"), mine: j.bool("mine"), peer: j.bool("peer"))
+                          done: j.bool("done"), mine: j.bool("mine"), peer: j.bool("peer"), enabled: j.bool("enabled"))
         }
         map = m
+        checkCelebrate()
     }
 
-    /** огонёк виден с 3 дней */
+    /// новый уровень огонька (3, 10, 30…) — один раз показываем красивую анимацию
+    private func checkCelebrate() {
+        guard celebrate == nil else { return }
+        var seen = UserDefaults.standard.dictionary(forKey: seenKey) as? [String: Int] ?? [:]
+        for s in map.values where s.enabled && s.level >= 3 {
+            if (seen[s.chatId] ?? 0) < s.level {
+                seen[s.chatId] = s.level
+                UserDefaults.standard.set(seen, forKey: seenKey)
+                celebrate = s
+                return
+            }
+        }
+    }
+
+    /// огонёк виден, когда серийчик выведен и серия от 3 дней
     func of(_ chatId: String?) -> Streak? {
-        guard let c = chatId, let s = map[c], s.count >= 3 else { return nil }
+        guard let c = chatId, let s = map[c], s.enabled, s.count >= 3 else { return nil }
         return s
+    }
+
+    func enabled(_ chatId: String?) -> Bool { chatId.flatMap { map[$0]?.enabled } ?? false }
+
+    /// «Вывести серийчика»
+    func enable(_ chatId: String) async -> Bool {
+        do {
+            _ = try await API.shared.rpc("lm_streak_enable", ["p_chat": chatId])
+            last = .distantPast
+            await load()
+            if let s = map[chatId], s.count < 3 { celebrate = s }   // приветствие серийчика
+            return true
+        } catch { AppModel.shared.say(error.localizedDescription); return false }
     }
 
     static func colors(_ level: Int, _ lit: Bool) -> [Color] {
@@ -999,6 +1045,34 @@ final class Streaks: ObservableObject {
     }
 }
 
+private func flamePath(_ w: CGFloat, _ h: CGFloat, extra: Bool) -> Path {
+    var p = Path()
+    p.move(to: CGPoint(x: w * 0.5, y: h * 0.98))
+    p.addCurve(to: CGPoint(x: w * 0.2, y: h * 0.38), control1: CGPoint(x: w * 0.12, y: h * 0.98), control2: CGPoint(x: w * 0.02, y: h * 0.62))
+    p.addCurve(to: CGPoint(x: w * 0.36, y: h * 0.55), control1: CGPoint(x: w * 0.24, y: h * 0.52), control2: CGPoint(x: w * 0.32, y: h * 0.56))
+    p.addCurve(to: CGPoint(x: w * 0.6, y: h * 0.02), control1: CGPoint(x: w * 0.3, y: h * 0.3), control2: CGPoint(x: w * 0.44, y: h * 0.1))
+    p.addCurve(to: CGPoint(x: w * 0.78, y: h * 0.4), control1: CGPoint(x: w * 0.58, y: h * 0.22), control2: CGPoint(x: w * 0.7, y: h * 0.3))
+    if extra {
+        p.addCurve(to: CGPoint(x: w * 0.88, y: h * 0.2), control1: CGPoint(x: w * 0.8, y: h * 0.32), control2: CGPoint(x: w * 0.84, y: h * 0.26))
+        p.addCurve(to: CGPoint(x: w * 0.96, y: h * 0.65), control1: CGPoint(x: w * 0.96, y: h * 0.4), control2: CGPoint(x: w * 0.98, y: h * 0.55))
+    }
+    p.addCurve(to: CGPoint(x: w * 0.5, y: h * 0.98), control1: CGPoint(x: w * 1.0, y: h * 0.84), control2: CGPoint(x: w * 0.82, y: h * 0.98))
+    p.closeSubpath()
+    return p
+}
+
+private func flameInner(_ w: CGFloat, _ h: CGFloat) -> Path {
+    var p = Path()
+    p.move(to: CGPoint(x: w * 0.5, y: h * 0.96))
+    p.addCurve(to: CGPoint(x: w * 0.36, y: h * 0.64), control1: CGPoint(x: w * 0.3, y: h * 0.96), control2: CGPoint(x: w * 0.26, y: h * 0.76))
+    p.addCurve(to: CGPoint(x: w * 0.48, y: h * 0.68), control1: CGPoint(x: w * 0.42, y: h * 0.7), control2: CGPoint(x: w * 0.46, y: h * 0.7))
+    p.addCurve(to: CGPoint(x: w * 0.6, y: h * 0.44), control1: CGPoint(x: w * 0.46, y: h * 0.56), control2: CGPoint(x: w * 0.52, y: h * 0.48))
+    p.addCurve(to: CGPoint(x: w * 0.72, y: h * 0.8), control1: CGPoint(x: w * 0.62, y: h * 0.56), control2: CGPoint(x: w * 0.74, y: h * 0.66))
+    p.addCurve(to: CGPoint(x: w * 0.5, y: h * 0.96), control1: CGPoint(x: w * 0.7, y: h * 0.92), control2: CGPoint(x: w * 0.62, y: h * 0.96))
+    p.closeSubpath()
+    return p
+}
+
 /// Нарисованный огонёк
 struct FlameView: View {
     let level: Int
@@ -1007,34 +1081,64 @@ struct FlameView: View {
         Canvas { ctx, size in
             let w = size.width, h = size.height
             let cs = Streaks.colors(level, lit)
-            var outer = Path()
-            outer.move(to: CGPoint(x: w * 0.5, y: h * 0.98))
-            outer.addCurve(to: CGPoint(x: w * 0.2, y: h * 0.38), control1: CGPoint(x: w * 0.12, y: h * 0.98), control2: CGPoint(x: w * 0.02, y: h * 0.62))
-            outer.addCurve(to: CGPoint(x: w * 0.36, y: h * 0.55), control1: CGPoint(x: w * 0.24, y: h * 0.52), control2: CGPoint(x: w * 0.32, y: h * 0.56))
-            outer.addCurve(to: CGPoint(x: w * 0.6, y: h * 0.02), control1: CGPoint(x: w * 0.3, y: h * 0.3), control2: CGPoint(x: w * 0.44, y: h * 0.1))
-            outer.addCurve(to: CGPoint(x: w * 0.78, y: h * 0.4), control1: CGPoint(x: w * 0.58, y: h * 0.22), control2: CGPoint(x: w * 0.7, y: h * 0.3))
-            if level >= 30 && lit {
-                outer.addCurve(to: CGPoint(x: w * 0.88, y: h * 0.2), control1: CGPoint(x: w * 0.8, y: h * 0.32), control2: CGPoint(x: w * 0.84, y: h * 0.26))
-                outer.addCurve(to: CGPoint(x: w * 0.96, y: h * 0.65), control1: CGPoint(x: w * 0.96, y: h * 0.4), control2: CGPoint(x: w * 0.98, y: h * 0.55))
-            }
-            outer.addCurve(to: CGPoint(x: w * 0.5, y: h * 0.98), control1: CGPoint(x: w * 1.0, y: h * 0.84), control2: CGPoint(x: w * 0.82, y: h * 0.98))
-            outer.closeSubpath()
-            ctx.fill(outer, with: .linearGradient(Gradient(colors: [cs[1], cs.count > 2 ? cs[2] : cs[1]]), startPoint: .zero, endPoint: CGPoint(x: 0, y: h)))
-            var inner = Path()
-            inner.move(to: CGPoint(x: w * 0.5, y: h * 0.96))
-            inner.addCurve(to: CGPoint(x: w * 0.36, y: h * 0.64), control1: CGPoint(x: w * 0.3, y: h * 0.96), control2: CGPoint(x: w * 0.26, y: h * 0.76))
-            inner.addCurve(to: CGPoint(x: w * 0.48, y: h * 0.68), control1: CGPoint(x: w * 0.42, y: h * 0.7), control2: CGPoint(x: w * 0.46, y: h * 0.7))
-            inner.addCurve(to: CGPoint(x: w * 0.6, y: h * 0.44), control1: CGPoint(x: w * 0.46, y: h * 0.56), control2: CGPoint(x: w * 0.52, y: h * 0.48))
-            inner.addCurve(to: CGPoint(x: w * 0.72, y: h * 0.8), control1: CGPoint(x: w * 0.62, y: h * 0.56), control2: CGPoint(x: w * 0.74, y: h * 0.66))
-            inner.addCurve(to: CGPoint(x: w * 0.5, y: h * 0.96), control1: CGPoint(x: w * 0.7, y: h * 0.92), control2: CGPoint(x: w * 0.62, y: h * 0.96))
-            inner.closeSubpath()
-            ctx.fill(inner, with: .linearGradient(Gradient(colors: [cs[0].opacity(0.95), Color.white.opacity(lit ? 0.9 : 0.6)]),
-                                                  startPoint: CGPoint(x: 0, y: h * 0.44), endPoint: CGPoint(x: 0, y: h)))
+            ctx.fill(flamePath(w, h, extra: level >= 30 && lit), with: .linearGradient(Gradient(colors: [cs[1], cs.count > 2 ? cs[2] : cs[1]]), startPoint: .zero, endPoint: CGPoint(x: 0, y: h)))
+            ctx.fill(flameInner(w, h), with: .linearGradient(Gradient(colors: [cs[0].opacity(0.95), Color.white.opacity(lit ? 0.9 : 0.6)]),
+                                                             startPoint: CGPoint(x: 0, y: h * 0.44), endPoint: CGPoint(x: 0, y: h)))
         }
     }
 }
 
-/// 🔥 3 — рядом с именем
+/// Серийчик — огонёк с глазками
+struct SerialMascot: View {
+    var size: CGFloat = 120
+    var level: Int = 3
+    var sleeping = false
+    @State private var t = false
+    @State private var blink = false
+    var body: some View {
+        ZStack {
+            FlameView(level: level, lit: !sleeping).frame(width: size * 0.86, height: size)
+                .scaleEffect(x: t ? 1.03 : 0.97, y: t ? 0.97 : 1.03, anchor: .bottom)
+            // глазки и улыбка
+            Canvas { ctx, sz in
+                let w = sz.width, h = sz.height
+                let ey = h * 0.66, ex = w * 0.13, er = w * 0.075
+                for dx in [-ex, ex] {
+                    let c = CGPoint(x: w * 0.53 + dx, y: ey)
+                    if sleeping || blink {
+                        var l = Path(); l.move(to: CGPoint(x: c.x - er, y: c.y)); l.addQuadCurve(to: CGPoint(x: c.x + er, y: c.y), control: CGPoint(x: c.x, y: c.y + er * 0.9))
+                        ctx.stroke(l, with: .color(Color(hex: 0x5a2600)), style: StrokeStyle(lineWidth: w * 0.03, lineCap: .round))
+                    } else {
+                        ctx.fill(Path(ellipseIn: CGRect(x: c.x - er, y: c.y - er * 1.2, width: er * 2, height: er * 2.4)), with: .color(Color(hex: 0x4a1d00)))
+                        ctx.fill(Path(ellipseIn: CGRect(x: c.x - er * 0.25, y: c.y - er * 0.9, width: er * 0.8, height: er * 0.8)), with: .color(.white))
+                    }
+                }
+                var m = Path()
+                m.move(to: CGPoint(x: w * 0.45, y: h * 0.8)); m.addQuadCurve(to: CGPoint(x: w * 0.61, y: h * 0.8), control: CGPoint(x: w * 0.53, y: h * 0.87))
+                ctx.stroke(m, with: .color(Color(hex: 0x5a2600)), style: StrokeStyle(lineWidth: w * 0.03, lineCap: .round))
+                for dx in [-w * 0.24, w * 0.24] {
+                    ctx.fill(Path(ellipseIn: CGRect(x: w * 0.53 + dx - w * 0.05, y: h * 0.74, width: w * 0.1, height: w * 0.06)), with: .color(Color(hex: 0xff5a7a).opacity(0.55)))
+                }
+            }
+            .frame(width: size * 0.86, height: size)
+            .scaleEffect(x: t ? 1.03 : 0.97, y: t ? 0.97 : 1.03, anchor: .bottom)
+        }
+        .frame(width: size, height: size)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { t = true }
+            Task { @MainActor in
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 3_200_000_000)
+                    blink = true
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    blink = false
+                }
+            }
+        }
+    }
+}
+
+/// Огонёк рядом с именем: 3 и больше — горит; если серийчик не выведен — ничего
 struct StreakBadge: View {
     let chatId: String?
     var size: CGFloat = 14
@@ -1050,87 +1154,264 @@ struct StreakBadge: View {
     }
 }
 
-/// Окно серии (как в TikTok)
+/// Кнопка в шапке личного чата: горящий огонёк с числом, а если серийчика ещё нет — серый контур
+struct StreakHeaderButton: View {
+    let chatId: String
+    let action: () -> Void
+    @ObservedObject private var st = Streaks.shared
+    var body: some View {
+        Button(action: action) {
+            if st.of(chatId) != nil { StreakBadge(chatId: chatId, size: 15) }
+            else {
+                FlameView(level: 3, lit: false).frame(width: 13, height: 15).opacity(0.8)
+            }
+        }
+        .buttonStyle(BouncyButtonStyle())
+    }
+}
+
+/// Окно серии: что это, уровни, «Вывести серийчика»
 struct StreakSheet: View {
     let chatId: String
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var st = Streaks.shared
     @ObservedObject private var model = AppModel.shared
-    @State private var bob = false
+    @State private var busy = false
 
     var body: some View {
         let s = st.map[chatId]
-        let count = s?.count ?? 0
+        let on = s?.enabled == true
+        let count = on ? (s?.count ?? 0) : 0
         let lit = s?.done == true
         let c = model.chat(chatId)
         let peerName = c?.displayName ?? "собеседник"
-        VStack(spacing: 0) {
-            HStack {
-                FlameView(level: s?.level ?? 3, lit: true).frame(width: 46, height: 54)
-                    .rotationEffect(.degrees(bob ? 8 : -8)).offset(y: bob ? -6 : 0)
-                    .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: bob)
-                Spacer()
-                Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 20, weight: .semibold)).foregroundColor(Theme.text) }
-            }
-            ZStack {
-                AvatarView(name: model.me?.name ?? "", url: model.me?.avatarURL, color: model.me?.color ?? 0, size: 100)
-                    .overlay(Circle().stroke(Theme.bg, lineWidth: 3)).offset(x: -42)
-                AvatarView(name: c?.displayName ?? "", url: c?.displayAvatar, color: c?.displayColor ?? 0, size: 100)
-                    .overlay(Circle().stroke(Theme.bg, lineWidth: 3)).offset(x: 42)
-            }
-            .frame(height: 108)
-            HStack(spacing: 4) {
-                Text(count >= 3 ? "Ваша серия длится" : "Серия:").font(.system(size: 23, weight: .black)).foregroundColor(Theme.text)
-                FlameView(level: s?.level ?? 3, lit: lit).frame(width: 20, height: 24)
-                Text("\(count) \(Streaks.days(count))").font(.system(size: 23, weight: .black)).foregroundColor(lit ? Color(hex: 0xff7a1a) : Theme.muted)
-            }
-            .minimumScaleFactor(0.7).lineLimit(1)
-            .padding(.top, 16)
-            VStack(alignment: .leading, spacing: 8) {
-                bullet("Серия растёт, когда вы оба пишете друг другу каждый день.")
-                bullet(todo(s, peerName))
-                bullet("Продолжайте общаться, чтобы огонёк становился ярче!")
-            }
-            .padding(.top, 14)
-            HStack(spacing: 0) {
-                ForEach(Array(Streaks.levels.enumerated()), id: \.offset) { i, lv in
-                    if i > 0 { Capsule().fill(count >= lv ? Color(hex: 0xff9a3d) : Theme.line).frame(height: 3) }
-                    VStack(spacing: 4) {
-                        FlameView(level: lv, lit: count >= lv).frame(width: 28, height: 34)
-                        Text("\(lv) д").font(.system(size: 13, weight: count >= lv ? .bold : .regular)).foregroundColor(count >= lv ? Theme.text : Theme.muted)
+        ScrollView {
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 18, weight: .semibold)).foregroundColor(Theme.text)
+                        .frame(width: 36, height: 36).background(Theme.panel2, in: Circle()) }
+                }
+                if on && count >= 3 {
+                    ZStack {
+                        AvatarView(name: model.me?.name ?? "", url: model.me?.avatarURL, color: model.me?.color ?? 0, size: 96)
+                            .overlay(Circle().stroke(Theme.bg, lineWidth: 3)).offset(x: -40)
+                        AvatarView(name: c?.displayName ?? "", url: c?.displayAvatar, color: c?.displayColor ?? 0, size: 96)
+                            .overlay(Circle().stroke(Theme.bg, lineWidth: 3)).offset(x: 40)
+                        SerialMascot(size: 54, level: s?.level ?? 3).offset(y: 46)
+                    }
+                    .frame(height: 130)
+                    HStack(spacing: 4) {
+                        Text("Ваша серия длится").font(.system(size: 22, weight: .black)).foregroundColor(Theme.text)
+                        FlameView(level: s?.level ?? 3, lit: lit).frame(width: 20, height: 24)
+                        Text("\(count) \(Streaks.days(count))").font(.system(size: 22, weight: .black)).foregroundColor(lit ? Color(hex: 0xff7a1a) : Theme.muted)
+                    }
+                    .minimumScaleFactor(0.7).lineLimit(1).padding(.top, 12)
+                } else {
+                    SerialMascot(size: 120, level: 3, sleeping: !on)
+                    Text(on ? "Серийчик выведен" : "Серийчик ещё спит").font(.system(size: 24, weight: .black)).foregroundColor(Theme.text).padding(.top, 8)
+                    Text(on ? "Пишите друг другу каждый день — на третий день загорится огонёк. Сейчас: \(count) \(Streaks.days(count)) подряд."
+                            : "Выведите серийчика, и в чате с \(peerName) начнётся серия: общайтесь каждый день, и через 3 дня рядом с именем загорится огонёк.")
+                        .font(.system(size: 15)).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(.top, 6).padding(.horizontal, 8)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    bullet("calendar", "День засчитывается, когда вы оба написали друг другу хотя бы по сообщению (по московскому времени).")
+                    if on { bullet("clock", todo(s, peerName)) }
+                    bullet("flame", "Не пропускайте дни: если день пропущен, серия погаснет в полночь.")
+                    bullet("sparkles", "Чем дольше серия, тем ярче огонёк: 3, 10, 30, 100 и 200 дней.")
+                }
+                .padding(.top, 16)
+                HStack(spacing: 0) {
+                    ForEach(Array(Streaks.levels.enumerated()), id: \.offset) { i, lv in
+                        if i > 0 { Capsule().fill(count >= lv ? Color(hex: 0xff9a3d) : Theme.line).frame(height: 3) }
+                        VStack(spacing: 4) {
+                            FlameView(level: lv, lit: count >= lv).frame(width: 28, height: 34)
+                            Text("\(lv) д").font(.system(size: 13, weight: count >= lv ? .bold : .regular)).foregroundColor(count >= lv ? Theme.text : Theme.muted)
+                        }
                     }
                 }
+                .padding(.top, 18)
+                if on, let b = s?.best, b > count {
+                    Text("Рекорд: \(b) \(Streaks.days(b))").font(.system(size: 13)).foregroundColor(Theme.muted).padding(.top, 10)
+                }
+                if on {
+                    Button { dismiss() } label: {
+                        Text("Понятно").font(.system(size: 18, weight: .bold)).foregroundColor(.white)
+                            .frame(maxWidth: .infinity).frame(height: 54).background(Color(hex: 0xe8455a), in: Capsule())
+                    }.buttonStyle(BouncyButtonStyle()).padding(.top, 20)
+                } else {
+                    Button {
+                        busy = true
+                        Task { if await st.enable(chatId) { dismiss() }; busy = false }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if busy { ProgressView().tint(.white) } else { Image(systemName: "flame.fill") }
+                            Text("Вывести серийчика")
+                        }
+                        .font(.system(size: 18, weight: .bold)).foregroundColor(.white)
+                        .frame(maxWidth: .infinity).frame(height: 54)
+                        .background(LinearGradient(colors: [Color(hex: 0xffa318), Color(hex: 0xff5a2a)], startPoint: .leading, endPoint: .trailing), in: Capsule())
+                    }.buttonStyle(BouncyButtonStyle()).disabled(busy).padding(.top, 20)
+                }
             }
-            .padding(.top, 20)
-            if let b = s?.best, b > count {
-                Text("Рекорд: \(b) \(Streaks.days(b))").font(.system(size: 13)).foregroundColor(Theme.muted).padding(.top, 10)
-            }
-            Spacer(minLength: 16)
-            Button { dismiss() } label: {
-                Text("Понятно").font(.system(size: 18, weight: .bold)).foregroundColor(.white)
-                    .frame(maxWidth: .infinity).frame(height: 54).background(Color(hex: 0xe8455a), in: Capsule())
-            }
-            .buttonStyle(BouncyButtonStyle())
+            .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 14)
         }
-        .padding(.horizontal, 22).padding(.top, 18).padding(.bottom, 10)
         .background(Theme.bg.ignoresSafeArea())
-        .onAppear { bob = true }
-        .presentationDetents([.height(640), .large])
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .task { await st.load(force: false) }
     }
 
     private func todo(_ s: Streak?, _ name: String) -> String {
-        guard let s, s.count > 0 else { return "Пишите друг другу каждый день — через 3 дня появится огонёк." }
+        guard let s, s.count > 0 else { return "Напишите друг другу сегодня — серия начнётся." }
         if s.done { return "Сегодня вы оба уже написали — огонёк горит. Возвращайтесь завтра!" }
         if s.mine { return "Вы сегодня уже написали. Ждём ответа от \(name) — иначе серия погаснет в полночь." }
         if s.peer { return "\(name) уже написал(а) сегодня. Ответьте до полуночи, чтобы серия продолжилась!" }
-        return "Напишите друг другу сегодня до полуночи (по Москве), чтобы серия не погасла."
+        return "Напишите друг другу сегодня до полуночи, чтобы серия не погасла."
     }
 
-    @ViewBuilder private func bullet(_ t: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("•").foregroundColor(Theme.muted)
-            Text(t).font(.system(size: 16)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+    @ViewBuilder private func bullet(_ icon: String, _ t: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundColor(Color(hex: 0xff7a1a)).frame(width: 22)
+            Text(t).font(.system(size: 15)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+/// Раздел в настройках: как работают огоньки
+struct StreakInfoView: View {
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                SerialMascot(size: 130).padding(.top, 10)
+                Text("Огоньки и серийчик").font(.system(size: 24, weight: .black)).foregroundColor(Theme.text)
+                Text("Огонёк показывает, сколько дней подряд вы общаетесь с человеком.").font(.system(size: 15)).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(.horizontal, 20)
+                VStack(alignment: .leading, spacing: 12) {
+                    row("1.circle.fill", "Откройте личный чат и нажмите на серый огонёк рядом с именем, затем — «Вывести серийчика».")
+                    row("2.circle.fill", "Пишите друг другу каждый день. День засчитывается, когда написали вы оба (по московскому времени).")
+                    row("3.circle.fill", "На третий день загорится огонёк с числом — его видно в списке чатов и в шапке чата.")
+                    row("moon.zzz.fill", "Если день пропущен, серия гаснет в полночь, и в чате появится сообщение об этом.")
+                }
+                .padding(16).background(Theme.panel, in: RoundedRectangle(cornerRadius: 18)).padding(.horizontal, 16)
+                Text("УРОВНИ").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.muted).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20)
+                VStack(spacing: 0) {
+                    ForEach(Array(Streaks.levels.enumerated()), id: \.offset) { i, lv in
+                        HStack(spacing: 12) {
+                            FlameView(level: lv, lit: true).frame(width: 26, height: 31)
+                            Text("\(lv) \(Streaks.days(lv)) подряд").font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                            Spacer()
+                            Text(["Огонёк загорелся", "Огонёк ярче", "Розовое пламя", "Синее пламя", "Легендарное пламя"][i]).font(.system(size: 13)).foregroundColor(Theme.muted)
+                        }
+                        .padding(.horizontal, 16).frame(height: 52)
+                        if i < Streaks.levels.count - 1 { Divider().overlay(Theme.line).padding(.leading, 54) }
+                    }
+                }
+                .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18)).padding(.horizontal, 16)
+            }
+            .padding(.bottom, 30)
+        }
+        .background(Theme.bg.ignoresSafeArea())
+        .navigationTitle("Огоньки").navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ icon: String, _ t: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon).font(.system(size: 18, weight: .semibold)).foregroundColor(Color(hex: 0xff7a1a)).frame(width: 24)
+            Text(t).font(.system(size: 15)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+/// Красивое появление огонька: вспышка, искры, растущее пламя и число
+struct StreakCelebration: View {
+    let s: Streak
+    let onClose: () -> Void
+    @ObservedObject private var model = AppModel.shared
+    @State private var phase: CGFloat = 0
+    @State private var glow = false
+    @State private var shown = false
+
+    var body: some View {
+        let lit = s.count >= 3
+        ZStack {
+            Color.black.opacity(shown ? 0.62 : 0).ignoresSafeArea()
+                .onTapGesture { close() }
+            // искры
+            TimelineView(.animation) { tl in
+                Canvas { ctx, size in
+                    let t = tl.date.timeIntervalSinceReferenceDate
+                    let c = CGPoint(x: size.width / 2, y: size.height * 0.42)
+                    for i in 0..<36 {
+                        let seed = Double(i) * 12.9898
+                        let a = (seed.truncatingRemainder(dividingBy: 6.283))
+                        let sp = 0.6 + (seed * 3.1).truncatingRemainder(dividingBy: 1.0)
+                        let life = ((t * 0.45 * sp) + Double(i) / 36).truncatingRemainder(dividingBy: 1.0)
+                        let r = 40 + life * 190
+                        let p = CGPoint(x: c.x + CGFloat(cos(a) * r), y: c.y + CGFloat(sin(a) * r) - CGFloat(life * 60))
+                        let sz = CGFloat(3 + (1 - life) * 5)
+                        let col = i % 3 == 0 ? Color(hex: 0xffd24c) : (i % 3 == 1 ? Color(hex: 0xff8a3d) : Color.white)
+                        ctx.opacity = (1 - life) * Double(phase)
+                        ctx.fill(Path(ellipseIn: CGRect(x: p.x - sz / 2, y: p.y - sz / 2, width: sz, height: sz)), with: .color(col))
+                    }
+                }
+            }
+            .allowsHitTesting(false)
+            .ignoresSafeArea()
+            VStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(RadialGradient(colors: [Color(hex: 0xffb347).opacity(0.75), .clear], center: .center, startRadius: 4, endRadius: 150))
+                        .frame(width: 300, height: 300).scaleEffect(glow ? 1.12 : 0.88).opacity(Double(phase))
+                    if lit {
+                        FlameView(level: s.level, lit: true).frame(width: 130, height: 155)
+                            .scaleEffect(phase).rotationEffect(.degrees(glow ? 3 : -3), anchor: .bottom)
+                    } else {
+                        SerialMascot(size: 150, level: 3).scaleEffect(phase)
+                    }
+                }
+                .frame(height: 260)
+                if lit {
+                    Text("\(s.count)").font(.system(size: 64, weight: .black)).foregroundColor(.white)
+                        .shadow(color: Color(hex: 0xff6a00).opacity(0.8), radius: 16)
+                        .scaleEffect(phase).opacity(Double(phase))
+                }
+                Text(lit ? (s.level <= 3 ? "Огонёк загорелся!" : "Огонёк стал ярче!") : "Серийчик выведен!")
+                    .font(.system(size: 26, weight: .black)).foregroundColor(.white).opacity(Double(phase))
+                Text(lit ? "\(s.count) \(Streaks.days(s.count)) подряд с \(model.chat(s.chatId)?.displayName ?? "собеседником"). Не прерывайте серию!"
+                         : "Пишите друг другу каждый день — через 3 дня загорится огонёк.")
+                    .font(.system(size: 16)).foregroundColor(.white.opacity(0.85)).multilineTextAlignment(.center).padding(.horizontal, 36).opacity(Double(phase))
+                Button { close() } label: {
+                    Text("Ура!").font(.system(size: 18, weight: .bold)).foregroundColor(.white)
+                        .frame(width: 200, height: 52)
+                        .background(LinearGradient(colors: [Color(hex: 0xffa318), Color(hex: 0xff5a2a)], startPoint: .leading, endPoint: .trailing), in: Capsule())
+                }
+                .buttonStyle(BouncyButtonStyle()).opacity(Double(phase)).padding(.top, 10)
+            }
+        }
+        .onAppear {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            withAnimation(.easeOut(duration: 0.25)) { shown = true }
+            withAnimation(.spring(response: 0.65, dampingFraction: 0.55).delay(0.1)) { phase = 1 }
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true).delay(0.4)) { glow = true }
+        }
+    }
+
+    private func close() {
+        withAnimation(.easeIn(duration: 0.22)) { phase = 0; shown = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { onClose() }
+    }
+}
+
+struct StreakCelebrationModifier: ViewModifier {
+    @ObservedObject private var st = Streaks.shared
+    func body(content: Content) -> some View {
+        content.overlay {
+            if let s = st.celebrate {
+                StreakCelebration(s: s) { st.celebrate = nil }
+                    .transition(.opacity)
+                    .zIndex(1000)
+            }
         }
     }
 }
@@ -1144,7 +1425,7 @@ struct StreakSystemPill: View {
         let n = m.meta.int("streak") ?? 3
         Button { open = true } label: {
             HStack(spacing: 6) {
-                FlameView(level: Streaks.levels.last { $0 <= n } ?? 3, lit: !lost).frame(width: 14, height: 17)
+                FlameView(level: Streaks.levels.last { $0 <= max(n, 3) } ?? 3, lit: !lost).frame(width: 14, height: 17)
                 Text((m.body ?? "").replacingOccurrences(of: "🔥 ", with: "").replacingOccurrences(of: "💨 ", with: ""))
                     .font(.system(size: 13, weight: .semibold)).multilineTextAlignment(.center)
             }

@@ -164,12 +164,15 @@ final class AppModel: ObservableObject {
         started = true
         // свой профиль из кэша — сразу, ещё до сети
         if me == nil, let id = myId, let r = LocalCache.loadMe(id) { let p = Profile(json: r); me = p; profiles[id] = p }
+        // ключ шифрования с устройства — сразу, до сети: сохранённые сообщения расшифровываются и без интернета
+        if let id = myId { E2E.shared.installLocal(id) }
         netStatus = "Соединение…"
         Net.watch()
         await Net.pickQuick()
         Realtime.shared.onState = { [weak self] ok in self?.netChanged(ok) }
         await loadMe()
         if let id = myId { await E2E.shared.setup(id) }
+        CrashReporter.shared.flush()
         Task { await Reminders.shared.load(); await DNDStore.shared.load(); await Streaks.shared.load() }
         netStatus = "Обновление…"
         await loadContacts()
@@ -1102,8 +1105,9 @@ final class AppModel: ObservableObject {
     func prep(_ chatId: String) async {
         if chat(chatId) == nil { await loadChats() }
         guard let c = chat(chatId), c.isPrivate else { return }
-        await E2E.shared.refresh(chatId, peer: c.peerId)
+        // сначала ключ из сохранённого на устройстве (работает без сети), потом сверка с сервером
         await E2E.shared.prepare(chatId, peer: c.peerId)
+        await E2E.shared.refresh(chatId, peer: c.peerId)
     }
 
     func loadMessages(_ chatId: String, older: Bool = false) async {
@@ -1543,9 +1547,9 @@ final class AppModel: ObservableObject {
             let title: String
             var body = m.preview
             if m.kind == "call" { body = m.isVideoCall ? "Пропущенный видеозвонок" : "Пропущенный звонок" }
-            if m.kind == "capsule" { body = "🔒 Капсула времени" }
-            if m.kind == "capsule_open" { body = "🎁 Капсула времени открылась" }
-            if c?.isPrivate ?? true { title = (urgent ? "⚡ Срочно · " : "") + senderName }
+            if m.kind == "capsule" { body = "Капсула времени" }
+            if m.kind == "capsule_open" { body = "Капсула времени открылась" }
+            if c?.isPrivate ?? true { title = (urgent ? "Срочно · " : "") + senderName }
             else if c?.isChannel == true { title = c?.displayName ?? "Канал" }
             else { title = c?.displayName ?? "Группа"; body = senderName + ": " + body }
             // Баннер внутри приложения — показываем всегда, пока Lumo открыт, независимо

@@ -54,13 +54,14 @@ struct SwipeChatRow<Content: View>: View {
                         .fill(Theme.panel2)
                         .opacity(Double(min(CGFloat(1), abs(x) / CGFloat(24))))
                 )
-                .offset(x: x)
+                // открытая строка: нажатие по самой строке закрывает её (а не открывает чат);
+                // слой едет вместе со строкой, поэтому не перекрывает кнопки свайпа
                 .overlay {
-                    // открытая строка: нажатие закрывает её, а не открывает чат
                     if x != 0 && tracking != true {
                         Color.clear.contentShape(Rectangle()).onTapGesture { close() }
                     }
                 }
+                .offset(x: x)
         })
         .onChange(of: openId) { v in
             if v != id && x != 0 { withAnimation(spring) { x = 0 }; full = false }

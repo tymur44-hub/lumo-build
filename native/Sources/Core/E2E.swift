@@ -28,6 +28,8 @@ final class E2E: ObservableObject {
     private var peerPubs: [String: Data] = [:]
     private var noKeyAt: [String: Date] = [:]
     private var chatKeys: [String: SymmetricKey] = [:]
+    /// ключ уже сверен с сервером (без сети работаем на ключе с устройства)
+    private var verified = false
     var changed: Set<String> = []
 
     private init() {}
@@ -70,13 +72,26 @@ final class E2E: ObservableObject {
 
     // MARK: - запуск после входа
 
+    /// Включить ключ, сохранённый на устройстве, без обращения к серверу
+    func installLocal(_ uid: String) {
+        guard !(me == uid && priv != nil), let l = loadLocal(uid) else { return }
+        try? install(uid, l.d, l.pub)
+        status = .ready
+    }
+
     func setup(_ uid: String) async {
-        if me == uid, status == .ready, priv != nil { return }
+        if me == uid, status == .ready, priv != nil, verified { return }
+        let local = loadLocal(uid)
+        // ключ на устройстве есть — включаем шифрование сразу, без сети: сообщения видны и без интернета
+        if let l = local, !(me == uid && priv != nil && status == .ready) {
+            try? install(uid, l.d, l.pub)
+            status = .ready
+        }
         do {
             let srv = try await API.shared.select("lm_keys", ["select": "pub", "user_id": "eq." + uid]).first?.str("pub")
-            let local = loadLocal(uid)
+            verified = true
             if let l = local, srv == nil || srv == l.pub.base64EncodedString() {
-                try install(uid, l.d, l.pub)
+                if !(me == uid && priv != nil) { try install(uid, l.d, l.pub) }
                 if srv == nil { try await publish(uid, l.pub) }
                 let b = try await API.shared.select("lm_key_backup", ["select": "user_id", "user_id": "eq." + uid])
                 backedUp = !b.isEmpty
@@ -84,7 +99,7 @@ final class E2E: ObservableObject {
                 status = .ready
                 return
             }
-            if local != nil { kcClear("key_" + uid) } // на сервере другой ключ — это устройство отстало
+            if local != nil { kcClear("key_" + uid); chatKeys = [:] } // на сервере другой ключ — это устройство отстало
             if srv != nil { me = uid; priv = nil; status = .needRestore; return }
             try await generateAndPublish(uid)
             promptBackup = true
@@ -109,7 +124,7 @@ final class E2E: ObservableObject {
     }
 
     func forget() {
-        me = nil; priv = nil; pub = nil; chatKeys = [:]; peerPubs = [:]; noKeyAt = [:]; changed = []
+        me = nil; priv = nil; pub = nil; chatKeys = [:]; peerPubs = [:]; noKeyAt = [:]; changed = []; verified = false
         status = .loading; promptBackup = false; backedUp = true
     }
 
@@ -207,12 +222,22 @@ final class E2E: ObservableObject {
         if let pinned = UserDefaults.standard.string(forKey: k) { if pinned != s { changed.insert(uid) } }
         else { UserDefaults.standard.set(s, forKey: k) }
         peerPubs[uid] = raw
+        UserDefaults.standard.set(s, forKey: "e2e_last_" + uid)
         return true
+    }
+
+    /// последний известный ключ собеседника, сохранённый на устройстве (работает без интернета)
+    private func savedPub(_ uid: String) -> Data? {
+        guard let s = UserDefaults.standard.string(forKey: "e2e_last_" + uid) ?? UserDefaults.standard.string(forKey: "e2e_pin_" + uid),
+              let raw = Data(base64Encoded: s), raw.count == 65 else { return nil }
+        return raw
     }
 
     private func peerPub(_ uid: String) async -> Data? {
         if uid == me { return pub }
         if let p = peerPubs[uid] { return p }
+        // сначала — ключ, сохранённый на устройстве: расшифровка не ждёт сеть; смену ключа поймает refresh()
+        if let saved = savedPub(uid) { peerPubs[uid] = saved; return saved }
         if let t = noKeyAt[uid], Date().timeIntervalSince(t) < 60 { return nil }
         let s = try? await API.shared.select("lm_keys", ["select": "pub", "user_id": "eq." + uid]).first?.str("pub")
         guard let str = s else { noKeyAt[uid] = Date(); return nil }

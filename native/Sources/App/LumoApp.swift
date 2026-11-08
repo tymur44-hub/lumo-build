@@ -56,6 +56,7 @@ struct LumoApp: App {
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        CrashReporter.shared.start()
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
         _ = CallManager.shared
         let nav = UINavigationBarAppearance()
@@ -135,6 +136,7 @@ struct RootView: View {
         .fullScreenCover(isPresented: $calls.showUI) { CallView().environmentObject(calls) }
         .modifier(E2ESheets())
         .modifier(DNDSummaryModifier())
+        .modifier(StreakCelebrationModifier())
         .sheet(isPresented: Binding(get: { model.loggedIn && phones.loaded && permsDone && !phones.reminderShown && (phones.status == "remind" || phones.status == "skipped") },
                                     set: { if !$0 { phones.reminderShown = true } })) { PhoneReminderSheet() }
         .task {

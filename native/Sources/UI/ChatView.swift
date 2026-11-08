@@ -655,7 +655,7 @@ struct ChatView: View {
                                 Text("Сообщений пока нет").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text)
                                 Text("Отправьте сообщение или напишите первым").font(.system(size: 13.5)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
                             } else {
-                                Text("👋").font(.system(size: 54))
+                                Image(systemName: "hand.wave.fill").font(.system(size: 50)).foregroundColor(Theme.a1)
                                 Text("Сообщений пока нет").font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text)
                                 Text("Напишите что-нибудь!").font(.system(size: 14)).foregroundColor(Theme.muted)
                             }
@@ -789,7 +789,7 @@ struct ChatView: View {
                 HStack(spacing: 4) {
                     Text(saved ? "Избранное" : (chat?.displayName ?? "")).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
                     if chat?.isPrivate == true { NameBadges(bot: chat?.peerBot == true || (chat?.peerId.flatMap { model.profiles[$0]?.isBot } ?? false), premium: chat?.peerPremium == true || (chat?.peerId.flatMap { model.profiles[$0]?.premium } ?? false), emoji: chat?.peerId.flatMap { model.profiles[$0]?.emojiStatus }, verified: chat?.peerVerified == true || (chat?.peerId.flatMap { model.profiles[$0]?.verified } ?? false)) }
-                    if chat?.isPrivate == true { StreakBadge(chatId: chatId, size: 15).onTapGesture { streakOpen = true } }
+                    if chat?.isPrivate == true && !saved && chat?.peerBot != true { StreakHeaderButton(chatId: chatId) { streakOpen = true } }
                     if chat?.isPrivate == true && e2e.active(chatId) { Image(systemName: "lock.fill").font(.system(size: 11)).foregroundColor(Theme.a2) }
                 }
                 if let n = model.netStatus {
@@ -801,7 +801,10 @@ struct ChatView: View {
                     Text(t).font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.a2).lineLimit(1)
                 } else if chat?.isPrivate == true, let pd = dnd.peer(chat?.peerId) {
                     // собеседник в режиме «Не беспокоить»
-                    Text(DNDStore.peerLine(pd)).font(.system(size: 12.5, weight: .semibold)).foregroundColor(Color(hex: 0x8c6cff)).lineLimit(1)
+                    HStack(spacing: 4) {
+                        Image(systemName: DNDStore.icon(pd.text)).font(.system(size: 11, weight: .semibold))
+                        Text(DNDStore.peerLine(pd)).font(.system(size: 12.5, weight: .semibold)).lineLimit(1)
+                    }.foregroundColor(Color(hex: 0x8c6cff))
                 } else {
                     Text(status).font(.system(size: 12.5)).foregroundColor(model.isOnline(chat?.peerId) && chat?.isPrivate == true ? Theme.a2 : Theme.muted).lineLimit(1)
                 }

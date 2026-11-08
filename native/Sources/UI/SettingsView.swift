@@ -6,7 +6,7 @@ import UIKit
 enum SettingsPage: Hashable {
     case premium, profile, profileEdit, calls, notifications, privacy, about, blocked, look, username, colors, devices, language
     case privacyKey(String)
-    case msgPrivacy, phone, twofa, wallet, gifts, dnd, capsules
+    case msgPrivacy, phone, twofa, wallet, gifts, dnd, capsules, streaks
 }
 
 struct SettingsView: View {
@@ -135,6 +135,10 @@ struct SettingsView: View {
                         NavigationLink(value: SettingsPage.capsules) {
                             SettingsRow(icon: "hourglass", color: Color(hex: 0xff8a3d), title: "Капсулы времени", subtitle: "Запечатанные и открытые послания")
                         }
+                        divider
+                        NavigationLink(value: SettingsPage.streaks) {
+                            SettingsRow(icon: "flame.fill", color: Color(hex: 0xff6a00), title: "Огоньки", subtitle: "Серии общения и серийчик")
+                        }
                     }
                     SettingsGroup {
                         Button { share = true } label: {
@@ -181,6 +185,7 @@ struct SettingsView: View {
                 case .gifts: GiftsView()
                 case .dnd: DNDSettingsView()
                 case .capsules: CapsuleBoxView()
+                case .streaks: StreakInfoView()
                 }
             }
             .onChange(of: avatarPick) { item in
