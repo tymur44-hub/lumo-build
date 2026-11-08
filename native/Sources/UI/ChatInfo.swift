@@ -610,6 +610,9 @@ struct EditChatView: View {
                 .buttonStyle(RowButtonStyle())
         }
         .padding(.top, 14)
+        if !isChannel {
+            GroupCallModeSection(chatId: chatId).padding(.top, 18).padding(.horizontal, 2)
+        }
     }
 
     @ViewBuilder private var typePage: some View {

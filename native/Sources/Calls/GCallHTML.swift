@@ -15,7 +15,9 @@ const IC = {
   flip: '<path d="M4 7h11a4 4 0 0 1 4 4v1"/><path d="M7 4L4 7l3 3"/><path d="M20 17H9a4 4 0 0 1-4-4v-1"/><path d="M17 20l3-3-3-3"/>',
   end: '<path d="M3.5 14.5c4.7-4 12.3-4 17 0l-2 2.6-3.6-1.4v-2.3a10 10 0 0 0-5.8 0v2.3l-3.6 1.4z" fill="currentColor"/>',
   spk: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 8.5a5 5 0 0 1 0 7M19.5 6a8.5 8.5 0 0 1 0 12"/>',
-  min: '<path d="M6 15l6-6 6 6"/>'
+  min: '<path d="M6 15l6-6 6 6"/>',
+  add: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M19 8v6M16 11h6"/>',
+  ok: '<path d="M5 12.5l4.5 4.5L19 7.5"/>'
 };
 const svg = (n, s = 24) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
 const COLORS = [['#ff8a65','#f4511e'],['#9575cd','#5e35b1'],['#4fc3f7','#0288d1'],['#81c784','#388e3c'],['#f06292','#c2185b'],['#ffb74d','#f57c00'],['#4db6ac','#00796b'],['#7986cb','#3949ab']];
@@ -45,6 +47,26 @@ const css = `
 #gcw .bar button.end{background:#ff3b30}
 #gcw .bar label{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;opacity:.85}
 #gcw .st{position:absolute;left:0;right:0;top:45%;text-align:center;font-size:15px;opacity:.8}
+#gcw .addb{position:absolute;right:14px;top:calc(8px + env(safe-area-inset-top));height:38px;border-radius:19px;border:0;padding:0 14px 0 10px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.14);color:#fff;font-weight:700;font-size:14px;cursor:pointer}
+#gcw .addb svg{width:20px;height:20px}
+#gcw .sheet{position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;animation:gcfade .2s ease;z-index:5}
+@keyframes gcfade{from{opacity:0}}
+#gcw .sheet .pn{width:100%;max-height:75%;background:#1a1a22;border-radius:22px 22px 0 0;display:flex;flex-direction:column;animation:gcup .32s cubic-bezier(.2,.9,.3,1);padding-bottom:env(safe-area-inset-bottom)}
+@keyframes gcup{from{transform:translateY(100%)}}
+#gcw .sheet .ph{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;font-weight:800;font-size:17px}
+#gcw .sheet .ph button{border:0;background:none;color:#7fb2ff;font-size:16px;font-weight:700;cursor:pointer}
+#gcw .sheet .ls{overflow:auto;padding:0 8px 8px}
+#gcw .sheet .r{display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:14px;cursor:pointer}
+#gcw .sheet .r:active{background:rgba(255,255,255,.06)}
+#gcw .sheet .r .av{width:42px;height:42px;font-size:16px;box-shadow:none}
+#gcw .sheet .r b{flex:1;font-weight:600;font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#gcw .sheet .r small{color:#34c759;font-size:12.5px;font-weight:700}
+#gcw .sheet .r .ck{width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,.35);display:grid;place-items:center;flex:none}
+#gcw .sheet .r.on .ck{background:#2f8cff;border-color:#2f8cff}
+#gcw .sheet .r .ck svg{width:15px;height:15px;opacity:0}#gcw .sheet .r.on .ck svg{opacity:1}
+#gcw .sheet .go{margin:8px 16px 12px;height:50px;border-radius:25px;border:0;background:#2f8cff;color:#fff;font-weight:700;font-size:16px;cursor:pointer}
+#gcw .sheet .go:disabled{opacity:.45}
+#gcw .toast{position:absolute;left:50%;top:calc(60px + env(safe-area-inset-top));transform:translateX(-50%);background:rgba(255,255,255,.95);color:#111;padding:9px 16px;border-radius:16px;font-weight:600;font-size:14px;z-index:6;animation:gcfade .2s ease}
 `;
 function avatarHtml(name, meta) {
   let m = {}; try { m = JSON.parse(meta || '{}') || {}; } catch (e) {}
@@ -63,6 +85,7 @@ window.GCall = {
     if (!document.getElementById('gcss')) { const s = document.createElement('style'); s.id = 'gcss'; s.textContent = css; document.head.appendChild(s); }
     const w = document.createElement('div'); w.id = 'gcw';
     w.innerHTML = `<div class="hd"><div style="flex:1;min-width:0"><b>${esc(o.title || 'Групповой звонок')}</b><small id="gcs">Подключение…</small></div></div>
+<button class="addb" id="gcadd">${svg('add')}Добавить</button>
 <div class="grid" id="gcg"></div><div id="gca" style="display:none"></div>
 <div class="bar">
 <label><button id="gcm">${svg('mic')}</button>Микрофон</label>
@@ -133,6 +156,29 @@ window.GCall = {
       .on(RoomEvent.Reconnected, status)
       .on(RoomEvent.Disconnected, () => { if (!closed) leave(); });
     $('gce').onclick = leave;
+    const api = o.api || (async (action, extra) => {
+      const r = await fetch(o.fn, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: o.apikey || '', Authorization: 'Bearer ' + (o.auth || '') },
+        body: JSON.stringify(Object.assign({ chat_id: o.chat_id, action }, extra || {})) });
+      return await r.json().catch(() => ({}));
+    });
+    const toast = t => { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; w.appendChild(d); setTimeout(() => d.remove(), 2200); };
+    $('gcadd').onclick = async () => {
+      const sh = document.createElement('div'); sh.className = 'sheet';
+      sh.innerHTML = `<div class="pn"><div class="ph"><span>Добавить в звонок</span><button data-x>Закрыть</button></div><div class="ls"><div style="padding:20px;text-align:center;opacity:.6">Загрузка…</div></div><button class="go" disabled>Пригласить</button></div>`;
+      w.appendChild(sh);
+      const close = () => sh.remove();
+      sh.onclick = e => { if (e.target === sh) close(); };
+      sh.querySelector('[data-x]').onclick = close;
+      const r = await api('members').catch(() => ({}));
+      const inRoom = new Set([room.localParticipant.identity, ...room.remoteParticipants.keys()]);
+      const L = (r.members || []).filter(m => !inRoom.has(m.id));
+      const sel = new Set();
+      const ls = sh.querySelector('.ls'), go = sh.querySelector('.go');
+      ls.innerHTML = L.length ? L.map(m => `<div class="r" data-u="${esc(m.id)}">${avatarHtml(m.name, JSON.stringify({ avatar: m.avatar, color: m.color }))}<b>${esc(m.name || 'Участник')}</b>${m.in_call ? '<small>в звонке</small>' : ''}<span class="ck">${svg('ok')}</span></div>`).join('')
+        : '<div style="padding:20px;text-align:center;opacity:.6">Все участники группы уже в звонке</div>';
+      ls.querySelectorAll('[data-u]').forEach(el => el.onclick = () => { const u = el.dataset.u; sel.has(u) ? sel.delete(u) : sel.add(u); el.classList.toggle('on', sel.has(u)); go.disabled = !sel.size; go.textContent = sel.size ? 'Пригласить (' + sel.size + ')' : 'Пригласить'; });
+      go.onclick = async () => { go.disabled = true; const res = await api('invite', { user_ids: [...sel] }).catch(() => ({})); close(); toast(res && res.sent ? 'Приглашение отправлено' : (res.error || 'Не удалось пригласить')); };
+    };
     $('gcm').onclick = async () => { await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled).catch(() => {}); syncBtns(); layout(); };
     $('gcv').onclick = async () => { await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled, { facingMode: front ? 'user' : 'environment' }).catch(() => {}); syncBtns(); layout(); };
     $('gcf').onclick = async () => {

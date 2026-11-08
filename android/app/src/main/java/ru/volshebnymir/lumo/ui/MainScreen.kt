@@ -157,7 +157,7 @@ fun Root() {
             else if (PhoneUi.bind) PhoneAuthScreen(bind = true) { PhoneUi.bind = false }
             else if (PhoneStore.loaded && !PhoneStore.reminderShown && (PhoneStore.status == "remind" || PhoneStore.status == "skipped")) PhoneReminderDialog()
         }
-        if (AppModel.loggedIn) { Ui.Overlays(); GroupCallOverlay(); if (AppModel.demoId == null) FullScreenPrompt(); E2EDialogs(); DndSummaryDialog(); StreakCelebrationOverlay() }
+        if (AppModel.loggedIn) { Ui.Overlays(); GroupCallOverlay(); IncomingGroupCallOverlay(); if (AppModel.demoId == null) FullScreenPrompt(); E2EDialogs(); DndSummaryDialog(); StreakCelebrationOverlay() }
         CallsUi.Overlay()
         if (AppModel.loggedIn) LockOverlay()
         AnimatedVisibility(AppModel.toast != null, Modifier.align(Alignment.BottomCenter).padding(bottom = 110.dp, start = 24.dp, end = 24.dp),

@@ -215,6 +215,7 @@ final class AppModel: ObservableObject {
         }
         if let id = myId {
             CallManager.shared.attach(myId: id)
+            GroupCalls.shared.attach(id)
             let oc = Realtime.shared.channel("lm-online", presenceKey: id)
             oc.onPresenceState = { [weak self] st in self?.online = Set(st.keys) }
             oc.onPresenceDiff = { [weak self] joins, leaves in

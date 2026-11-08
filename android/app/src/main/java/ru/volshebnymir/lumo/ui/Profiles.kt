@@ -1109,6 +1109,7 @@ fun EditChatScreen(chatId: String) {
                         CardDivider(70)
                         IconRow(Icons.Filled.People, Color(0xFF2B8CFF), if (c.isChannel) "Подписчики" else "Участники", members.size.toString()) { page = "members" }
                     }
+                    if (!c.isChannel) GroupCallModeSection(chatId)
                     Spacer(Modifier.height(30.dp))
                 }
                 "type" -> {

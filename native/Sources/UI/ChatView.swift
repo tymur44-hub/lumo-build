@@ -28,7 +28,6 @@ struct ChatView: View {
     @State private var imageURL: IdentifiedURL?
     @State private var videoURL: IdentifiedURL?
     @State private var showInfo = false
-    @State private var gcall: GroupCallInfo?
     @State private var gcCount = 0
     @State private var gcBusy = false
     @State private var forwarding: ForwardBatch?
@@ -222,7 +221,6 @@ struct ChatView: View {
                 }
             }
         }
-        .fullScreenCover(item: $gcall, onDismiss: { Task { gcCount = await model.groupCallCount(chatId) } }) { GroupCallScreen(info: $0) }
         .task(id: chatId) {
             guard chat?.type == "group" else { return }
             while !Task.isCancelled {
@@ -767,8 +765,7 @@ struct ChatView: View {
         guard !gcBusy else { return }
         gcBusy = true
         Task {
-            let ok = await AVAudioApplicationPermission.ask(video: video)
-            if ok, let info = await model.groupCall(chatId, video: video) { gcall = info }
+            await GroupCalls.shared.start(chatId, video: video)
             gcBusy = false
         }
     }

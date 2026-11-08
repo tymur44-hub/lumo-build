@@ -137,6 +137,7 @@ struct RootView: View {
         .modifier(E2ESheets())
         .modifier(DNDSummaryModifier())
         .modifier(StreakCelebrationModifier())
+        .modifier(GroupCallHostModifier())
         .sheet(isPresented: Binding(get: { model.loggedIn && phones.loaded && permsDone && !phones.reminderShown && (phones.status == "remind" || phones.status == "skipped") },
                                     set: { if !$0 { phones.reminderShown = true } })) { PhoneReminderSheet() }
         .task {

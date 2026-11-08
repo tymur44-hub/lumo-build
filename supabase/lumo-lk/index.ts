@@ -59,22 +59,54 @@ Deno.serve(async (req) => {
     const { data: u } = await db.auth.getUser(tok);
     if (!u?.user) return json({ error: "unauthorized" }, 401);
     const me = u.user.id;
-    const { chat_id, action } = await req.json();
+    const body = await req.json();
+    const { chat_id, action } = body;
     if (!chat_id) return json({ error: "chat_id" }, 400);
-    const { data: chat } = await db.from("lm_chats").select("id,type,title").eq("id", chat_id).maybeSingle();
+    const { data: chat } = await db.from("lm_chats").select("id,type,title,avatar_url,color,calls").eq("id", chat_id).maybeSingle();
     if (!chat || chat.type !== "group") return json({ error: "Групповые звонки — только в группах" }, 400);
-    const { data: mem } = await db.from("lm_members").select("user_id").eq("chat_id", chat_id).eq("user_id", me).maybeSingle();
+    const { data: mem } = await db.from("lm_members").select("user_id,role").eq("chat_id", chat_id).eq("user_id", me).maybeSingle();
     if (!mem) return json({ error: "Вы не участник группы" }, 403);
+    const admin = mem.role === "owner" || mem.role === "admin";
+    const mode = chat.calls || "all";
     const c = await lk();
     if (!c.url || !c.key || !c.secret) return json({ error: "Групповые звонки не настроены" }, 500);
     const room = roomOf(chat_id);
 
     if (action === "status") {
-      const ps = await participants(room);
-      return json({ active: ps.length > 0, count: ps.length, ids: ps.map((p) => p.identity) });
+      const ps = mode === "off" ? [] : await participants(room);
+      return json({ active: ps.length > 0, count: ps.length, ids: ps.map((p) => p.identity), names: ps.map((p) => p.name),
+        mode, admin, can_start: mode === "all" || (mode === "admins" && admin) });
     }
 
-    // token (и при первом входе — сообщение в чат «начался групповой звонок»)
+    if (action === "members") {
+      const ps = await participants(room);
+      const inCall = new Set(ps.map((p) => p.identity));
+      const { data: ms } = await db.from("lm_members").select("user_id").eq("chat_id", chat_id).limit(500);
+      const ids = (ms || []).map((m: { user_id: string }) => m.user_id).filter((id: string) => id !== me);
+      const { data: profs } = ids.length ? await db.from("lm_profiles").select("id,name,avatar_url,color").in("id", ids) : { data: [] };
+      // deno-lint-ignore no-explicit-any
+      return json({ members: (profs || []).map((p: any) => ({ id: p.id, name: p.name, avatar: p.avatar_url, color: p.color, in_call: inCall.has(p.id) })) });
+    }
+
+    if (action === "invite") {
+      if (mode === "off") return json({ error: "Звонки в этой группе отключены" }, 403);
+      const want: string[] = Array.isArray(body.user_ids) ? body.user_ids.slice(0, 50) : [];
+      if (!want.length) return json({ ok: true, sent: 0 });
+      const { data: ok } = await db.from("lm_members").select("user_id").eq("chat_id", chat_id).in("user_id", want);
+      const to = (ok || []).map((m: { user_id: string }) => m.user_id);
+      const ps = await participants(room);
+      const { data: from } = await db.from("lm_profiles").select("name,avatar_url").eq("id", me).maybeSingle();
+      const payload = { chat_id, title: chat.title || "Группа", avatar: chat.avatar_url, color: chat.color ?? 0,
+        from: from?.name || "Участник", from_id: me, names: ps.map((p) => p.name).filter(Boolean), count: ps.length, at: Date.now() };
+      const r = await fetch(SB_URL + "/realtime/v1/api/broadcast", {
+        method: "POST", headers: { apikey: SRK, Authorization: "Bearer " + SRK, "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: to.map((u) => ({ topic: "lm-gc-" + u, event: "invite", payload })) }),
+      });
+      return json({ ok: r.ok, sent: to.length });
+    }
+
+    if (mode === "off") return json({ error: "Звонки в этой группе отключены администратором" }, 403);
+
     const { data: prof } = await db.from("lm_profiles").select("name,avatar_url,color").eq("id", me).maybeSingle();
     const now = Math.floor(Date.now() / 1000);
     const token = await jwt({
@@ -87,7 +119,7 @@ Deno.serve(async (req) => {
     if (action === "start") {
       const ps = await participants(room);
       if (ps.length === 0) {
-        // не чаще раза в 2 минуты
+        if (mode === "admins" && !admin) return json({ error: "Начать звонок в этой группе могут только администраторы" }, 403);
         const { data: last } = await db.from("lm_messages").select("id,created_at").eq("chat_id", chat_id).eq("kind", "system")
           .contains("meta", { gcall: true }).order("created_at", { ascending: false }).limit(1);
         const recent = last?.[0] && Date.now() - new Date(last[0].created_at).getTime() < 120000;

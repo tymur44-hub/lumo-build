@@ -233,6 +233,7 @@ object AppModel {
                 Realtime.track(oc, jsonOf("at" to System.currentTimeMillis()))
                 onlineChannel = oc
                 CallsBridge.attach(id)
+                ru.volshebnymir.lumo.ui.GroupCalls.attach(id)
             }
             presence(true)
             scope.launch { touchSession() }
