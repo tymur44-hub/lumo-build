@@ -184,7 +184,7 @@ struct BannedScreen: View {
             msg = reply.isEmpty ? "Модераторы оставили блокировку в силе." : "Ответ модератора: " + reply
         } else {
             msg = "Модераторы рассмотрят её и снимут блокировку, если согласятся. Это окно обновится само."
-            if let at = ban.appealAt { msg += "\nОтправлена " + DateParser.time(at) }
+            if let at = ban.appealAt { msg += "\nОтправлена " + Fmt.time(at) }
         }
         return HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
