@@ -23,9 +23,9 @@ P.stopsq='<rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/
 #bannedScr .apst svg{width:24px;height:24px;flex:none;color:#f0a23a}
 #bannedScr .apst.rej svg{color:var(--danger)}
 #bannedScr .apst b{display:block;font-size:15px}#bannedScr .apst span{display:block;margin-top:3px;color:var(--muted);font-size:13.5px;line-height:1.4;white-space:pre-wrap}
-#bannedScr .bnbtn{margin-top:22px;width:100%;height:54px;border:0;border-radius:16px;background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;font-weight:700;font-size:17px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:transform .15s,opacity .2s}
-#bannedScr .bnbtn:active{transform:scale(.97)}#bannedScr .bnbtn[disabled]{opacity:.5;cursor:default}
-#bannedScr .bnbtn svg{width:20px;height:20px}
+#bannedScr .bnbtn,#apSheet .bnbtn{margin-top:22px;width:100%;height:54px;border:0;border-radius:16px;background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;font-weight:700;font-size:17px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:transform .15s,opacity .2s}
+#bannedScr .bnbtn:active,#apSheet .bnbtn:active{transform:scale(.97)}#bannedScr .bnbtn[disabled],#apSheet .bnbtn[disabled]{opacity:.5;cursor:default}
+#bannedScr .bnbtn svg,#apSheet .bnbtn svg{width:20px;height:20px}
 #bannedScr .bnout{margin-top:8px;background:none;border:0;color:var(--muted);font-weight:600;font-size:15px;font-family:inherit;padding:12px 16px;cursor:pointer;border-radius:10px}
 #bannedScr .bnout:hover{background:var(--hover)}
 #apSheet{position:fixed;inset:0;z-index:99991;background:var(--bg);display:flex;flex-direction:column;transform:translateY(100%);transition:transform .38s cubic-bezier(.2,.9,.3,1)}
@@ -78,7 +78,7 @@ function drawBanned(){ const b=BAN; if(!b) return; let d=document.getElementById
   const body=`<div class="bnw">${fresh?`<div class="wall"><div class="bricks">${brickWall()}</div><div class="lk"><i>${ic('lock')}</i></div></div>`:d.querySelector('.wall').outerHTML}
 <h2>Ваш аккаунт заблокирован</h2>
 <p class="sub">Администрация Lumo ограничила доступ к аккаунту${un?' @'+esc(un):''}. Пока блокировка действует, нельзя писать сообщения и пользоваться Lumo.</p>
-<div class="why"><small>${ic('excl')}ПРИЧИНА</small><b>${b.reason?esc(b.reason):'Причина не указана'}</b></div>${apst}
+<div class="why"><small>${ic('info')}ПРИЧИНА</small><b>${b.reason?esc(b.reason):'Причина не указана'}</b></div>${apst}
 <button class="bnbtn" id="bnAp" ${pend?'disabled':''}>${ic(pend?'clock':'send')}${pend?'Апелляция на рассмотрении':rej?'Подать апелляцию ещё раз':'Подать апелляцию'}</button>
 <button class="bnout" id="bnOut">Выйти из аккаунта</button></div>`;
   d.innerHTML=body;

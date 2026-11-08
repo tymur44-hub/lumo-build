@@ -403,8 +403,6 @@ fun InfoScreen(chatId: String) {
     var memberMenu by remember { mutableStateOf<Pair<String, String>?>(null) }
     var gcSettings by remember { mutableStateOf(false) }
     var chatPhotoMenu by remember { mutableStateOf(false) }
-    if (chatPhotoMenu) ChatPhotoMenu(c?.isChannel == true, onPick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-        onDelete = { scope.launch { AppModel.removeChatAvatar(chatId) } }) { chatPhotoMenu = false }
     if (gcSettings) GroupCallSettingsDialog(chatId) { gcSettings = false }
     suspend fun reload() { members = AppModel.members(chatId) }
     LaunchedEffect(chatId) { reload() }
@@ -417,6 +415,8 @@ fun InfoScreen(chatId: String) {
             AppModel.setChatAvatar(chatId, d.first)
         }
     }
+    if (chatPhotoMenu) ChatPhotoMenu(c?.isChannel == true, onPick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        onDelete = { scope.launch { AppModel.removeChatAvatar(chatId) } }) { chatPhotoMenu = false }
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             TopBar("", right = {
