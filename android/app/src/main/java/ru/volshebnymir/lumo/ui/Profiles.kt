@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -164,7 +165,7 @@ private fun MyProfileTabs(savedChat: String?, open: (Message) -> Unit) {
         Gifts.load()
     }
     gift?.let { OwnedGiftDialog(it) { gift = null } }
-    Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         listOf("Публикации", "Подарки", "Медиа").forEachIndexed { i, t -> Pill(t, tab == i) { tab = i } }
     }
     Spacer(Modifier.height(10.dp))
@@ -362,7 +363,7 @@ private fun PersonTabs(userId: String, gifts: Boolean, chatId: String?) {
     var gift by remember { mutableStateOf<OwnedGift?>(null) }
     LaunchedEffect(userId) { if (gifts) Gifts.loadUser(userId) }
     gift?.let { OwnedGiftDialog(it) { gift = null } }
-    Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (gifts) Pill("Публикации", tab == 2) { tab = 2 }
         if (gifts) Pill("Подарки", tab == 0) { tab = 0 }
         Pill("Медиа", tab == 1) { tab = 1 }

@@ -50,12 +50,10 @@ struct ChatInfoView: View {
                 if chat?.isPrivate == true, !saved { peerHero } else { hero; actions }
                 if let c = chat {
                     if c.isPrivate { privateSections(c) } else { groupSections(c) }
-                    if c.isPrivate, !saved, let pid = c.peerId, !(c.peerBot || (model.profiles[pid]?.isBot ?? false)) {
-                        ProfileTabs(userId: pid)
-                    }
                     PremiumChatRows(chat: c)
-                    // медиа, файлы, голосовые и ссылки из этого чата
-                    SharedMediaSection(chatId: c.id)
+                    // публикации и подарки собеседника + медиа, файлы, голосовые и ссылки — одной строкой вкладок
+                    SharedMediaSection(chatId: c.id,
+                                       profileUser: (c.isPrivate && !saved && !(c.peerBot || (model.profiles[c.peerId ?? ""]?.isBot ?? false))) ? c.peerId : nil)
                 }
                 Color.clear.frame(height: 20)
             }
@@ -1336,10 +1334,14 @@ struct ChannelIntroArt: View {
 struct SharedMediaSection: View {
     @EnvironmentObject var model: AppModel
     let chatId: String
+    var profileUser: String? = nil
 
-    enum Tab: String, CaseIterable { case media = "Медиа", files = "Файлы", voice = "Голосовые", links = "Ссылки" }
+    enum Tab: String, CaseIterable { case posts = "Публикации", gifts = "Подарки", media = "Медиа", files = "Файлы", voice = "Голосовые", links = "Ссылки" }
 
     @State private var tab: Tab = .media
+    @State private var posts: [ProfilePost] = []
+    @State private var openPost: ProfilePost?
+    @Namespace private var tabNS
     @State private var media: [Message] = []
     @State private var files: [Message] = []
     @State private var voices: [Message] = []
@@ -1351,6 +1353,7 @@ struct SharedMediaSection: View {
     private var available: [Tab] {
         Tab.allCases.filter { t in
             switch t {
+            case .posts, .gifts: return profileUser != nil
             case .media: return !media.isEmpty
             case .files: return !files.isEmpty
             case .voice: return !voices.isEmpty
@@ -1368,18 +1371,20 @@ struct SharedMediaSection: View {
                     .font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(20)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 2) {
                         ForEach(available, id: \.self) { t in
-                            Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { tab = t } } label: {
-                                Text(t.rawValue).font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(tab == t ? Theme.text : Theme.muted)
+                            Button { withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) { tab = t } } label: {
+                                Text(t.rawValue).font(.system(size: 15, weight: .semibold)).lineLimit(1).fixedSize()
+                                    .foregroundColor(cur == t ? Theme.text : Theme.muted)
                                     .padding(.horizontal, 14).padding(.vertical, 8)
-                                    .background(Capsule().fill(tab == t ? Theme.panel2 : Color.clear))
+                                    .background { if cur == t { Capsule().fill(Theme.panel2).matchedGeometryEffect(id: "smtab", in: tabNS) } }
                             }
                             .buttonStyle(BouncyButtonStyle())
                         }
                     }
-                    .padding(.horizontal, 4)
+                    .padding(3)
+                    .background(Capsule().stroke(Theme.line, lineWidth: 1))
+                    .padding(.horizontal, 2)
                 }
                 content
             }
@@ -1387,13 +1392,36 @@ struct SharedMediaSection: View {
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 22).fill(Theme.panel))
         .padding(.horizontal, 14)
-        .task { await load() }
+        .task {
+            if let u = profileUser {
+                posts = await model.profilePosts(u)
+                tab = .posts
+            }
+            await load()
+        }
+        .fullScreenCover(item: $openPost, onDismiss: { if let u = profileUser { Task { posts = await model.profilePosts(u) } } }) { p in
+            PostViewer(post: p, mine: false).environmentObject(model)
+        }
         .fullScreenCover(item: $image) { ImageScreen(url: $0.url) }
         .fullScreenCover(item: $video) { VideoScreen(url: $0.url) }
     }
 
+    private var cur: Tab { available.contains(tab) ? tab : (available.first ?? .media) }
+
     @ViewBuilder private var content: some View {
-        switch available.contains(tab) ? tab : (available.first ?? .media) {
+        switch cur {
+        case .posts:
+            if posts.isEmpty {
+                VStack(spacing: 6) {
+                    Image(systemName: "square.grid.3x3").font(.system(size: 28)).foregroundColor(Theme.muted)
+                    Text("Пока нет публикаций").font(.subheadline).foregroundColor(Theme.muted)
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, 22)
+            } else {
+                PostsGrid(items: posts) { openPost = $0 }.clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+        case .gifts:
+            if let u = profileUser { ProfileGiftsRow(userId: u) }
         case .media:
             let cols = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
             LazyVGrid(columns: cols, spacing: 2) {
