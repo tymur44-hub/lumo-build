@@ -1017,13 +1017,13 @@ struct NewChatView: View {
             Theme.bg.ignoresSafeArea()
             switch step {
             case .menu: menu.transition(.opacity)
-            case .intro: intro.transition(.move(edge: .trailing))
-            case .details: details.transition(.move(edge: .trailing))
-            case .type: typeScreen.transition(.move(edge: .trailing))
-            case .members: membersScreen.transition(.move(edge: .trailing))
+            case .intro: intro.transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
+            case .details: details.transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
+            case .type: typeScreen.transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
+            case .members: membersScreen.transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: step)
+        .animation(.spring(response: 0.38, dampingFraction: 0.88), value: step)
         .sheet(isPresented: $pickMembers) {
             PeoplePicker(title: isChannel ? "Подписчики" : "Участники", buttonTitle: "Готово") { members = $0 }.environmentObject(model)
         }

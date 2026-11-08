@@ -3,6 +3,7 @@ package ru.volshebnymir.lumo.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -962,7 +963,11 @@ fun NewChatScreen() {
     var results by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
     var creating by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(q) { results = if (q.trim().length >= 2) { kotlinx.coroutines.delay(250); AppModel.search(q.trim().removePrefix("@")).filter { it.kind == "user" } } else emptyList() }
-    creating?.let { type -> CreateChatWizard(type) { creating = null }; return }
+    androidx.compose.animation.AnimatedContent(creating, transitionSpec = {
+        if (targetState != null) (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(300)) + androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(340)) { it / 12 }) togetherWith androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200))
+        else androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(260)) togetherWith (androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(220)) + androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(260)) { it / 12 })
+    }, label = "newchat") { cr ->
+    if (cr != null) CreateChatWizard(cr) { creating = null } else {
     Column(Modifier.fillMaxSize().background(p.bg).imePadding()) {
         TopBar("Новый чат")
         SearchBox(q, { q = it }, Modifier.padding(horizontal = 14.dp).fillMaxWidth())
@@ -998,6 +1003,8 @@ fun NewChatScreen() {
                 }
             }
         }
+    }
+    }
     }
 }
 

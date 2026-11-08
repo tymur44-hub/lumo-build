@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.togetherWith
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -100,7 +101,13 @@ fun CreateChatWizard(mode: String, onClose: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize().background(p.bg).imePadding()) {
-        when (step) {
+        androidx.compose.animation.AnimatedContent(step, Modifier.fillMaxSize(), transitionSpec = {
+            val fwd = targetState > initialState
+            (androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(320)) { if (fwd) it / 3 else -it / 3 } + androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(280))) togetherWith
+                (androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(320)) { if (fwd) -it / 3 else it / 3 } + androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)))
+        }, label = "wz") { st ->
+        Column(Modifier.fillMaxSize()) {
+        when (st) {
             0 -> {
                 Box(Modifier.fillMaxWidth().statusBarsPadding().padding(12.dp)) { RoundIcon(Icons.AutoMirrored.Filled.ArrowBack, 46.dp, bg = p.panel) { back() } }
                 Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -217,6 +224,8 @@ fun CreateChatWizard(mode: String, onClose: () -> Unit) {
                     }
                 }, contentAlignment = Alignment.Center) { Text(if (busy) "Создаём…" else "Создать $noun", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp) }
             }
+        }
+        }
         }
     }
 }
