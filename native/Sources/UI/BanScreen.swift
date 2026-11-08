@@ -178,13 +178,13 @@ struct BannedScreen: View {
         let icon: String = rej ? "xmark.circle.fill" : "hourglass"
         let tint: Color = rej ? Theme.danger : Color(hex: 0xf0a23a)
         let title: String = rej ? "Апелляция отклонена" : "Апелляция отправлена"
-        var body: String
+        var msg: String
         if rej {
             let reply = ban.appealReply ?? ""
-            body = reply.isEmpty ? "Модераторы оставили блокировку в силе." : "Ответ модератора: " + reply
+            msg = reply.isEmpty ? "Модераторы оставили блокировку в силе." : "Ответ модератора: " + reply
         } else {
-            body = "Модераторы рассмотрят её и снимут блокировку, если согласятся. Это окно обновится само."
-            if let at = ban.appealAt { body += "\nОтправлена " + DateParser.time(at) }
+            msg = "Модераторы рассмотрят её и снимут блокировку, если согласятся. Это окно обновится само."
+            if let at = ban.appealAt { msg += "\nОтправлена " + DateParser.time(at) }
         }
         return HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
@@ -192,7 +192,7 @@ struct BannedScreen: View {
                 .frame(width: 26)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.system(size: 15, weight: .bold)).foregroundColor(Theme.text)
-                Text(body)
+                Text(msg)
                     .font(.system(size: 13.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
