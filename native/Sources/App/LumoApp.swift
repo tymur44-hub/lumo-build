@@ -33,6 +33,12 @@ struct LumoApp: App {
                     }
                 }
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.banner)
+                .overlay {
+                    if let b = model.myBan, model.loggedIn {
+                        BannedScreen(ban: b).environmentObject(model).environmentObject(look)
+                            .transition(.opacity.combined(with: .scale(scale: 1.04)))
+                    }
+                }
         }
         .onChange(of: phase) { p in
             if p == .active { model.scenePhase(true); ExtraStore.shared.scene(active: true) }

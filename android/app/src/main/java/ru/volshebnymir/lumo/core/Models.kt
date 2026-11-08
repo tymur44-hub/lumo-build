@@ -266,3 +266,16 @@ data class StoryGroup(val userId: String, val name: String, val avatarUrl: Strin
 enum class ReportReason(val title: String) {
     spam("Спам"), abuse("Оскорбления или травля"), fraud("Мошенничество"), violence("Угрозы или насилие"), adult("Неприемлемый контент"), other("Другое")
 }
+
+
+/** Состояние блокировки моего аккаунта (lm_my_ban) */
+data class BanInfo(val reason: String?, val appealStatus: String?, val appealReply: String?, val appealAt: String?) {
+    companion object {
+        fun from(j: JSONObject): BanInfo? {
+            if (!j.optBoolean("banned")) return null
+            val a = j.optJSONObject("appeal")
+            fun s(o: JSONObject?, k: String) = o?.takeIf { it.has(k) && !it.isNull(k) }?.optString(k)
+            return BanInfo(s(j, "reason"), s(a, "status"), s(a, "reply"), s(a, "created_at"))
+        }
+    }
+}

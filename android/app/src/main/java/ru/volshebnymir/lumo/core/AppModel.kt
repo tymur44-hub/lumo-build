@@ -63,6 +63,9 @@ object AppModel {
 
     var loggedIn by mutableStateOf(false)
     var me by mutableStateOf<Profile?>(null)
+    /** мой аккаунт заблокирован администрацией — поверх всего показывается окно блокировки */
+    var myBan by mutableStateOf<BanInfo?>(null)
+    private var banJob: kotlinx.coroutines.Job? = null
     val chats = mutableStateListOf<ChatItem>()
     var chatsLoaded by mutableStateOf(false)
     val messages = mutableStateMapOf<String, List<Message>>()
@@ -234,6 +237,8 @@ object AppModel {
                 onlineChannel = oc
                 CallsBridge.attach(id)
                 ru.volshebnymir.lumo.ui.GroupCalls.attach(id)
+                banJob?.cancel()
+                banJob = scope.launch { while (true) { checkBan(); kotlinx.coroutines.delay(45_000) } }
             }
             presence(true)
             scope.launch { touchSession() }
@@ -352,6 +357,7 @@ object AppModel {
     suspend fun endSession(id: String) { runCatching { Api.rpc("lm_session_kill", jsonOf("p_id" to id)) } }
 
     fun resetAfterLogout() {
+        banJob?.cancel(); banJob = null; myBan = null
         PhoneStore.reset()
         Lumens.reset()
         ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE).edit().putBoolean("lm_sess_active", false).apply()
@@ -484,6 +490,7 @@ object AppModel {
     fun isContact(id: String) = contacts.contains(id)
 
     suspend fun addContact(id: String) {
+        if (isBotUser(id)) { say("Ботов нельзя добавить в контакты"); return }
         runCatching { Api.insertQuiet("lm_contacts", jsonOf("contact_id" to id)) }.onFailure { say(it.message ?: "Ошибка") }
         loadContacts()
         val saved = PhoneStore.saveToPhonebook(id, displayName(id))
@@ -1056,6 +1063,31 @@ object AppModel {
         blockedMe.clear(); blockedMe.addAll(arr("me"))
     }
 
+    suspend fun checkBan() {
+        if (!loggedIn) return
+        val j = runCatching { Api.rpc("lm_my_ban") as? JSONObject }.getOrNull() ?: return
+        myBan = BanInfo.from(j)
+    }
+
+    /** Подать апелляцию; null — успешно, иначе текст ошибки */
+    suspend fun submitAppeal(text: String): String? = try {
+        (Api.rpc("lm_appeal_submit", jsonOf("p_text" to text)) as? JSONObject)?.let { myBan = BanInfo.from(it) }; null
+    } catch (e: Exception) { e.message ?: "Ошибка" }
+
+    fun isBotUser(uid: String?): Boolean {
+        uid ?: return false
+        if (profiles[uid]?.isBot == true) return true
+        return chats.any { it.isPrivate && it.peerId == uid && it.peerBot }
+    }
+
+    /** Бота не блокируют, а останавливают; перезапуск снова отправляет /start */
+    suspend fun setBotStopped(id: String, chatId: String?, stop: Boolean) {
+        runCatching {
+            Api.rpc("lm_block", jsonOf("p_user" to id, "p_on" to stop)); loadBlocks()
+            if (!stop && !chatId.isNullOrEmpty()) send(chatId, "text", "/start")
+        }.onSuccess { say(if (stop) "Бот остановлен" else "Бот перезапущен") }.onFailure { say(it.message ?: "Ошибка") }
+    }
+
     suspend fun setBlocked(id: String, on: Boolean) {
         runCatching { Api.rpc("lm_block", jsonOf("p_user" to id, "p_on" to on)); loadBlocks() }
             .onSuccess { say(if (on) "Пользователь заблокирован" else "Пользователь разблокирован") }.onFailure { say(it.message ?: "Ошибка") }
@@ -1075,7 +1107,7 @@ object AppModel {
     fun peerBlockText(uid: String?): String? {
         uid ?: return null
         if (profiles[uid]?.banned == true) return "Аккаунт заблокирован"
-        if (uid in blockedByMe) return "Вы заблокировали этого пользователя"
+        if (uid in blockedByMe) return if (isBotUser(uid)) "Бот остановлен" else "Вы заблокировали этого пользователя"
         if (uid in blockedMe) return "Пользователь ограничил сообщения"
         return null
     }
@@ -1114,6 +1146,11 @@ object AppModel {
     suspend fun linkDiscussion(channel: String, group: String?) {
         runCatching { Api.rpc("lm_link_discussion", jsonOf("p_channel" to channel, "p_group" to group)); Lumens.loadCfg(); loadChats() }
             .onSuccess { say(if (group == null) "Группа отвязана" else "Обсуждение подключено") }.onFailure { say(it.message ?: "Ошибка") }
+    }
+
+    suspend fun removeChatAvatar(chatId: String) {
+        runCatching { Api.update("lm_chats", mapOf("id" to chatId), JSONObject().put("avatar_url", JSONObject.NULL)); loadChats() }
+            .onSuccess { say("Фото удалено") }.onFailure { say(it.message ?: "Ошибка") }
     }
 
     suspend fun setChatAvatar(chatId: String, jpeg: ByteArray) {

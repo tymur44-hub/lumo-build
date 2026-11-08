@@ -232,19 +232,32 @@ struct PersonSheet: View {
                                 SettingsRow(icon: "lock.fill", color: Theme.a1, title: "Код безопасности", chevron: false)
                             }
                             Divider().overlay(Theme.line)
-                            Button {
-                                Task {
-                                    if model.isContact(userId) { await model.removeContact(userId) } else { await model.addContact(userId) }
+                            let isBot = model.isBotUser(userId)
+                            if !isBot {
+                                Button {
+                                    Task {
+                                        if model.isContact(userId) { await model.removeContact(userId) } else { await model.addContact(userId) }
+                                    }
+                                } label: {
+                                    SettingsRow(icon: model.isContact(userId) ? "person.badge.minus" : "person.badge.plus", color: Color(hex: 0x2bd67b),
+                                                title: model.isContact(userId) ? "Удалить из контактов" : "Добавить в контакты", chevron: false)
                                 }
-                            } label: {
-                                SettingsRow(icon: model.isContact(userId) ? "person.badge.minus" : "person.badge.plus", color: Color(hex: 0x2bd67b),
-                                            title: model.isContact(userId) ? "Удалить из контактов" : "Добавить в контакты", chevron: false)
+                                Divider().overlay(Theme.line)
                             }
-                            Divider().overlay(Theme.line)
                             let blocked = model.blockedByMe.contains(userId)
-                            Button { Task { await model.setBlocked(userId, !blocked) } } label: {
-                                SettingsRow(icon: blocked ? "lock.open.fill" : "hand.raised.fill", color: Theme.danger,
-                                            title: blocked ? "Разблокировать" : "Заблокировать", titleColor: blocked ? Theme.text : Theme.danger, chevron: false)
+                            if isBot {
+                                Button {
+                                    let cid = model.chats.first { $0.isPrivate && $0.peerId == userId }?.id ?? ""
+                                    Task { await model.setBotStopped(userId, chatId: cid, !blocked) }
+                                } label: {
+                                    SettingsRow(icon: blocked ? "play.fill" : "stop.fill", color: Theme.danger,
+                                                title: blocked ? "Перезапустить бота" : "Остановить бота", titleColor: blocked ? Theme.text : Theme.danger, chevron: false)
+                                }
+                            } else {
+                                Button { Task { await model.setBlocked(userId, !blocked) } } label: {
+                                    SettingsRow(icon: blocked ? "lock.open.fill" : "hand.raised.fill", color: Theme.danger,
+                                                title: blocked ? "Разблокировать" : "Заблокировать", titleColor: blocked ? Theme.text : Theme.danger, chevron: false)
+                                }
                             }
                             Divider().overlay(Theme.line)
                             Button { report = ReportTarget(user: userId, chat: nil, message: nil) } label: {

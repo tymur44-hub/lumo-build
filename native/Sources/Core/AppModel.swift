@@ -14,6 +14,9 @@ final class AppModel: ObservableObject {
 
     @Published var loggedIn: Bool
     @Published var me: Profile?
+    /// мой аккаунт заблокирован администрацией — показываем окно блокировки
+    @Published var myBan: BanInfo?
+    private var banLoop: Task<Void, Never>?
     @Published var chats: [ChatItem] = []
     @Published var chatsLoaded = false
     @Published var messages: [String: [Message]] = [:]
@@ -216,6 +219,13 @@ final class AppModel: ObservableObject {
         if let id = myId {
             CallManager.shared.attach(myId: id)
             GroupCalls.shared.attach(id)
+            banLoop?.cancel()
+            banLoop = Task { [weak self] in
+                while !Task.isCancelled {
+                    await self?.checkBan()
+                    try? await Task.sleep(nanoseconds: 45_000_000_000)
+                }
+            }
             let oc = Realtime.shared.channel("lm-online", presenceKey: id)
             oc.onPresenceState = { [weak self] st in self?.online = Set(st.keys) }
             oc.onPresenceDiff = { [weak self] joins, leaves in
@@ -387,6 +397,7 @@ final class AppModel: ObservableObject {
     }
 
     func resetAfterLogout() {
+        banLoop?.cancel(); banLoop = nil; myBan = nil
         UserDefaults.standard.set(false, forKey: "lm_sess_active")
         PhoneStore.shared.reset()
         Lumens.shared.reset()
@@ -419,6 +430,7 @@ final class AppModel: ObservableObject {
 
     func scenePhase(_ active: Bool) {
         if active { Task { await Net.pick() } }
+        if active && loggedIn && demo == nil { Task { await checkBan() } }
         if active && loggedIn && demo == nil { Task { await DNDStore.shared.checkEnded(); await Reminders.shared.load(); await Streaks.shared.load() } }
         isActive = active
         if !loggedIn || demo != nil { return }
@@ -659,6 +671,7 @@ final class AppModel: ObservableObject {
 
     func addContact(_ id: String) async {
         guard id != myId, !isContact(id) else { return }
+        if isBotUser(id) { say("Ботов нельзя добавить в контакты"); return }
         do {
             _ = try await API.shared.insert("lm_contacts", ["contact_id": id])
             contacts.insert(id, at: 0)
@@ -705,6 +718,22 @@ final class AppModel: ObservableObject {
         blockedMe = Set((j["me"] as? [Any] ?? []).compactMap { $0 as? String })
     }
 
+    func isBotUser(_ uid: String?) -> Bool {
+        guard let uid = uid else { return false }
+        if profiles[uid]?.isBot == true { return true }
+        return chats.contains { $0.isPrivate && $0.peerId == uid && $0.peerBot }
+    }
+
+    /// Бота не блокируют, а останавливают: он перестаёт писать. Перезапуск снова отправляет /start
+    func setBotStopped(_ id: String, chatId: String, _ stop: Bool) async {
+        do {
+            _ = try await API.shared.rpc("lm_block", ["p_user": id, "p_on": stop])
+            await loadBlocks()
+            if !stop, !chatId.isEmpty { _ = await send(chatId: chatId, kind: "text", body: "/start") }
+            say(stop ? "Бот остановлен" : "Бот перезапущен")
+        } catch { say(error.localizedDescription) }
+    }
+
     func setBlocked(_ id: String, _ on: Bool) async {
         do {
             _ = try await API.shared.rpc("lm_block", ["p_user": id, "p_on": on])
@@ -734,7 +763,7 @@ final class AppModel: ObservableObject {
     func peerBlockText(_ uid: String?) -> String? {
         guard let uid = uid else { return nil }
         if let p = profiles[uid], p.banned { return "Аккаунт заблокирован" + ((p.banReason ?? "").isEmpty ? "" : ": " + (p.banReason ?? "")) }
-        if blockedByMe.contains(uid) { return "Вы заблокировали этого пользователя" }
+        if blockedByMe.contains(uid) { return isBotUser(uid) ? "Бот остановлен" : "Вы заблокировали этого пользователя" }
         if blockedMe.contains(uid) { return "Пользователь ограничил сообщения" }
         return nil
     }
@@ -987,6 +1016,14 @@ final class AppModel: ObservableObject {
             let url = try await API.shared.upload(data, ext: "jpg", contentType: "image/jpeg")
             try await API.shared.update("lm_chats", match: ["id": chatId], ["avatar_url": url])
             await loadChats()
+        } catch { say(error.localizedDescription) }
+    }
+
+    func removeChatAvatar(_ chatId: String) async {
+        do {
+            try await API.shared.update("lm_chats", match: ["id": chatId], ["avatar_url": NSNull()])
+            await loadChats()
+            say("Фото удалено")
         } catch { say(error.localizedDescription) }
     }
 

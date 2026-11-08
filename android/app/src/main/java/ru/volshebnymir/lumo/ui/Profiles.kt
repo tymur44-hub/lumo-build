@@ -252,6 +252,7 @@ fun PersonScreen(userId: String) {
     val dm = AppModel.chats.firstOrNull { it.isPrivate && it.peerId == userId }
     val call = rememberCallStarter()
     val blocked = userId in AppModel.blockedByMe
+    val isBot = pr?.isBot == true || dm?.peerBot == true
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             if (sendLumens) LumenSendDialog(userId) { sendLumens = false }
@@ -276,7 +277,9 @@ fun PersonScreen(userId: String) {
                             onClick = { menu = false; AppModel.push(Screen.ChatSearch(dm.id)) })
                         if (dm != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Очистить историю") }, leadingIcon = { Icon(Icons.Filled.CleaningServices, null) },
                             onClick = { menu = false; scope.launch { AppModel.clearChat(dm.id) } })
-                        androidx.compose.material3.DropdownMenuItem(text = { Text(if (blocked) "Разблокировать" else "Заблокировать", color = p.danger) }, leadingIcon = { Icon(Icons.Filled.Block, null, tint = p.danger) },
+                        if (isBot) androidx.compose.material3.DropdownMenuItem(text = { Text(if (blocked) "Перезапустить бота" else "Остановить бота", color = p.danger) }, leadingIcon = { Icon(if (blocked) Icons.Filled.PlayArrow else Icons.Filled.Stop, null, tint = p.danger) },
+                            onClick = { menu = false; scope.launch { AppModel.setBotStopped(userId, dm?.id, !blocked) } })
+                        else androidx.compose.material3.DropdownMenuItem(text = { Text(if (blocked) "Разблокировать" else "Заблокировать", color = p.danger) }, leadingIcon = { Icon(Icons.Filled.Block, null, tint = p.danger) },
                             onClick = { menu = false; if (blocked) scope.launch { AppModel.setBlocked(userId, false) } else confirmBlock = true })
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Пожаловаться", color = p.danger) }, leadingIcon = { Icon(Icons.Filled.Flag, null, tint = p.danger) },
                             onClick = { menu = false; report = true })
@@ -326,10 +329,15 @@ fun PersonScreen(userId: String) {
             Card {
                 SettingsRow(Icons.Filled.Lock, p.a1, "Код безопасности", "Проверить сквозное шифрование") { safety = true }
                 Divider()
-                if (AppModel.isContact(userId)) SettingsRow(Icons.Filled.PersonRemove, p.danger, "Удалить из контактов", titleColor = p.danger) { scope.launch { AppModel.removeContact(userId) } }
-                else SettingsRow(Icons.Filled.PersonAdd, p.a1, "Добавить в контакты") { if (ru.volshebnymir.lumo.core.PhoneStore.canWriteContacts()) scope.launch { AppModel.addContact(userId) } else writePerm.launch(android.Manifest.permission.WRITE_CONTACTS) }
-                Divider()
-                SettingsRow(Icons.Filled.Block, p.danger, if (blocked) "Разблокировать" else "Заблокировать", titleColor = p.danger) {
+                if (!isBot) {
+                    if (AppModel.isContact(userId)) SettingsRow(Icons.Filled.PersonRemove, p.danger, "Удалить из контактов", titleColor = p.danger) { scope.launch { AppModel.removeContact(userId) } }
+                    else SettingsRow(Icons.Filled.PersonAdd, p.a1, "Добавить в контакты") { if (ru.volshebnymir.lumo.core.PhoneStore.canWriteContacts()) scope.launch { AppModel.addContact(userId) } else writePerm.launch(android.Manifest.permission.WRITE_CONTACTS) }
+                    Divider()
+                }
+                if (isBot) SettingsRow(if (blocked) Icons.Filled.PlayArrow else Icons.Filled.Stop, p.danger, if (blocked) "Перезапустить бота" else "Остановить бота", titleColor = p.danger) {
+                    scope.launch { AppModel.setBotStopped(userId, dm?.id, !blocked) }
+                }
+                else SettingsRow(Icons.Filled.Block, p.danger, if (blocked) "Разблокировать" else "Заблокировать", titleColor = p.danger) {
                     if (blocked) scope.launch { AppModel.setBlocked(userId, false) } else confirmBlock = true
                 }
             }
@@ -394,6 +402,9 @@ fun InfoScreen(chatId: String) {
     var report by remember { mutableStateOf(false) }
     var memberMenu by remember { mutableStateOf<Pair<String, String>?>(null) }
     var gcSettings by remember { mutableStateOf(false) }
+    var chatPhotoMenu by remember { mutableStateOf(false) }
+    if (chatPhotoMenu) ChatPhotoMenu(c?.isChannel == true, onPick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        onDelete = { scope.launch { AppModel.removeChatAvatar(chatId) } }) { chatPhotoMenu = false }
     if (gcSettings) GroupCallSettingsDialog(chatId) { gcSettings = false }
     suspend fun reload() { members = AppModel.members(chatId) }
     LaunchedEffect(chatId) { reload() }
@@ -436,7 +447,9 @@ fun InfoScreen(chatId: String) {
                 Card {
                     SettingsRow(Icons.Filled.Edit, p.a1, "Изменить ${if (c?.isChannel == true) "канал" else "группу"}") { AppModel.push(Screen.EditChat(chatId)) }
                     Divider()
-                    SettingsRow(Icons.Filled.CameraAlt, Color(0xFF22A6FF), "Сменить фото") { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                    SettingsRow(Icons.Filled.CameraAlt, Color(0xFF22A6FF), if (c?.avatarUrl.isNullOrEmpty()) "Установить фото" else "Сменить фото") {
+                        if (c?.avatarUrl.isNullOrEmpty()) pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) else chatPhotoMenu = true
+                    }
                     if (c?.type == "group") { Divider(); SettingsRow(Icons.Filled.PersonAdd, Color(0xFF2BD67B), "Добавить участников") { adding = true } }
                     if (c?.type == "group" && c.isChannel != true) { Divider(); SettingsRow(Icons.Filled.Call, Color(0xFF2BD67B), "Групповые звонки") { gcSettings = true } }
                 }
@@ -1029,6 +1042,7 @@ fun EditChatScreen(chatId: String) {
     var isPublic by remember { mutableStateOf(!c.username.isNullOrEmpty()) }
     var uname by remember { mutableStateOf(c.username ?: "") }
     var page by remember { mutableStateOf("main") }   // main | type | admins | members | reactions | discussion
+    var editPhotoMenu by remember { mutableStateOf(false) }
     val cfg0 = Lumens.cfg[chatId]
     var rxOn by remember(cfg0) { mutableStateOf(cfg0?.reactions?.isNotEmpty() != false) }
     var rxSet by remember(cfg0) { mutableStateOf((cfg0?.reactions ?: ALL_REACTIONS).toSet()) }
@@ -1084,8 +1098,12 @@ fun EditChatScreen(chatId: String) {
                 "main" -> {
                     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Avatar(c.displayName, c.displayAvatar, c.displayColor, 110.dp)
-                        Text("Изменить фотографию", color = p.a1, fontSize = 18.sp, fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(top = 10.dp).bouncy { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }.padding(8.dp))
+                        Text(if (c.avatarUrl.isNullOrEmpty()) "Выбрать фотографию" else "Изменить фотографию", color = p.a1, fontSize = 18.sp, fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(top = 10.dp).bouncy {
+                                if (c.avatarUrl.isNullOrEmpty()) pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) else editPhotoMenu = true
+                            }.padding(8.dp))
+                        if (editPhotoMenu) ChatPhotoMenu(c.isChannel, onPick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                            onDelete = { scope.launch { AppModel.removeChatAvatar(c.id) } }) { editPhotoMenu = false }
                     }
                     GroupCard {
                         PlainField(title, { title = it.take(64) }, "Название")
@@ -1220,6 +1238,29 @@ fun EditChatScreen(chatId: String) {
                     Spacer(Modifier.height(30.dp))
                 }
             }
+        }
+    }
+}
+
+
+/** «Сменить фото» группы/канала: выбрать новое или удалить текущее */
+@Composable
+fun ChatPhotoMenu(channel: Boolean, onPick: () -> Unit, onDelete: () -> Unit, onClose: () -> Unit) {
+    val p = P
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(p.panel).padding(vertical = 8.dp)) {
+            Text(if (channel) "Фото канала" else "Фото группы", color = p.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            @Composable fun row(icon: androidx.compose.ui.graphics.vector.ImageVector, t: String, col: Color, f: () -> Unit) =
+                Row(Modifier.fillMaxWidth().clickable { onClose(); f() }.padding(horizontal = 20.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(icon, null, tint = col, modifier = Modifier.size(22.dp)); Spacer(Modifier.width(14.dp))
+                    Text(t, color = col, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                }
+            row(Icons.Filled.Photo, "Выбрать новое фото", p.text, onPick)
+            Box(Modifier.padding(start = 56.dp).fillMaxWidth().height(1.dp).background(p.line))
+            row(Icons.Filled.Delete, "Удалить фото", p.danger, onDelete)
+            Box(Modifier.padding(start = 56.dp).fillMaxWidth().height(1.dp).background(p.line))
+            row(Icons.Filled.Close, "Отмена", p.muted) {}
         }
     }
 }

@@ -324,7 +324,17 @@ fun ChatScreen(chatId: String) {
             }
             val blockedText = if (chat?.isPrivate == true) AppModel.peerBlockText(chat.peerId) else null
             if (peerDnd != null && blockedText == null) UrgentStrip(chat?.displayName ?: "", peerDnd, urgentOn) { urgentOn = !urgentOn }
-            if (blockedText != null) {
+            val stoppedBot = chat?.takeIf { it.isPrivate }?.peerId?.takeIf { AppModel.isBotUser(it) && it in AppModel.blockedByMe }
+            if (stoppedBot != null) {
+                Box(Modifier.fillMaxWidth().background(p.panel).navigationBarsPadding().padding(10.dp)) {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(p.accent)
+                        .bouncy { scope.launch { AppModel.setBotStopped(stoppedBot, chatId, false) } }.padding(vertical = 14.dp),
+                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(6.dp))
+                        Text("ПЕРЕЗАПУСТИТЬ БОТА", color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp)
+                    }
+                }
+            } else if (blockedText != null) {
                 Text(blockedText, color = p.muted, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().background(p.panel).navigationBarsPadding().padding(16.dp))
             } else if (chat != null && chat.isPrivate && peerBadges(chat).first && loaded && msgs.none { it.senderId == AppModel.myId }) {
@@ -552,7 +562,8 @@ fun ChatMenu(c: ChatItem) {
             val peer = c.peerId
             if (c.isPrivate && peer != null && peer != AppModel.myId) {
                 val blocked = peer in AppModel.blockedByMe
-                item(Icons.Filled.Block, if (blocked) "Разблокировать" else "Заблокировать", danger = !blocked) { scope.launch { AppModel.setBlocked(peer, !blocked) } }
+                if (AppModel.isBotUser(peer)) item(if (blocked) Icons.Filled.PlayArrow else Icons.Filled.Stop, if (blocked) "Перезапустить бота" else "Остановить бота", danger = !blocked) { scope.launch { AppModel.setBotStopped(peer, c.id, !blocked) } }
+                else item(Icons.Filled.Block, if (blocked) "Разблокировать" else "Заблокировать", danger = !blocked) { scope.launch { AppModel.setBlocked(peer, !blocked) } }
                 item(Icons.Filled.Flag, "Пожаловаться", danger = true) { report = true }
             }
             if (!c.isPrivate) item(Icons.Filled.Flag, "Пожаловаться", danger = true) { report = true }

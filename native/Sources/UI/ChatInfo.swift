@@ -32,6 +32,8 @@ struct ChatInfoView: View {
     @State private var confirmClear = false
     @State private var deleting: ChatItem?
     @State private var avatarPick: PhotosPickerItem?
+    @State private var pickPhoto = false
+    @State private var photoMenu = false
     @State private var avatarFull: IdentifiedURL?
     @State private var showQR = false
     @State private var showBub = false
@@ -249,7 +251,7 @@ struct ChatInfoView: View {
             Button { lumenTarget = LumenTarget(id: pid) } label: { Label("Отправить люмены", systemImage: "sparkle") }
             Button { giftTarget = GiftTarget(id: pid) } label: { Label("Подарить подарок", systemImage: "gift") }
         }
-        if c.isPrivate, let p = c.peerId, p != model.myId {
+        if c.isPrivate, let p = c.peerId, p != model.myId, !model.isBotUser(p) {
             Button {
                 Task { if model.isContact(p) { await model.removeContact(p) } else { await model.addContact(p) } }
             } label: {
@@ -279,8 +281,14 @@ struct ChatInfoView: View {
         Button { confirmClear = true } label: { Label("Очистить историю", systemImage: "eraser") }
         if c.isPrivate, let p = c.peerId, p != model.myId {
             let blocked = model.blockedByMe.contains(p)
-            Button(role: blocked ? nil : .destructive) { Task { await model.setBlocked(p, !blocked) } } label: {
-                Label(blocked ? "Разблокировать" : "Заблокировать", systemImage: blocked ? "lock.open" : "hand.raised")
+            if model.isBotUser(p) {
+                Button(role: blocked ? nil : .destructive) { Task { await model.setBotStopped(p, chatId: c.id, !blocked) } } label: {
+                    Label(blocked ? "Перезапустить бота" : "Остановить бота", systemImage: blocked ? "play.fill" : "stop.fill")
+                }
+            } else {
+                Button(role: blocked ? nil : .destructive) { Task { await model.setBlocked(p, !blocked) } } label: {
+                    Label(blocked ? "Разблокировать" : "Заблокировать", systemImage: blocked ? "lock.open" : "hand.raised")
+                }
             }
             Button(role: .destructive) { report = ReportTarget(user: p, chat: c.id, message: nil) } label: {
                 Label("Пожаловаться", systemImage: "exclamationmark.bubble")
@@ -394,8 +402,14 @@ struct ChatInfoView: View {
             SettingsGroup {
                 Button { editChat = true } label: { SettingsRow(icon: "pencil", color: Theme.a1, title: "Изменить название и описание") }
                 Divider().overlay(Theme.line)
-                PhotosPicker(selection: $avatarPick, matching: .images) {
-                    SettingsRow(icon: "photo", color: Color(hex: 0x22a6ff), title: "Сменить фото")
+                Button { if (chat?.avatarURL ?? "").isEmpty { pickPhoto = true } else { photoMenu = true } } label: {
+                    SettingsRow(icon: "photo", color: Color(hex: 0x22a6ff), title: (chat?.avatarURL ?? "").isEmpty ? "Установить фото" : "Сменить фото")
+                }
+                .photosPicker(isPresented: $pickPhoto, selection: $avatarPick, matching: .images)
+                .confirmationDialog("Фото " + (c.isChannel ? "канала" : "группы"), isPresented: $photoMenu, titleVisibility: .visible) {
+                    Button("Выбрать новое фото") { pickPhoto = true }
+                    Button("Удалить фото", role: .destructive) { Task { await model.removeChatAvatar(c.id) } }
+                    Button("Отмена", role: .cancel) {}
                 }
                 Divider().overlay(Theme.line)
                 Button { addMembers = true } label: {
@@ -485,6 +499,8 @@ struct EditChatView: View {
     @State private var uname = ""
     @State private var members: [Member] = []
     @State private var avatarPick: PhotosPickerItem?
+    @State private var pickPhoto = false
+    @State private var photoMenu = false
     @State private var busy = false
     @State private var error: String?
     @ObservedObject private var lumens = Lumens.shared
@@ -575,8 +591,14 @@ struct EditChatView: View {
     @ViewBuilder private var main: some View {
         VStack(spacing: 10) {
             AvatarView(name: chat?.displayName ?? "", url: chat?.displayAvatar, color: chat?.displayColor ?? 0, size: 110)
-            PhotosPicker(selection: $avatarPick, matching: .images) {
-                Text("Изменить фотографию").font(.system(size: 18)).foregroundColor(Theme.a1)
+            Button { if (chat?.avatarURL ?? "").isEmpty { pickPhoto = true } else { photoMenu = true } } label: {
+                Text((chat?.avatarURL ?? "").isEmpty ? "Выбрать фотографию" : "Изменить фотографию").font(.system(size: 18)).foregroundColor(Theme.a1)
+            }
+            .photosPicker(isPresented: $pickPhoto, selection: $avatarPick, matching: .images)
+            .confirmationDialog("Фото " + kind, isPresented: $photoMenu, titleVisibility: .visible) {
+                Button("Выбрать новое фото") { pickPhoto = true }
+                Button("Удалить фото", role: .destructive) { Task { await model.removeChatAvatar(chatId) } }
+                Button("Отмена", role: .cancel) {}
             }
         }
         .padding(.vertical, 12)

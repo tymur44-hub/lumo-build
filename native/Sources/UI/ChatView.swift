@@ -874,8 +874,14 @@ struct ChatView: View {
                 Button { confirmClear = true } label: { Label("Очистить историю", systemImage: "eraser") }
                 if c.isPrivate, let p = c.peerId, p != model.myId {
                     let blocked = model.blockedByMe.contains(p)
-                    Button(role: blocked ? nil : .destructive) { Task { await model.setBlocked(p, !blocked) } } label: {
-                        Label(blocked ? "Разблокировать" : "Заблокировать", systemImage: blocked ? "lock.open" : "hand.raised")
+                    if model.isBotUser(p) {
+                        Button(role: blocked ? nil : .destructive) { Task { await model.setBotStopped(p, chatId: c.id, !blocked) } } label: {
+                            Label(blocked ? "Перезапустить бота" : "Остановить бота", systemImage: blocked ? "play.fill" : "stop.fill")
+                        }
+                    } else {
+                        Button(role: blocked ? nil : .destructive) { Task { await model.setBlocked(p, !blocked) } } label: {
+                            Label(blocked ? "Разблокировать" : "Заблокировать", systemImage: blocked ? "lock.open" : "hand.raised")
+                        }
                     }
                     Button { reporting = ReportTarget(user: p, chat: c.id, message: nil) } label: {
                         Label("Пожаловаться", systemImage: "exclamationmark.bubble")
@@ -944,6 +950,12 @@ struct ComposerView: View {
     @State private var scheduleText = ""
     var onSendMenu: () -> Void = {}
 
+    /// остановленный мной бот — вместо поля ввода кнопка «Перезапустить»
+    private var stoppedBot: String? {
+        guard let c = model.chat(chatId), c.isPrivate, let pid = c.peerId, model.isBotUser(pid), model.blockedByMe.contains(pid) else { return nil }
+        return pid
+    }
+
     private var needStart: Bool {
         guard let c = model.chat(chatId), c.isPrivate else { return false }
         let bot = c.peerBot || (c.peerId.flatMap { model.profiles[$0]?.isBot } ?? false)
@@ -969,6 +981,16 @@ struct ComposerView: View {
                 }
                 .buttonStyle(BouncyButtonStyle())
                 .background(Theme.panel)
+            } else if let pid = stoppedBot {
+                Button { Task { await model.setBotStopped(pid, chatId: chatId, false) } } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "play.fill")
+                        Text("ПЕРЕЗАПУСТИТЬ БОТА")
+                    }
+                    .font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                    .frame(maxWidth: .infinity).frame(height: 48).background(Theme.accent, in: RoundedRectangle(cornerRadius: 14))
+                }
+                .padding(10)
             } else if let b = blockedText {
                 Text(b).font(.subheadline.weight(.semibold)).foregroundColor(Theme.muted)
                     .multilineTextAlignment(.center)
