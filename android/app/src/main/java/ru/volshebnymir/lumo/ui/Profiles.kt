@@ -168,7 +168,8 @@ private fun MyProfileTabs(savedChat: String?, open: (Message) -> Unit) {
     }
     Spacer(Modifier.height(10.dp))
     when (tab) {
-        0 -> {
+        0 -> ProfilePostsTab(AppModel.myId ?: "")
+        3 -> {
             val l = stories
             Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.panel).padding(8.dp)) {
                 when {
@@ -251,8 +252,19 @@ fun PersonScreen(userId: String) {
     val blocked = userId in AppModel.blockedByMe
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            TopBar("", right = {
-              if (dm != null) ChatMenu(dm) else
+            if (sendLumens) LumenSendDialog(userId) { sendLumens = false }
+            if (giftShop) GiftShopDialog(userId) { giftShop = false }
+            var more by remember { mutableStateOf(false) }
+            var phone by remember(userId) { mutableStateOf<String?>(null) }
+            LaunchedEffect(userId) { phone = runCatching { ru.volshebnymir.lumo.core.Api.rpc("lm_phone_of", ru.volshebnymir.lumo.core.jsonOf("p_user" to userId))?.toString() }.getOrNull() }
+            val canPay = userId != AppModel.myId && pr?.isBot != true
+            TgProfileHero(AppModel.displayName(userId), pr?.avatarUrl, pr?.color ?: 0, if (pr?.premium == true) pr.emojiStatus else null, pr?.premium == true && pr.isBot != true,
+                pr?.verified == true, AppModel.lastSeenText(userId), AppModel.isOnline(userId), pr?.profileBg, pr?.profilePattern, userId,
+                onOpenPhoto = { pr?.avatarUrl?.let { viewer = avatarMsg(it) } },
+                top = { light ->
+                    RoundIcon(Icons.AutoMirrored.Filled.ArrowBack, tint = if (light) Color.White else null, bg = if (light) Color.White.copy(alpha = 0.2f) else null) { AppModel.pop() }
+                    Spacer(Modifier.weight(1f))
+                    if (dm != null) ChatMenu(dm) else
                 Box {
                     RoundIcon(Icons.Filled.MoreVert) { menu = true }
                     androidx.compose.material3.DropdownMenu(menu, { menu = false }) {
@@ -268,42 +280,36 @@ fun PersonScreen(userId: String) {
                             onClick = { menu = false; report = true })
                     }
                 }
-            })
-            if (sendLumens) LumenSendDialog(userId) { sendLumens = false }
-            if (giftShop) GiftShopDialog(userId) { giftShop = false }
-            ProfileHead(AppModel.displayName(userId), pr?.avatarUrl, pr?.color ?: 0, AppModel.lastSeenText(userId), AppModel.isOnline(userId), userId) {
-                pr?.avatarUrl?.let { viewer = avatarMsg(it) }
-            }
-            var more by remember { mutableStateOf(false) }
-            var phone by remember(userId) { mutableStateOf<String?>(null) }
-            LaunchedEffect(userId) { phone = runCatching { ru.volshebnymir.lumo.core.Api.rpc("lm_phone_of", ru.volshebnymir.lumo.core.jsonOf("p_user" to userId))?.toString() }.getOrNull() }
-            val canPay = userId != AppModel.myId && pr?.isBot != true
-            Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (dm == null) ActionTile(Icons.Filled.ChatBubble, "Чат", Modifier.weight(1f)) { scope.launch { AppModel.openDM(userId) } }
-                if (pr?.isBot != true && dm?.peerBot != true) {
-                    ActionTile(Icons.Filled.Call, "Звонок", Modifier.weight(1f)) {
-                        if (dm != null) call(dm, false) else scope.launch { AppModel.openDM(userId) }
+                },
+                bottom = { light ->
+                Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (dm == null) GlassTile(Icons.Filled.ChatBubble, "Чат", light, Modifier.weight(1f)) { scope.launch { AppModel.openDM(userId) } }
+                    if (pr?.isBot != true && dm?.peerBot != true) {
+                        GlassTile(Icons.Filled.Call, "Звонок", light, Modifier.weight(1f)) {
+                            if (dm != null) call(dm, false) else scope.launch { AppModel.openDM(userId) }
+                        }
+                        GlassTile(Icons.Filled.Videocam, "Видео", light, Modifier.weight(1f)) {
+                            if (dm != null) call(dm, true) else scope.launch { AppModel.openDM(userId) }
+                        }
                     }
-                    ActionTile(Icons.Filled.Videocam, "Видео", Modifier.weight(1f)) {
-                        if (dm != null) call(dm, true) else scope.launch { AppModel.openDM(userId) }
+                    if (dm != null) GlassTile(if (dm.muted) Icons.Filled.NotificationsActive else Icons.Filled.NotificationsOff, if (dm.muted) "Звук" else "Без звука", light, Modifier.weight(1f)) {
+                        scope.launch { AppModel.setMuted(dm.id, !dm.muted) }
                     }
-                }
-                if (dm != null) ActionTile(if (dm.muted) Icons.Filled.NotificationsActive else Icons.Filled.NotificationsOff, if (dm.muted) "Звук" else "Без звука", Modifier.weight(1f)) {
-                    scope.launch { AppModel.setMuted(dm.id, !dm.muted) }
-                }
-                if (dm != null) ActionTile(Icons.Filled.Search, "Поиск", Modifier.weight(1f)) { AppModel.push(Screen.ChatSearch(dm.id)) }
-                Box(Modifier.weight(1f)) {
-                    ActionTile(Icons.Filled.MoreHoriz, "Ещё", Modifier.fillMaxWidth()) { more = true }
-                    androidx.compose.material3.DropdownMenu(more, { more = false }) {
-                        if (canPay) androidx.compose.material3.DropdownMenuItem(text = { Text("Отправить люмены") }, leadingIcon = { Icon(Icons.Filled.Diamond, null) },
-                            onClick = { more = false; sendLumens = true })
-                        if (canPay) androidx.compose.material3.DropdownMenuItem(text = { Text("Подарить подарок") }, leadingIcon = { Icon(Icons.Filled.CardGiftcard, null) },
-                            onClick = { more = false; giftShop = true })
-                        androidx.compose.material3.DropdownMenuItem(text = { Text("Скопировать @" + (pr?.username ?: "")) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
-                            onClick = { more = false; copy(ctx, "@" + (pr?.username ?: "")) })
+                    if (dm != null) GlassTile(Icons.Filled.Search, "Поиск", light, Modifier.weight(1f)) { AppModel.push(Screen.ChatSearch(dm.id)) }
+                    Box(Modifier.weight(1f)) {
+                        GlassTile(Icons.Filled.MoreHoriz, "Ещё", light, Modifier.fillMaxWidth()) { more = true }
+                        androidx.compose.material3.DropdownMenu(more, { more = false }) {
+                            if (canPay) androidx.compose.material3.DropdownMenuItem(text = { Text("Отправить люмены") }, leadingIcon = { Icon(Icons.Filled.Diamond, null) },
+                                onClick = { more = false; sendLumens = true })
+                            if (canPay) androidx.compose.material3.DropdownMenuItem(text = { Text("Подарить подарок") }, leadingIcon = { Icon(Icons.Filled.CardGiftcard, null) },
+                                onClick = { more = false; giftShop = true })
+                            androidx.compose.material3.DropdownMenuItem(text = { Text("Скопировать @" + (pr?.username ?: "")) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
+                                onClick = { more = false; copy(ctx, "@" + (pr?.username ?: "")) })
+                        }
                     }
                 }
-            }
+                    pr?.musicUrl?.let { u -> ProfileMusicRow(u, pr.musicTitle, pr.musicArtist, light, Modifier.padding(horizontal = 14.dp, vertical = 0.dp).padding(top = 10.dp)) }
+                })
             Spacer(Modifier.height(14.dp))
             pr?.let { ChannelCard(it) }
             Card {
@@ -351,16 +357,18 @@ fun PersonScreen(userId: String) {
 @Composable
 private fun PersonTabs(userId: String, gifts: Boolean, chatId: String?) {
     val p = P
-    var tab by remember { mutableStateOf(if (gifts) 0 else 1) }
+    var tab by remember { mutableStateOf(if (gifts) 2 else 1) }
     var gift by remember { mutableStateOf<OwnedGift?>(null) }
     LaunchedEffect(userId) { if (gifts) Gifts.loadUser(userId) }
     gift?.let { OwnedGiftDialog(it) { gift = null } }
     Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (gifts) Pill("Публикации", tab == 2) { tab = 2 }
         if (gifts) Pill("Подарки", tab == 0) { tab = 0 }
         Pill("Медиа", tab == 1) { tab = 1 }
     }
     Spacer(Modifier.height(10.dp))
-    if (tab == 0 && gifts) {
+    if (tab == 2) ProfilePostsTab(userId)
+    else if (tab == 0 && gifts) {
         val l = Gifts.of[userId].orEmpty()
         if (l.isEmpty()) Text("Подарков пока нет", color = p.muted, modifier = Modifier.fillMaxWidth().padding(20.dp), textAlign = TextAlign.Center)
         else OwnedGrid(l) { gift = it }
@@ -541,17 +549,30 @@ fun MyProfileScreen() {
     val saved = AppModel.chats.firstOrNull { it.isPrivate && it.peerId == AppModel.myId }
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            TopBar("", right = { Text("Изм.", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.bouncy { AppModel.push(Screen.EditProfile) }.padding(12.dp)) })
-            ProfileHead(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, "в сети", true, AppModel.myId) { me?.avatarUrl?.let { viewer = avatarMsg(it) } }
-            Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(Icons.Filled.QrCode, "QR-код", Modifier.weight(1f)) { Ui.qrMine = true }
-                ActionTile(Icons.Filled.Edit, "Изменить", Modifier.weight(1f)) { AppModel.push(Screen.EditProfile) }
-                ActionTile(Icons.Filled.Share, "Поделиться", Modifier.weight(1f)) {
-                    val link = ru.volshebnymir.lumo.core.Config.SITE + "#@" + (me?.username ?: "")
-                    runCatching { ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
-                        .putExtra(android.content.Intent.EXTRA_TEXT, "Пиши мне в Lumo: $link"), "Поделиться").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                }
-            }
+            var emojiDlg by remember { mutableStateOf(false) }
+            if (emojiDlg) EmojiPickerDialog { emojiDlg = false }
+            TgProfileHero(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, if (me?.premium == true) me.emojiStatus else null, me?.premium == true, me?.verified == true,
+                "в сети", true, me?.profileBg, me?.profilePattern, AppModel.myId,
+                onOpenPhoto = { me?.avatarUrl?.let { viewer = avatarMsg(it) } },
+                onStatus = { if (me?.premium == true) emojiDlg = true else AppModel.push(Screen.Premium) },
+                top = { light ->
+                    RoundIcon(Icons.AutoMirrored.Filled.ArrowBack, tint = if (light) Color.White else null, bg = if (light) Color.White.copy(alpha = 0.2f) else null) { AppModel.pop() }
+                    Spacer(Modifier.weight(1f))
+                    Text("Изм.", color = if (light) Color.White else p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(if (light) Color.White.copy(alpha = 0.2f) else Color.Transparent).bouncy { AppModel.push(Screen.EditProfile) }.padding(horizontal = 14.dp, vertical = 10.dp))
+                },
+                bottom = { light ->
+                    Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassTile(Icons.Filled.QrCode, "QR-код", light, Modifier.weight(1f)) { Ui.qrMine = true }
+                        GlassTile(Icons.Filled.Edit, "Изменить", light, Modifier.weight(1f)) { AppModel.push(Screen.EditProfile) }
+                        GlassTile(Icons.Filled.Share, "Поделиться", light, Modifier.weight(1f)) {
+                            val link = ru.volshebnymir.lumo.core.Config.SITE + "#@" + (me?.username ?: "")
+                            runCatching { ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                                .putExtra(android.content.Intent.EXTRA_TEXT, "Пиши мне в Lumo: $link"), "Поделиться").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        }
+                    }
+                    me?.musicUrl?.let { u -> ProfileMusicRow(u, me.musicTitle, me.musicArtist, light, Modifier.padding(horizontal = 14.dp).padding(top = 10.dp)) }
+                })
             Spacer(Modifier.height(14.dp))
             LaunchedEffect(Unit) { if (!ru.volshebnymir.lumo.core.PhoneStore.loaded) ru.volshebnymir.lumo.core.PhoneStore.load() }
             Card {
@@ -632,6 +653,8 @@ fun EditProfileScreen() {
     var pwDialog by remember { mutableStateOf(false) }
     var extraDlg by remember { mutableStateOf(false) }
     var delAcc by remember { mutableStateOf(false) }
+    var styleDlg by remember { mutableStateOf(false) }
+    if (styleDlg) ProfileStyleDialog { styleDlg = false }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u == null) return@rememberLauncherForActivityResult
         scope.launch {
@@ -696,6 +719,10 @@ fun EditProfileScreen() {
                 IconRow(Icons.Filled.AlternateEmail, Color(0xFF7C5CFF), "Имя пользователя", "@" + (me?.username ?: "")) { AppModel.push(Screen.EditUsername) }
                 CardDivider(68)
                 IconRow(Icons.Filled.Brush, Color(0xFF3AB8FF), "Персональные цвета", null) { AppModel.push(Screen.EditColor) }
+                CardDivider(68)
+                IconRow(Icons.Filled.Palette, Color(0xFFFF6FAE), "Оформление профиля", if (me?.profileBg != null || me?.profilePattern != null) "Своё" else "Стандартное") { styleDlg = true }
+                CardDivider(68)
+                ProfileMusicEditRow()
                 CardDivider(68)
                 IconRow(Icons.Filled.Link, Color(0xFFFFB020), "Расширенный профиль", "Ссылки · Premium") { ru.volshebnymir.lumo.core.AppModel.premium { extraDlg = true } }
                 CardDivider(68)

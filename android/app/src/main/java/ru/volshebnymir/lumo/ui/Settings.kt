@@ -79,30 +79,40 @@ fun SettingsScreen() {
             runCatching { AppModel.setAvatar(d.first) }.onSuccess { AppModel.say("Фото обновлено") }.onFailure { AppModel.say(it.message ?: "Ошибка") }
         }
     }
-    Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Spacer(Modifier.height(4.dp))
-        // шапка
-        Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(26.dp))
-            .background(Brush.linearGradient(listOf(p.a1.copy(alpha = 0.16f), p.a2.copy(alpha = 0.1f))))
-            .border(1.dp, p.line, RoundedCornerShape(26.dp)).padding(vertical = 18.dp, horizontal = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.bouncy { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
-                Avatar(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, 110.dp)
-                Box(Modifier.align(Alignment.BottomEnd).size(34.dp).clip(CircleShape).background(p.bg).padding(3.dp).clip(CircleShape).background(p.a1), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.CameraAlt, null, tint = Color.White, modifier = Modifier.size(16.dp))
+    var styleDlg by remember { mutableStateOf(false) }
+    if (styleDlg) ProfileStyleDialog { styleDlg = false }
+    LaunchedEffect(Unit) { if (!ru.volshebnymir.lumo.core.PhoneStore.loaded) ru.volshebnymir.lumo.core.PhoneStore.load() }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // шапка как в Telegram: цвет профиля, QR слева, «Изм.» справа, имя со статусом, телефон и @юзернейм
+        val light = me?.profileBg != null
+        Box(Modifier.fillMaxWidth()) {
+            ProfileStyleKt.Background(me?.profileBg, me?.profilePattern, me?.emojiStatus, 150.dp, Modifier.matchParentSize())
+            Column(Modifier.fillMaxWidth().statusBarsPadding().padding(bottom = if (light) 20.dp else 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RoundIcon(Icons.Filled.QrCode, tint = if (light) Color.White else p.text, bg = if (light) Color.White.copy(alpha = 0.2f) else p.panel2) { Ui.qrMine = true }
+                    Spacer(Modifier.weight(1f))
+                    Text("Изм.", color = if (light) Color.White else p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(22.dp)).background(if (light) Color.White.copy(alpha = 0.2f) else p.panel2).bouncy { AppModel.push(Screen.EditProfile) }.padding(horizontal = 16.dp, vertical = 11.dp))
                 }
+                Box(Modifier.clip(CircleShape).bouncy { AppModel.push(Screen.MyProfile) }) { Avatar(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, 104.dp) }
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(me?.name ?: "", color = if (light) Color.White else p.text, fontWeight = FontWeight.Black, fontSize = 24.sp)
+                    if (me?.verified == true) Icon(Icons.Filled.Verified, null, tint = if (light) Color.White else p.a2, modifier = Modifier.padding(start = 6.dp).size(20.dp))
+                    if (me?.premium == true) { val es = me?.emojiStatus; Box(Modifier.padding(start = 6.dp).clip(CircleShape).bouncy { emojiDlg = true }.padding(2.dp)) { if (es != null) StatusEmoji(es, 22.sp) else Icon(Icons.Filled.Star, null, tint = if (light) Color.White else Color(0xFFFFB020), modifier = Modifier.size(20.dp)) } }
+                }
+                val ph = ru.volshebnymir.lumo.core.PhoneStore.phone?.filter { it.isDigit() }?.let { d -> if (d.length == 11) "+${d[0]} ${d.substring(1, 4)} ${d.substring(4, 7)} ${d.substring(7, 9)} ${d.substring(9)}" else "+$d" }
+                Text(listOfNotNull(ph, "@" + (me?.username ?: "")).joinToString(" • "), color = if (light) Color.White.copy(alpha = 0.85f) else p.muted, fontSize = 15.sp)
             }
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(me?.name ?: "", color = p.text, fontWeight = FontWeight.Black, fontSize = 24.sp)
-                if (me?.verified == true) Icon(Icons.Filled.Verified, null, tint = p.a2, modifier = Modifier.padding(start = 6.dp).size(20.dp))
-                if (me?.premium == true) { val es = me?.emojiStatus; Box(Modifier.padding(start = 6.dp).clip(CircleShape).bouncy { emojiDlg = true }.padding(2.dp)) { if (es != null) StatusEmoji(es, 22.sp) else Icon(Icons.Filled.Star, null, tint = Color(0xFFFFB020), modifier = Modifier.size(20.dp)) } }
+        }
+        Card {
+            SettingsRow(Icons.Filled.EmojiEmotions, p.a1, if (me?.emojiStatus.isNullOrEmpty()) "Установить эмодзи-статус" else "Изменить эмодзи-статус", titleColor = p.a1) {
+                if (me?.premium == true) emojiDlg = true else AppModel.push(Screen.Premium)
             }
-            Text("@" + (me?.username ?: ""), color = p.muted, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            if (!me?.bio.isNullOrEmpty()) Text(me!!.bio, color = p.text, fontSize = 14.5.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, start = 14.dp, end = 14.dp))
-            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip(Icons.Filled.Edit, "Изменить профиль") { AppModel.push(Screen.MyProfile) }
-                Chip(Icons.Filled.QrCode, "QR-код") { Ui.qrMine = true }
-            }
+            Divider()
+            SettingsRow(Icons.Filled.Palette, p.a1, "Изменить цвет профиля", titleColor = p.a1) { styleDlg = true }
+            Divider()
+            SettingsRow(Icons.Filled.CameraAlt, p.a1, "Изменить фотографию", titleColor = p.a1) { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
         }
         var limitDlg by remember { mutableStateOf(false) }
         if (limitDlg) AlertDialog(onDismissRequest = { limitDlg = false }, containerColor = p.panel,

@@ -28,6 +28,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -86,11 +91,14 @@ object Ui {
     var addStory by mutableStateOf(false)
     var qrMine by mutableStateOf(false)
     var qrScan by mutableStateOf(false)
+    /** "posts" — опубликованные в профиле, "archive" — архив историй */
+    var storyArchive by mutableStateOf<String?>(null)
 
     @Composable
     fun Overlays() {
         storyUser?.let { StoryViewer(it) { storyUser = null } }
         if (addStory) AddStoryScreen { addStory = false }
+        storyArchive?.let { m -> StoryArchiveScreen(m == "posts") { storyArchive = null } }
         androidx.compose.animation.AnimatedVisibility(qrMine, enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(380)) + androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(420), initialScale = 0.88f), exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(220)) + androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(220), targetScale = 0.92f)) { MyQRScreen { qrMine = false } }
         if (qrScan) QRScanScreen { qrScan = false }
         AppModel.miniApp?.let { MiniAppScreen(it) { AppModel.miniApp = null } }
@@ -110,6 +118,7 @@ private fun Ring(unseen: Boolean, mine: Boolean, content: @Composable () -> Unit
     Box(Modifier.border(3.dp, b, CircleShape).padding(5.dp)) { content() }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun StoriesBar() {
     val p = P
@@ -117,7 +126,13 @@ fun StoriesBar() {
     val mine = AppModel.stories.firstOrNull { it.userId == AppModel.myId }
     val others = AppModel.stories.filter { it.userId != AppModel.myId }
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Column(Modifier.width(78.dp).bouncy { if (mine != null) Ui.storyUser = AppModel.myId else Ui.addStory = true }, horizontalAlignment = Alignment.CenterHorizontally) {
+        var myMenu by remember { mutableStateOf(false) }
+        Column(Modifier.width(78.dp).combinedClickable(onClick = { if (mine != null) Ui.storyUser = AppModel.myId else Ui.addStory = true }, onLongClick = { myMenu = true }), horizontalAlignment = Alignment.CenterHorizontally) {
+            androidx.compose.material3.DropdownMenu(myMenu, { myMenu = false }) {
+                androidx.compose.material3.DropdownMenuItem(text = { Text("Добавить историю") }, leadingIcon = { Icon(Icons.Filled.Add, null) }, onClick = { myMenu = false; Ui.addStory = true })
+                androidx.compose.material3.DropdownMenuItem(text = { Text("Опубликованные истории") }, leadingIcon = { Icon(Icons.Filled.GridOn, null) }, onClick = { myMenu = false; Ui.storyArchive = "posts" })
+                androidx.compose.material3.DropdownMenuItem(text = { Text("Архив историй") }, leadingIcon = { Icon(Icons.Filled.Archive, null) }, onClick = { myMenu = false; Ui.storyArchive = "archive" })
+            }
             Box {
                 if (mine != null) Ring(false, true) { Avatar(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, 54.dp) }
                 else Box(Modifier.padding(8.dp)) { Avatar(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, 54.dp) }
@@ -174,12 +189,19 @@ fun StoryViewer(startUser: String, onClose: () -> Unit) {
     }
     var dragY by remember { mutableFloatStateOf(0f) }
     val dy by androidx.compose.animation.core.animateFloatAsState(dragY, label = "dy")
-    Box(Modifier.fillMaxSize().graphicsLayer { translationY = dy; val k = 1f - (dy / 2500f).coerceIn(0f, 0.15f); scaleX = k; scaleY = k }
+    // автор запретил снимки экрана — включаем защиту окна, пока история на экране
+    val act = ctx as? android.app.Activity
+    DisposableEffect(s.id, s.noShot) {
+        if (s.noShot && !mine) act?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { if (s.noShot && !mine) act?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
+    }
+    Box(Modifier.fillMaxSize().graphicsLayer { translationY = dy; val k = 1f - (dy / 2200f).coerceIn(0f, 0.18f); scaleX = k; scaleY = k
+            shape = RoundedCornerShape(if (dy > 1f) 28.dp else 0.dp); clip = dy > 1f }
         .background(Color.Black).clickable(remember { MutableInteractionSource() }, null) {}
         .pointerInput(Unit) {
             // смахнуть вниз — закрыть
             detectVerticalDragGestures(
-                onDragEnd = { if (dragY > 220f) onClose() else { dragY = 0f; paused = false } },
+                onDragEnd = { if (dragY > 160f) onClose() else { dragY = 0f; paused = false } },
                 onDragCancel = { dragY = 0f; paused = false },
             ) { _, d -> dragY = (dragY + d).coerceAtLeast(0f); paused = true }
         }) {
@@ -217,7 +239,7 @@ fun StoryViewer(startUser: String, onClose: () -> Unit) {
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     Text(if (mine) "Моя история" else g.name, color = Color.White, fontWeight = FontWeight.Bold)
-                    Text(Fmt.listTime(s.createdAt), color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                    Text(storyAgo(s.createdAt), color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
                 }
                 RoundIcon(Icons.Filled.Close, tint = Color.White) { onClose() }
             }
@@ -390,62 +412,81 @@ private fun StoryCamera(onClose: () -> Unit, onPicked: (android.net.Uri, Boolean
     }
 }
 
+private fun storyAgo(d: java.util.Date): String {
+    val m = ((System.currentTimeMillis() - d.time) / 60000).toInt()
+    return when {
+        m < 1 -> "только что"
+        m < 60 -> "$m мин назад"
+        m < 60 * 24 -> "${m / 60} ч назад"
+        m < 60 * 48 -> "вчера"
+        else -> "${m / (60 * 24)} дн. назад"
+    }
+}
+
+/** Подготовка истории как в Telegram: полноэкранный предпросмотр, подпись, «Далее» → «Поделиться историей» */
 @Composable
 private fun StoryEdit(first: android.net.Uri, firstVideo: Boolean, onClose: () -> Unit, onRetake: () -> Unit) {
-    val p = P
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var uri by remember { mutableStateOf<android.net.Uri?>(first) }
-    var isVideo by remember { mutableStateOf(firstVideo) }
+    val uri = first
+    val isVideo = firstVideo
     var caption by remember { mutableStateOf("") }
-    var hours by remember { mutableStateOf(24) }
-    var aud by remember { mutableStateOf("all") }
-    var allow by remember { mutableStateOf(listOf<String>()) }
     var busy by remember { mutableStateOf(false) }
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
-        if (u != null) { uri = u; isVideo = ctx.contentResolver.getType(u)?.startsWith("video") == true }
+    var share by remember { mutableStateOf(false) }
+    var muted by remember { mutableStateOf(false) }
+    val st = remember { StoryShareState() }
+    BackHandler(!share) { onRetake() }
+    val player = remember(uri) {
+        if (!isVideo) null else ExoPlayer.Builder(ctx).build().apply { setMediaItem(MediaItem.fromUri(uri)); repeatMode = Player.REPEAT_MODE_ALL; prepare(); playWhenReady = true }
     }
-    BackHandler { onRetake() }
-    Column(Modifier.fillMaxSize().background(p.bg).clickable(remember { MutableInteractionSource() }, null) {}.statusBarsPadding().navigationBarsPadding().imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            RoundIcon(Icons.Filled.Close) { onRetake() }
-            Text("Новая история", color = p.text, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+    DisposableEffect(uri) { onDispose { player?.release() } }
+    LaunchedEffect(share) { player?.playWhenReady = !share }
+    LaunchedEffect(muted) { player?.volume = if (muted) 0f else 1f }
+    Column(Modifier.fillMaxSize().background(Color.Black).clickable(remember { MutableInteractionSource() }, null) {}.statusBarsPadding().navigationBarsPadding().imePadding().padding(horizontal = 10.dp, vertical = 4.dp)) {
+        Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color(0xFF141414))) {
+            if (player != null) AndroidView({ PlayerView(it).apply { useController = false; this.player = player } }, Modifier.fillMaxSize())
+            else AsyncImage(uri, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            RoundIcon(Icons.Filled.Close, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f), modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)) { onRetake() }
+            if (isVideo) RoundIcon(if (muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f),
+                modifier = Modifier.align(Alignment.TopStart).padding(10.dp)) { muted = !muted }
         }
-        Box(Modifier.weight(1f).fillMaxWidth().padding(14.dp).clip(RoundedCornerShape(22.dp)).background(p.panel2)
-            .bouncy { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }, contentAlignment = Alignment.Center) {
-            val u = uri
-            if (u == null) Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Filled.AddPhotoAlternate, null, tint = p.muted, modifier = Modifier.size(48.dp))
-                Text("Выбрать фото или видео", color = p.muted)
-            } else AsyncImage(u, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-            if (isVideo) Icon(Icons.Filled.PlayCircle, null, tint = Color.White, modifier = Modifier.size(56.dp))
+        Spacer(Modifier.height(10.dp))
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Color.White.copy(alpha = 0.12f)).padding(horizontal = 16.dp, vertical = 12.dp)) {
+            if (caption.isEmpty()) Text("Добавить подпись…", color = Color.White.copy(alpha = 0.5f))
+            BasicTextField(caption, { caption = it.take(300) }, textStyle = TextStyle(color = Color.White, fontSize = 16.sp), cursorBrush = SolidColor(Color.White), maxLines = 4, modifier = Modifier.fillMaxWidth())
         }
-        Column(Modifier.padding(horizontal = 14.dp)) {
-            LumoField(caption, { caption = it.take(200) }, "Подпись (необязательно)")
-            Spacer(Modifier.height(6.dp))
-            StoryHoursPicker(hours) { hours = it }
-            Spacer(Modifier.height(6.dp))
-            StoryAudiencePicker(aud, allow, { aud = it }, { allow = it })
-            Spacer(Modifier.height(10.dp))
-            GradientButton("Опубликовать", busy, enabled = uri != null) {
-                val u = uri ?: return@GradientButton
-                busy = true
-                scope.launch {
-                    val ok = withContext(Dispatchers.IO) {
-                        val raw = MediaUtil.read(ctx, u) ?: return@withContext null
-                        if (isVideo) {
-                            val type = ctx.contentResolver.getType(u) ?: "video/mp4"
-                            Triple(raw, android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(type) ?: "mp4", type) to JSONObject()
-                        } else MediaUtil.jpeg(raw)?.let { Triple(it.first, "jpg", "image/jpeg") to jsonOf("w" to it.second, "h" to it.third) }
-                    }
-                    if (ok == null) { AppModel.say("Не удалось открыть файл"); busy = false; return@launch }
-                    if (ok.first.first.size > 50 * 1024 * 1024) { AppModel.say("Файл больше 50 МБ"); busy = false; return@launch }
-                    val done = AppModel.addStory(if (isVideo) "video" else "image", ok.first.first, ok.first.second, ok.first.third, caption.trim(), ok.second, hours, aud, allow)
-                    busy = false
-                    if (done) onClose()
-                }
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            RoundIcon(Icons.AutoMirrored.Filled.ArrowBack, tint = Color.White, bg = Color.White.copy(alpha = 0.12f)) { onRetake() }
+            Spacer(Modifier.weight(1f))
+            Row(Modifier.clip(RoundedCornerShape(22.dp)).background(Color(0xFF2F8CFF)).bouncy { share = true }.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("ДАЛЕЕ", color = Color.White, fontWeight = FontWeight.Bold)
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.White, modifier = Modifier.size(20.dp))
             }
-            Spacer(Modifier.height(14.dp))
+        }
+    }
+    androidx.compose.animation.AnimatedVisibility(share, enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
+        StoryShareScreen(st, busy, onBack = { share = false }) {
+            busy = true
+            scope.launch {
+                val ok = withContext(Dispatchers.IO) {
+                    val raw = MediaUtil.read(ctx, uri) ?: return@withContext null
+                    if (isVideo) {
+                        val type = ctx.contentResolver.getType(uri) ?: "video/mp4"
+                        Triple(raw, android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(type) ?: "mp4", type) to JSONObject()
+                    } else MediaUtil.jpeg(raw)?.let { Triple(it.first, "jpg", "image/jpeg") to jsonOf("w" to it.second, "h" to it.third) }
+                }
+                if (ok == null) { AppModel.say("Не удалось открыть файл"); busy = false; return@launch }
+                if (ok.first.first.size > 50 * 1024 * 1024) { AppModel.say("Файл больше 50 МБ"); busy = false; return@launch }
+                val meta = ok.second
+                if (!st.shots) meta.put("noshot", true)
+                val thumb = if (isVideo) withContext(Dispatchers.IO) { videoThumb(ctx, uri) } else null
+                val (aud, allow) = st.resolve()
+                val done = AppModel.addStory(if (isVideo) "video" else "image", ok.first.first, ok.first.second, ok.first.third, caption.trim(), meta, st.hours, aud, allow, st.pinned, thumb)
+                busy = false
+                if (done) onClose()
+            }
         }
     }
 }

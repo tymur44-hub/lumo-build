@@ -89,6 +89,8 @@ data class Profile(
     val channelId: String? = null, val channelTitle: String? = null, val channelUsername: String? = null,
     val channelAvatar: String? = null, val channelColor: Int = 0, val channelMembers: Int = 0,
     val premium: Boolean = false, val isBot: Boolean = false, val emojiStatus: String? = null,
+    val profileBg: Int? = null, val profilePattern: String? = null,
+    val musicUrl: String? = null, val musicTitle: String = "", val musicArtist: String = "", val posts: Int = 0,
 ) {
     /** Имя без фамилии (в поле name хранится полное имя) */
     val firstName: String get() = if (lastName.isNotEmpty() && name.endsWith(" $lastName")) name.removeSuffix(" $lastName") else name
@@ -110,6 +112,9 @@ data class Profile(
             j.str("last_name") ?: "", j.str("birthday"), j.optJSONObject("privacy") ?: JSONObject(),
             j.str("channel_id"), j.str("channel_title"), j.str("channel_username"), j.str("channel_avatar"), j.int("channel_color") ?: 0, j.int("channel_members") ?: 0,
             j.bool("premium"), j.bool("is_bot"), j.str("emoji_status"),
+            j.int("profile_bg"), j.str("profile_pattern")?.takeIf { it.isNotEmpty() },
+            j.optJSONObject("profile_music")?.str("url")?.takeIf { it.isNotEmpty() },
+            j.optJSONObject("profile_music")?.str("title") ?: "", j.optJSONObject("profile_music")?.str("artist") ?: "", j.int("posts") ?: 0,
         )
     }
 }
@@ -243,11 +248,13 @@ data class StoryItem(
     val id: Int, val userId: String, val name: String, val username: String, val avatarUrl: String?, val color: Int,
     val kind: String, val mediaUrl: String, val caption: String, val createdAt: Date, val seen: Boolean, val views: Int,
     val liked: Boolean = false,
+    val noShot: Boolean = false,
 ) {
     companion object {
         fun from(j: JSONObject) = StoryItem(
             j.int("id") ?: 0, j.str("user_id") ?: "", j.str("name") ?: "", j.str("username") ?: "", j.str("avatar_url"), j.int("color") ?: 0,
             j.str("kind") ?: "image", j.str("media_url") ?: "", j.str("caption") ?: "", j.date("created_at") ?: Date(), j.bool("seen"), j.int("views") ?: 0, j.bool("liked"),
+            j.optJSONObject("meta")?.optBoolean("noshot") == true,
         )
     }
 }

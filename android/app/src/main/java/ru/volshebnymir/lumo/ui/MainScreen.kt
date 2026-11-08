@@ -32,6 +32,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -99,6 +100,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -314,16 +316,60 @@ fun ChatListScreen() {
         results.clear()
         if (q.trim().length >= 2) { delay(250); results.addAll(AppModel.search(q.trim().removePrefix("@"))) }
     }
+    // как в Telegram: истории свёрнуты в стопку у «Чаты»; потянуть список вниз — лента раскрывается, прокрутить вверх — сворачивается
+    var storiesOpen by remember { mutableStateOf(false) }
+    var emojiDlg by remember { mutableStateOf(false) }
+    var editMenu by remember { mutableStateOf(false) }
+    val scopeL = rememberCoroutineScope()
+    val pull = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            var acc = 0f
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (available.y < -6f && storiesOpen) storiesOpen = false
+                if (available.y < 0) acc = 0f
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+            override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (available.y > 0 && !storiesOpen) {
+                    acc += available.y
+                    if (acc > 140f) { acc = 0f; storiesOpen = true; scopeL.launch { AppModel.loadStories() } }
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
+    if (emojiDlg) EmojiPickerDialog { emojiDlg = false }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         NetStatusBar()
-        Row(Modifier.padding(start = 18.dp, end = 14.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Lumo", fontWeight = FontWeight.Black, fontSize = 30.sp, style = TextStyle(brush = p.accent), modifier = Modifier.weight(1f))
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(16.dp)).background(p.panel2).bouncy { Ui.qrMine = true }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.QrCodeScanner, null, tint = p.text, modifier = Modifier.size(22.dp))
+        Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box {
+                Text("Изм.", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+                    modifier = Modifier.clip(RoundedCornerShape(22.dp)).background(p.panel2).bouncy { editMenu = true }.padding(horizontal = 16.dp, vertical = 11.dp))
+                androidx.compose.material3.DropdownMenu(editMenu, { editMenu = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Новый чат, группа или канал") }, leadingIcon = { Icon(Icons.Filled.EditNote, null) },
+                        onClick = { editMenu = false; AppModel.push(Screen.NewChat) })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Архив историй") }, leadingIcon = { Icon(Icons.Filled.Archive, null) },
+                        onClick = { editMenu = false; Ui.storyArchive = "archive" })
+                }
+            }
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.animation.AnimatedVisibility(!storiesOpen && AppModel.stories.isNotEmpty(),
+                    enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.5f),
+                    exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.5f)) { StoryStack() }
+                Text("Чаты", color = p.text, fontWeight = FontWeight.Bold, fontSize = 19.sp, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 6.dp))
+                val me = AppModel.me
+                if (me?.premium == true) Box(Modifier.padding(start = 6.dp).clip(CircleShape).bouncy { emojiDlg = true }.padding(2.dp)) {
+                    val es = me.emojiStatus
+                    if (!es.isNullOrEmpty()) StatusEmoji(es, 20.sp) else Icon(Icons.Filled.Star, null, tint = p.a1, modifier = Modifier.size(18.dp))
+                }
+            }
+            Row(Modifier.clip(RoundedCornerShape(22.dp)).background(p.panel2), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(42.dp).bouncy { Ui.qrMine = true }, contentAlignment = Alignment.Center) { Icon(Icons.Filled.QrCodeScanner, null, tint = p.text, modifier = Modifier.size(20.dp)) }
+                Box(Modifier.size(42.dp).bouncy { Ui.addStory = true }, contentAlignment = Alignment.Center) { Icon(Icons.Filled.AddCircleOutline, null, tint = p.text, modifier = Modifier.size(21.dp)) }
             }
             Spacer(Modifier.width(8.dp))
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(16.dp)).background(p.panel2).bouncy { AppModel.push(Screen.NewChat) }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.EditNote, null, tint = p.text)
+            Box(Modifier.size(44.dp).clip(CircleShape).background(p.a1).bouncy { AppModel.push(Screen.NewChat) }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Edit, null, tint = Color.White, modifier = Modifier.size(20.dp))
             }
         }
         SearchBox(q, { q = it }, Modifier.padding(horizontal = 14.dp, vertical = 8.dp).fillMaxWidth())
@@ -339,8 +385,9 @@ fun ChatListScreen() {
                 when (folder) { "private" -> it.isPrivate; "group" -> it.type == "group"; "channel" -> it.isChannel; "unread" -> it.unread > 0; else -> true }
             }
             if (!AppModel.chatsLoaded) Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = p.a1) }
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 110.dp)) {
-                if (folder == "all") item(key = "stories") { StoriesBar() }
+            androidx.compose.animation.AnimatedVisibility(storiesOpen, enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()) { StoriesBar() }
+            LazyColumn(Modifier.fillMaxSize().nestedScroll(pull), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 110.dp)) {
                 if (folder == "all" && Reminders.list.isNotEmpty()) item(key = "reminders") { RemindersBar() }
                 items(list, key = { it.id }) { c -> ChatRow(c, Modifier.animateItem()) }
                 if (AppModel.chatsLoaded && list.isEmpty()) item {
@@ -552,3 +599,21 @@ fun ContactsScreen() {
 
 // ---------------- настройки ----------------
 
+
+
+/** Стопка аватаров с историями рядом с «Чаты» */
+@Composable
+fun StoryStack() {
+    val p = P
+    val groups = AppModel.stories.sortedWith(compareBy({ it.userId != AppModel.myId }, { !it.unseen }))
+    Row(Modifier.clip(CircleShape).bouncy { Ui.storyUser = groups.firstOrNull { it.userId != AppModel.myId && it.unseen }?.userId ?: groups.firstOrNull()?.userId },
+        horizontalArrangement = Arrangement.spacedBy((-12).dp), verticalAlignment = Alignment.CenterVertically) {
+        if (groups.size > 2) Box(Modifier.size(34.dp).clip(CircleShape).background(p.bg).padding(2.dp).clip(CircleShape)
+            .background(Brush.verticalGradient(listOf(Color(0xFF6FB8FF), p.a1))), contentAlignment = Alignment.Center) {
+            Text("${groups.size}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        }
+        groups.take(2).forEach { g ->
+            Box(Modifier.size(34.dp).clip(CircleShape).background(p.bg).padding(2.dp)) { Avatar(g.name, g.avatarUrl, g.color, 30.dp) }
+        }
+    }
+}

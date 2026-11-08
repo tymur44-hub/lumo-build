@@ -1083,11 +1083,33 @@ object AppModel {
         stories.clear(); stories.addAll(groups)
     }
 
-    suspend fun addStory(kind: String, data: ByteArray, ext: String, contentType: String, caption: String, meta: JSONObject, hours: Int = 24, aud: String = "all", allow: List<String> = emptyList()): Boolean = try {
+    suspend fun addStory(kind: String, data: ByteArray, ext: String, contentType: String, caption: String, meta: JSONObject, hours: Int = 24, aud: String = "all", allow: List<String> = emptyList(), pinned: Boolean = false, thumb: ByteArray? = null): Boolean = try {
         val url = Api.upload(data, ext, contentType)
-        Api.rpc("lm_story_add2", jsonOf("p_kind" to kind, "p_url" to url, "p_caption" to caption, "p_meta" to meta, "p_hours" to hours, "p_aud" to aud, "p_allow" to JSONArray(allow)))
-        loadStories(); say("История опубликована"); true
+        if (thumb != null) runCatching { meta.put("thumb", Api.upload(thumb, "jpg", "image/jpeg")) }
+        Api.rpc("lm_story_add3", jsonOf("p_kind" to kind, "p_url" to url, "p_caption" to caption, "p_meta" to meta, "p_hours" to hours, "p_aud" to aud, "p_allow" to JSONArray(allow), "p_pinned" to pinned))
+        loadStories(); loadMe(); say("История опубликована"); true
     } catch (e: Exception) { say("Ошибка: " + (e.message ?: "")); false }
+
+    // публикации в профиле, архив, близкие друзья, музыка и оформление профиля
+    suspend fun profilePosts(uid: String): List<JSONObject> = (runCatching { Api.rpc("lm_profile_posts", jsonOf("p_user" to uid)) }.getOrNull() as? JSONArray).objects()
+    suspend fun storyArchive(): List<JSONObject> = (runCatching { Api.rpc("lm_story_archive") }.getOrNull() as? JSONArray).objects()
+    suspend fun setStoryPinned(id: Int, on: Boolean) { runCatching { Api.rpc("lm_story_set_pinned", jsonOf("p_id" to id, "p_on" to on)) }; loadMe() }
+    suspend fun closeFriends(): Set<String> {
+        val r = runCatching { Api.rpc("lm_close_friends_get") }.getOrNull() as? JSONArray ?: return emptySet()
+        return (0 until r.length()).mapNotNull { i -> r.opt(i)?.let { v -> if (v is JSONObject) v.optString("lm_close_friends_get") else v.toString() } }.toSet()
+    }
+    suspend fun setCloseFriends(ids: Set<String>) { runCatching { Api.rpc("lm_close_friends_set", jsonOf("p_ids" to JSONArray(ids.toList()))) } }
+    suspend fun setProfileMusic(data: ByteArray?, ext: String = "mp3", title: String = "", artist: String = ""): Boolean = try {
+        if (data != null) {
+            val ct = when (ext) { "m4a" -> "audio/mp4"; "wav" -> "audio/wav"; "ogg" -> "audio/ogg"; else -> "audio/mpeg" }
+            val url = Api.upload(data, ext, ct)
+            Api.rpc("lm_set_profile_music", jsonOf("p" to jsonOf("url" to url, "title" to title, "artist" to artist)))
+        } else Api.rpc("lm_set_profile_music", jsonOf("p" to null))
+        loadMe(); true
+    } catch (e: Exception) { say(e.message ?: "Ошибка"); false }
+    suspend fun setProfileStyle(bg: Int?, pattern: String?): Boolean = try {
+        Api.rpc("lm_set_profile_style", jsonOf("p_bg" to bg, "p_pattern" to pattern)); loadMe(); true
+    } catch (e: Exception) { say(e.message ?: "Ошибка"); false }
 
     fun viewStory(s: StoryItem) {
         if (s.userId == myId || s.seen) return
