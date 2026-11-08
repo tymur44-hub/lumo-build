@@ -170,7 +170,7 @@ final class AppModel: ObservableObject {
         Realtime.shared.onState = { [weak self] ok in self?.netChanged(ok) }
         await loadMe()
         if let id = myId { await E2E.shared.setup(id) }
-        Task { await Reminders.shared.load(); await DNDStore.shared.load() }
+        Task { await Reminders.shared.load(); await DNDStore.shared.load(); await Streaks.shared.load() }
         netStatus = "Обновление…"
         await loadContacts()
         await loadChats()
@@ -411,7 +411,7 @@ final class AppModel: ObservableObject {
 
     func scenePhase(_ active: Bool) {
         if active { Task { await Net.pick() } }
-        if active && loggedIn && demo == nil { Task { await DNDStore.shared.checkEnded(); await Reminders.shared.load() } }
+        if active && loggedIn && demo == nil { Task { await DNDStore.shared.checkEnded(); await Reminders.shared.load(); await Streaks.shared.load() } }
         isActive = active
         if !loggedIn || demo != nil { return }
         if active {
@@ -1239,6 +1239,7 @@ final class AppModel: ObservableObject {
             messages[chatId] = sorted(list)
             scheduleReload()
             Reminders.shared.repliedIn(chatId)   // ответили — напоминания по этому чату сервер уже снял
+            if chat(chatId)?.isPrivate == true { Task { try? await Task.sleep(nanoseconds: 600_000_000); await Streaks.shared.load() } }
             return true
         } catch {
             messages[chatId]?.removeAll { $0.id == pid }
@@ -1511,7 +1512,9 @@ final class AppModel: ObservableObject {
         if let s = m.senderId { typing[m.chatId]?[s] = nil }
         if m.kind == "call" { Task { await loadCalls() } }
         scheduleReload()
+        if m.kind == "system" && (m.meta.keys.contains("streak") || m.meta.keys.contains("streak_lost")) { Task { await Streaks.shared.load() } }
         guard m.senderId != myId, m.kind != "system" else { return }
+        if chat(m.chatId)?.isPrivate == true { Task { try? await Task.sleep(nanoseconds: 600_000_000); await Streaks.shared.load() } }
         if let sid = m.senderId, profiles[sid] == nil { Task { _ = await profile(sid) } }
         // чат открыт (в том числе если поверх него открыт профиль собеседника) — баннер не нужен
         let visible = isActive && (openChatId == m.chatId || path.last == m.chatId)

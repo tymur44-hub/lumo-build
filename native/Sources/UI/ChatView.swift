@@ -58,6 +58,7 @@ struct ChatView: View {
     @State private var fxSeen = 0
     @State private var newBelow = 0
     @State private var remindFor: Message?
+    @State private var streakOpen = false
     @ObservedObject private var dnd = DNDStore.shared
 
     private var chat: ChatItem? { model.chat(chatId) }
@@ -257,6 +258,8 @@ struct ChatView: View {
         .sheet(item: $forwarding) { b in ForwardView(messages: b.messages).environmentObject(model) }
         .sheet(item: $reporting) { t in ReportView(target: t).environmentObject(model) }
         .sheet(item: $remindFor) { m in RemindPickerSheet(message: m) }
+        .sheet(isPresented: $streakOpen) { StreakSheet(chatId: chatId) }
+        .task(id: chatId) { if chat?.isPrivate == true { await Streaks.shared.load(force: false) } }
         .onChange(of: model.pendingReply) { _ in applyPending() }
         .onChange(of: model.pendingJump) { _ in applyPending() }
         .sheet(item: $tipping) { m in
@@ -786,6 +789,7 @@ struct ChatView: View {
                 HStack(spacing: 4) {
                     Text(saved ? "Избранное" : (chat?.displayName ?? "")).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
                     if chat?.isPrivate == true { NameBadges(bot: chat?.peerBot == true || (chat?.peerId.flatMap { model.profiles[$0]?.isBot } ?? false), premium: chat?.peerPremium == true || (chat?.peerId.flatMap { model.profiles[$0]?.premium } ?? false), emoji: chat?.peerId.flatMap { model.profiles[$0]?.emojiStatus }, verified: chat?.peerVerified == true || (chat?.peerId.flatMap { model.profiles[$0]?.verified } ?? false)) }
+                    if chat?.isPrivate == true { StreakBadge(chatId: chatId, size: 15).onTapGesture { streakOpen = true } }
                     if chat?.isPrivate == true && e2e.active(chatId) { Image(systemName: "lock.fill").font(.system(size: 11)).foregroundColor(Theme.a2) }
                 }
                 if let n = model.netStatus {

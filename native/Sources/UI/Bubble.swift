@@ -136,6 +136,8 @@ struct MessageRow: View {
             .buttonStyle(BouncyButtonStyle())
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
+        } else if m.kind == "system" && (m.meta.keys.contains("streak") || m.meta.keys.contains("streak_lost")) {
+            StreakSystemPill(m: m)
         } else if m.kind == "system" {
             Text(m.body ?? "")
                 .font(.system(size: 13, weight: .semibold))

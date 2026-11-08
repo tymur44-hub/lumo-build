@@ -323,7 +323,7 @@ struct ChatRow: View {
                     else if chat.type == "group" { Image(systemName: "person.2.fill").font(.caption).foregroundColor(Theme.muted) }
                     Text(chat.isPrivate && chat.peerId == model.myId ? "Избранное" : chat.displayName)
                         .font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
-                    if chat.isPrivate && chat.peerId != model.myId { NameBadges(bot: chat.peerBot, premium: chat.peerPremium, emoji: chat.peerId.flatMap { model.profiles[$0]?.emojiStatus }, verified: chat.peerVerified || (chat.peerId.flatMap { model.profiles[$0]?.verified } ?? false)) }
+                    if chat.isPrivate && chat.peerId != model.myId { NameBadges(bot: chat.peerBot, premium: chat.peerPremium, emoji: chat.peerId.flatMap { model.profiles[$0]?.emojiStatus }, verified: chat.peerVerified || (chat.peerId.flatMap { model.profiles[$0]?.verified } ?? false)); StreakBadge(chatId: chat.id) }
                     if chat.muted { Image(systemName: "speaker.slash.fill").font(.caption2).foregroundColor(Theme.muted) }
                     Spacer(minLength: 4)
                     if chat.lastSender == model.myId, chat.lastId != nil, chat.lastKind != "system" {
