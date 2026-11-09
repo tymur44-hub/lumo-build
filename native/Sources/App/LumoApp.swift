@@ -144,6 +144,7 @@ struct RootView: View {
         .modifier(DNDSummaryModifier())
         .modifier(StreakCelebrationModifier())
         .modifier(GroupCallHostModifier())
+        .modifier(GameHostModifier())
         .sheet(isPresented: Binding(get: { model.loggedIn && phones.loaded && permsDone && !phones.reminderShown && (phones.status == "remind" || phones.status == "skipped") },
                                     set: { if !$0 { phones.reminderShown = true } })) { PhoneReminderSheet() }
         .task {

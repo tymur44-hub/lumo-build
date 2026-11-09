@@ -122,6 +122,28 @@ struct MessageRow: View {
                 if !mine { Spacer(minLength: 44) }
             }
             .padding(.top, first ? 6 : 0)
+        } else if m.kind == "dice" || m.kind == "game" {
+            HStack(alignment: .bottom, spacing: 6) {
+                if mine { Spacer(minLength: 44) }
+                if isGroup && !mine {
+                    AvatarView(name: senderName, url: m.senderId.flatMap { model.profiles[$0]?.avatarURL },
+                               color: m.senderId.flatMap { model.profiles[$0]?.color } ?? 0, size: 34)
+                }
+                VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
+                    if isGroup && !mine { Text(senderName).font(.system(size: 13, weight: .bold)).foregroundColor(senderColor).padding(.leading, 6) }
+                    Group {
+                        if m.kind == "dice" { ThrowBubble(m: m, mine: mine) } else { GameBubble(m: m, mine: mine) }
+                    }
+                    .onLongPressGesture(minimumDuration: 0.35) {
+                        guard !selecting, m.id > 0 else { return }
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        onMenu(m)
+                    }
+                    reactionsRow
+                }
+                if !mine { Spacer(minLength: 44) }
+            }
+            .padding(.top, first ? 6 : 0)
         } else if m.kind == "capsule_open" {
             Button { if let id = m.meta.int("capsule") { onJump(id) } } label: {
                 HStack(spacing: 6) {

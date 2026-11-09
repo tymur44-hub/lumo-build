@@ -929,6 +929,7 @@ struct ComposerView: View {
     @State private var sendLumensTo: LumenTarget?
     @State private var urgentOn = false
     @State private var showCapsule = false
+    @State private var showGames = false
     @ObservedObject private var dndStore = DNDStore.shared
     /// собеседник в «Не беспокоить» и разрешает мне срочные
     private var canUrgent: Bool {
@@ -1042,6 +1043,8 @@ struct ComposerView: View {
                                             case "note": startNote(locked: true)
                                             case "lumens": if let p = lumensPeer { sendLumensTo = LumenTarget(id: p) }
                                             case "capsule": showCapsule = true
+                                            case "games":
+                                                if model.chat(chatId)?.type == "channel" { model.say("Игры доступны в личных чатах и группах") } else { showGames = true }
                                             default: break
                                             }
                                         })
@@ -1132,6 +1135,7 @@ struct ComposerView: View {
         }
         .sheet(isPresented: $showScheduled) { ScheduledListSheet(chatId: chatId).environmentObject(model) }
         .sheet(isPresented: $showCapsule) { CapsuleComposeSheet(chatId: chatId, replyTo: reply?.id).environmentObject(model) }
+        .sheet(isPresented: $showGames) { GamesSheet(chatId: chatId).environmentObject(model) }
         // «записывает голосовое/видео…» у собеседника
         .onReceive(Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()) { _ in reportActivity() }
         .onChange(of: rec.recording) { _ in reportActivity() }

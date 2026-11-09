@@ -153,6 +153,7 @@ fun ChatScreen(chatId: String) {
     var readersMsg by remember { mutableStateOf<Message?>(null) }
     var remindFor by remember { mutableStateOf<Message?>(null) }
     var capsuleOpen by remember { mutableStateOf(false) }
+    var gamesOpen by remember { mutableStateOf(false) }
     var capsuleReply by remember { mutableStateOf<Int?>(null) }
     var urgentOn by remember(chatId) { mutableStateOf(false) }
     val peerDnd = Dnd.peer(chat?.takeIf { it.isPrivate }?.peerId)
@@ -394,6 +395,7 @@ fun ChatScreen(chatId: String) {
                     if (need.isEmpty()) NoteSession(lockedStart).also { note = it } else { notePerm.launch(need.toTypedArray()); null }
                 },
                 onCapsule = { capsuleReply = reply?.id; reply = null; capsuleOpen = true },
+                onGames = { gamesOpen = true },
             )
         }
 
@@ -427,6 +429,7 @@ fun ChatScreen(chatId: String) {
         viewer?.let { MediaViewer(it) { viewer = null } }
         remindFor?.let { m -> RemindPickerDialog(m) { remindFor = null } }
         if (capsuleOpen) CapsuleComposeDialog(chatId, capsuleReply) { capsuleOpen = false }
+        if (gamesOpen) GamesDialog(chatId) { gamesOpen = false }
         tipMsg?.let { m -> if (chat?.isChannel == true) LumenReactDialog(m, chat.displayName) { tipMsg = null } else TipDialog(m) { tipMsg = null } }
         readersMsg?.let { m -> ReadersDialog(m) { readersMsg = null } }
         reportMsg?.let { m -> ReportDialog(m.senderId, chatId, m.id) { reportMsg = null } }
@@ -689,6 +692,21 @@ private fun MessageRow(
     if (m.kind == "gift") { GiftMessageCard(m, chat); return }
     if (m.kind == "system" && (m.meta.has("streak") || m.meta.has("streak_lost"))) { StreakSystemPill(m); return }
     if (m.kind == "capsule_open") { CapsuleOpenPill(m) { onReplyTap(it) }; return }
+    if (m.kind == "dice" || m.kind == "game") {
+        val mineG = m.senderId == AppModel.myId
+        Row(modifier.fillMaxWidth().background(if (flash) p.a2.copy(alpha = 0.18f) else Color.Transparent).padding(horizontal = 8.dp, vertical = 3.dp)) {
+            if (mineG) Spacer(Modifier.weight(1f))
+            Column(Modifier.combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
+                onClick = {}, onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onLong(m) }),
+                horizontalAlignment = if (mineG) Alignment.End else Alignment.Start) {
+                if (chat?.type == "group" && !mineG) Text(AppModel.displayName(m.senderId), color = p.a2, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp, bottom = 2.dp))
+                if (m.kind == "dice") ThrowBubble(m, mineG) else GameBubble(m, mineG)
+                Reactions(m, mineG)
+            }
+            if (!mineG) Spacer(Modifier.weight(1f))
+        }
+        return
+    }
     if (m.kind == "capsule") {
         val mineC = m.senderId == AppModel.myId
         Row(modifier.fillMaxWidth().background(if (flash) p.a2.copy(alpha = 0.18f) else Color.Transparent).padding(horizontal = 8.dp, vertical = 3.dp)) {
@@ -1079,6 +1097,7 @@ private fun Composer(
     onSendMenu: (Int) -> Unit = {}, onFx: (String) -> Unit = {},
     takeReply: () -> Int?, takeCaption: () -> String?, onVideoNote: (Boolean) -> NoteSession?,
     onCapsule: (() -> Unit)? = null,
+    onGames: (() -> Unit)? = null,
 ) {
     val p = P
     val ctx = LocalContext.current
@@ -1208,6 +1227,7 @@ private fun Composer(
                         onLumens = { sendLumensTo = chat?.peerId },
                         onPost = { kind, body, media, meta -> val r = takeReply(); scope.launch { AppModel.send(chatId, kind, body, media, meta, replyTo = r) } },
                         onCapsule = onCapsule?.takeIf { chat?.canPost != false },
+                        onGames = onGames?.takeIf { chat?.canPost != false && chat?.isChannel != true },
                     )
                 }
                 Row(Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).background(p.panel2), verticalAlignment = Alignment.Bottom) {
