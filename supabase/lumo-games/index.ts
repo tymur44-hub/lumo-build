@@ -227,7 +227,12 @@ async function handle(me: string, b: Game) {
     const state = kind === "ttt" ? { board: "........." } : kind === "checkers" ? { board: checkersStart(), quiet: 0, last: null } : { shots: {}, ready: {} };
     const { data: g, error } = await db.from("lm_games").insert({ chat_id: chat, kind, p1: me, stake, state }).select("*").single();
     if (error) { await credit(me, stake, chat, "game_refund"); fail(error.message); }
-    const { data: m } = await db.from("lm_messages").insert({ chat_id: chat, sender_id: me, kind: "game", body: TITLES[kind], meta: { game: g.id, g: kind, stake, st: "invite" } }).select("id").single();
+    const { data: m, error: me2 } = await db.from("lm_messages").insert({ chat_id: chat, sender_id: me, kind: "game", body: TITLES[kind], meta: { game: g.id, g: kind, stake, st: "invite" } }).select("id").single();
+    if (me2 || !m) {
+      await db.from("lm_games").delete().eq("id", g.id);
+      await credit(me, stake, chat, "game_refund");
+      fail(me2?.message || "Не удалось отправить приглашение");
+    }
     const ng = await save(g, { msg_id: m?.id ?? null });
     await syncMsg(ng);
     return await view(ng, me);
