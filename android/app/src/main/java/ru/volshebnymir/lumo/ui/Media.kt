@@ -350,7 +350,7 @@ private fun VideoNoteCircle(m: Message) {
     Box(Modifier.size(size).clip(CircleShape).background(p.panel2).bouncy { playing = !playing }, contentAlignment = Alignment.Center) {
         if (playing && src != null) {
             val player = remember {
-                ExoPlayer.Builder(ctx).build().apply {
+                ru.volshebnymir.lumo.core.LumoPlayer.build(ctx).apply {
                     setMediaItem(MediaItem.fromUri(ru.volshebnymir.lumo.core.Net.px(src) ?: src)); prepare(); playWhenReady = true
                     addListener(object : Player.Listener {
                         override fun onPlaybackStateChanged(s: Int) { if (s == Player.STATE_ENDED) playing = false }

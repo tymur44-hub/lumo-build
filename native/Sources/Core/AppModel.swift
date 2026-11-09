@@ -1070,6 +1070,8 @@ final class AppModel: ObservableObject {
     func addStory(kind: String, data: Data, ext: String, contentType: String, caption: String, meta: JSON, hours: Int = 24, aud: String = "all", allow: [String] = [], pinned: Bool = false, thumb: Data? = nil) async -> Bool {
         storyUpload = 0
         defer { storyUpload = nil }
+        var data = data, ext = ext, contentType = contentType
+        if kind == "video", let c = await VideoCompress.compress(data, ext: ext) { data = c; ext = "mp4"; contentType = "video/mp4" }
         do {
             let url = try await API.shared.upload(data, ext: ext, contentType: contentType) { p in
                 Task { @MainActor in if let cur = AppModel.shared.storyUpload, p * 0.95 > cur { AppModel.shared.storyUpload = p * 0.95 } }
@@ -1394,6 +1396,12 @@ final class AppModel: ObservableObject {
         let temp = Message(pendingIn: chatId, sender: me, kind: kind, body: body, meta: meta, replyTo: replyTo, local: local)
         messages[chatId, default: []].append(temp)
         Task {
+            var data = data, ext = ext, contentType = contentType, meta = meta
+            // видео с камеры сжимаем до 720p — меньше ждать отправки и меньше трафика у получателей
+            if kind == "video", let c = await VideoCompress.compress(data, ext: ext) {
+                data = c; ext = "mp4"; contentType = "video/mp4"; meta["size"] = c.count
+                if meta["name"] != nil { meta["name"] = "video.mp4" }
+            }
             do {
                 if data.count > BigFile.chunk {
                     // хранилище принимает до 50 МБ за раз — грузим частями, получатель склеит

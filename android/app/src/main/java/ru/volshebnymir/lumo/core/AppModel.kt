@@ -688,7 +688,9 @@ object AppModel {
         messages[chatId] = (messages[chatId] ?: emptyList()) + temp
         scope.launch {
             try {
-                val url = Api.upload(data, ext, contentType)
+                // видео с камеры сжимаем до 720p — меньше трафика у отправителя и получателей
+                val small = if (kind == "video") VideoCompress.compress(ctx, data, ext) else null
+                val url = if (small != null) { meta.put("size", small.size); Api.upload(small, "mp4", "video/mp4") } else Api.upload(data, ext, contentType)
                 send(chatId, kind, body, url, meta, replyTo, pendingId = temp.id)
             } catch (e: Exception) {
                 messages[chatId] = (messages[chatId] ?: emptyList()).filter { it.id != temp.id }
@@ -1193,8 +1195,9 @@ object AppModel {
 
     suspend fun addStory(kind: String, data: ByteArray, ext: String, contentType: String, caption: String, meta: JSONObject, hours: Int = 24, aud: String = "all", allow: List<String> = emptyList(), pinned: Boolean = false, thumb: ByteArray? = null): Boolean = try {
         storyUpload = 0f
+        val small = if (kind == "video") VideoCompress.compress(ctx, data, ext) else null
         val url = try {
-            Api.upload(data, ext, contentType) { p -> val v = p * 0.95f; android.os.Handler(android.os.Looper.getMainLooper()).post { if (storyUpload != null && v > (storyUpload ?: 0f)) storyUpload = v } }
+            Api.upload(small ?: data, if (small != null) "mp4" else ext, if (small != null) "video/mp4" else contentType) { p -> val v = p * 0.95f; android.os.Handler(android.os.Looper.getMainLooper()).post { if (storyUpload != null && v > (storyUpload ?: 0f)) storyUpload = v } }
         } catch (e: Exception) { storyUpload = null; throw e }
         if (thumb != null) runCatching { meta.put("thumb", Api.upload(thumb, "jpg", "image/jpeg")) }
         Api.rpc("lm_story_add3", jsonOf("p_kind" to kind, "p_url" to url, "p_caption" to caption, "p_meta" to meta, "p_hours" to hours, "p_aud" to aud, "p_allow" to JSONArray(allow), "p_pinned" to pinned))
@@ -1352,7 +1355,10 @@ object AppModel {
         }
         messages[chatId] = (messages[chatId] ?: emptyList()) + temps
         scope.launch {
-            val urls = parts.map { pt -> async { runCatching { Api.upload(pt.data, pt.ext, pt.mime) }.getOrNull() } }.map { it.await() }
+            val urls = parts.map { pt -> async { runCatching {
+                val small = if (pt.kind == "video") VideoCompress.compress(ctx, pt.data, pt.ext) else null
+                if (small != null) Api.upload(small, "mp4", "video/mp4") else Api.upload(pt.data, pt.ext, pt.mime)
+            }.getOrNull() } }.map { it.await() }
             temps.forEachIndexed { i, t ->
                 val u = urls[i]
                 if (u == null) { messages[chatId] = (messages[chatId] ?: emptyList()).filter { it.id != t.id }; say("Ошибка загрузки"); return@forEachIndexed }

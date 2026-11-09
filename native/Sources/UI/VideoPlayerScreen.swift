@@ -192,7 +192,37 @@ struct VPScrubber: View {
 }
 
 /// Собственный видеоплеер: перемотка, скорость, ±10 секунд двойным касанием, свайп вниз — закрыть
+/// Полноэкранное видео: сначала скачивается (один раз), потом играет с телефона
 struct VideoScreen: View {
+    let url: URL
+    @State private var local: URL?
+    @Environment(\.dismiss) private var dismiss
+    init(url: URL) { self.url = url; _local = State(initialValue: url.isFileURL ? url : MediaCache.shared.local(url)) }
+    var body: some View {
+        if let l = local {
+            VideoScreenInner(url: l)
+        } else {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                ProgressView().tint(.white).scaleEffect(1.3)
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button { dismiss() } label: {
+                            Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                                .frame(width: 40, height: 40).background(.ultraThinMaterial, in: Circle())
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(16)
+            }
+            .task { local = await MediaCache.shared.fetch(url) }
+        }
+    }
+}
+
+struct VideoScreenInner: View {
     let url: URL
     @Environment(\.dismiss) private var dismiss
     @StateObject private var vm: VideoPlayerModel
@@ -204,7 +234,7 @@ struct VideoScreen: View {
 
     init(url: URL) {
         self.url = url
-        _vm = StateObject(wrappedValue: VideoPlayerModel(url: url.px))
+        _vm = StateObject(wrappedValue: VideoPlayerModel(url: url.isFileURL ? url : url.px))
     }
 
     var body: some View {

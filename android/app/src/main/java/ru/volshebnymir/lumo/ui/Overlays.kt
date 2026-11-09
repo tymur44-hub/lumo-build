@@ -213,7 +213,7 @@ fun StoryViewer(startUser: String, onClose: () -> Unit) {
         }) {
             if (s.kind == "video") {
                 val player = remember(s.id) {
-                    ExoPlayer.Builder(ctx).build().apply {
+                    ru.volshebnymir.lumo.core.LumoPlayer.build(ctx).apply {
                         setMediaItem(MediaItem.fromUri(ru.volshebnymir.lumo.core.Net.px(s.mediaUrl) ?: s.mediaUrl)); prepare(); playWhenReady = true
                         addListener(object : Player.Listener {
                             override fun onPlaybackStateChanged(st: Int) { if (st == Player.STATE_READY && duration > 0) videoDur = duration }

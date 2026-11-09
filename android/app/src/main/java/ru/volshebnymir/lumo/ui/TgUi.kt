@@ -393,7 +393,7 @@ fun PostViewer(st: JSONObject, mine: Boolean, onClose: () -> Unit) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             if (st.optString("kind") == "video") {
                 val player = remember(id) {
-                    androidx.media3.exoplayer.ExoPlayer.Builder(ctx).build().apply {
+                    ru.volshebnymir.lumo.core.LumoPlayer.build(ctx).apply {
                         setMediaItem(androidx.media3.common.MediaItem.fromUri(ru.volshebnymir.lumo.core.Net.px(st.optString("media_url")) ?: st.optString("media_url"))); prepare(); playWhenReady = true
                     }
                 }

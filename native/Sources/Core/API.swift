@@ -222,7 +222,7 @@ final class API {
         guard let uid = userId else { throw APIError(message: "Войдите заново", status: 401) }
         let path = "\(uid)/\(randomId()).\(ext)"
         try await raw("POST", "/storage/v1/object/\(Config.bucket)/\(path)",
-                      headers: ["Content-Type": contentType, "x-upsert": "false", "Cache-Control": "3600"], data: data)
+                      headers: ["Content-Type": contentType, "x-upsert": "false", "Cache-Control": "max-age=31536000"], data: data)
         return Config.supabaseURL + "/storage/v1/object/public/\(Config.bucket)/\(path)"
     }
 
@@ -236,7 +236,7 @@ final class API {
         req.setValue("Bearer " + (try await validToken()), forHTTPHeaderField: "Authorization")
         req.setValue(contentType, forHTTPHeaderField: "Content-Type")
         req.setValue("false", forHTTPHeaderField: "x-upsert")
-        req.setValue("3600", forHTTPHeaderField: "Cache-Control")
+        req.setValue("max-age=31536000", forHTTPHeaderField: "Cache-Control")
         let (respData, resp) = try await Net.session.upload(for: req, from: data, delegate: UploadProgress(progress))
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         if !(200..<300).contains(code) {

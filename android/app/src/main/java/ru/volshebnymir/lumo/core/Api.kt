@@ -289,7 +289,7 @@ object Api {
     suspend fun upload(data: ByteArray, ext: String, contentType: String, progress: ((Float) -> Unit)? = null): String {
         val uid = userId ?: throw ApiError("Войдите заново", 401)
         val path = "$uid/${UUID.randomUUID().toString().take(8)}.$ext"
-        raw("POST", "/storage/v1/object/${Config.BUCKET}/$path", headers = mapOf("x-upsert" to "false", "Cache-Control" to "3600"),
+        raw("POST", "/storage/v1/object/${Config.BUCKET}/$path", headers = mapOf("x-upsert" to "false", "Cache-Control" to "max-age=31536000"),
             bytes = data, contentType = contentType, progress = progress)
         return "${Config.SUPABASE}/storage/v1/object/public/${Config.BUCKET}/$path"
     }

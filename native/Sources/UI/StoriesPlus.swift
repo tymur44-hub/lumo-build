@@ -330,7 +330,7 @@ struct PostViewer: View {
         .onAppear {
             pinned = post.pinned
             if post.kind == "video", let u = URL(string: post.mediaURL) {
-                let p = AVPlayer(url: u.px); player = p; p.play()
+                Task { let lu = await MediaCache.shared.fetch(u); let p = AVPlayer(url: lu); player = p; p.play() }
             }
         }
         .onDisappear { player?.pause() }

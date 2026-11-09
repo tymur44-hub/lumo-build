@@ -255,9 +255,16 @@ struct StoryViewer: View {
         model.viewStory(s)
         if s.kind == "video", let u = URL(string: s.mediaURL) {
             try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
-            let p = AVPlayer(url: u.px)
-            player = p
-            p.play()
+            // видео скачивается один раз и потом играет с телефона
+            Task {
+                let lu = await MediaCache.shared.fetch(u)
+                guard item?.id == s.id else { return }
+                let p = AVPlayer(url: lu)
+                player = p
+                p.play()
+                loaded = true
+            }
+            return
         }
         loaded = true
     }

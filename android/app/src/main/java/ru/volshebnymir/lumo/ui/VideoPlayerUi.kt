@@ -134,7 +134,7 @@ private fun VpCircle(icon: androidx.compose.ui.graphics.vector.ImageVector, size
 @Composable
 fun LumoVideoPlayer(src: String, onClose: () -> Unit, onSave: () -> Unit) {
     val ctx = LocalContext.current
-    val player = remember { ExoPlayer.Builder(ctx).build().apply { setMediaItem(MediaItem.fromUri(src)); prepare(); playWhenReady = true } }
+    val player = remember { ru.volshebnymir.lumo.core.LumoPlayer.build(ctx).apply { setMediaItem(MediaItem.fromUri(src)); prepare(); playWhenReady = true } }
 
     var wants by remember { mutableStateOf(true) }
     var buffering by remember { mutableStateOf(true) }
