@@ -59,14 +59,14 @@ class MainActivity : FragmentActivity() {
         if (Build.VERSION.SDK_INT < 26) return null
         val C = ru.volshebnymir.lumo.core.Calls
         val b = android.app.PictureInPictureParams.Builder().setAspectRatio(android.util.Rational(9, 16))
-        if (Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(C.state == C.State.Active && C.video).setSeamlessResizeEnabled(true)
+        if (Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(C.state == ru.volshebnymir.lumo.core.Calls.State.Active && C.video).setSeamlessResizeEnabled(true)
         return b.build()
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val C = ru.volshebnymir.lumo.core.Calls
-        if (Build.VERSION.SDK_INT in 26..30 && C.state == C.State.Active && C.video &&
+        if (Build.VERSION.SDK_INT in 26..30 && C.state == ru.volshebnymir.lumo.core.Calls.State.Active && C.video &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) runCatching { pipParams()?.let { enterPictureInPictureMode(it) } }
     }
 
