@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import ru.volshebnymir.lumo.core.Api
 import ru.volshebnymir.lumo.core.AppModel
+import ru.volshebnymir.lumo.core.isPremium
 import ru.volshebnymir.lumo.core.jsonOf
 
 /** Групповой звонок через LiveKit: доступ выдаёт сервер (lumo-lk), сам звонок — встроенная страница */
@@ -59,6 +60,12 @@ object GroupCalls {
         uid = id
         val ch = ru.volshebnymir.lumo.core.Realtime.channel("lm-gc-$id")
         ch.onBroadcast = { ev, p ->
+            // Premium выдали или продлили — обновляем профиль сразу, без перезапуска
+            if (ev == "premium") kotlinx.coroutines.MainScope().launch {
+                val was = AppModel.isPremium
+                runCatching { AppModel.loadMe() }
+                if (!was && AppModel.isPremium) AppModel.say("Lumo Premium активирован")
+            }
             if (ev == "invite") android.os.Handler(android.os.Looper.getMainLooper()).post {
                 if (current == null) {
                     val names = p.optJSONArray("names")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()

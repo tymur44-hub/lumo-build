@@ -39,6 +39,15 @@ final class GroupCalls: ObservableObject {
         uid = id
         let ch = Realtime.shared.channel("lm-gc-" + id)
         ch.onBroadcast = { [weak self] event, p in
+            // Premium выдали или продлили — обновляем профиль сразу, без перезапуска
+            if event == "premium" {
+                Task { @MainActor in
+                    let was = AppModel.shared.isPremium
+                    await AppModel.shared.loadMe()
+                    if !was && AppModel.shared.isPremium { AppModel.shared.say("Lumo Premium активирован") }
+                }
+                return
+            }
             guard event == "invite" else { return }
             Task { @MainActor in
                 guard let self, self.current == nil, let chat = p.str("chat_id") else { return }
