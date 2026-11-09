@@ -15,10 +15,10 @@
       const cache=await caches.open(CN);
       let r=await cache.match(u);
       if(!r){
-        const head=await fetch(u,{method:'GET',headers:{Range:'bytes=0-0'}}).catch(()=>null);
-        const total=head&&+(((head.headers.get('content-range')||'').split('/')[1])||0);
-        if(!total||total>MAX_ONE) return null;
-        const full=await fetch(u); if(!full.ok) return null;
+        const ctl=new AbortController();
+        const full=await fetch(u,{signal:ctl.signal}); if(!full.ok) return null;
+        const len=+(full.headers.get('content-length')||0);
+        if(len>MAX_ONE){ ctl.abort(); return null; }
         const b=await full.blob();
         await cache.put(u,new Response(b,{headers:{'Content-Type':b.type||'video/mp4','Content-Length':String(b.size)}}));
         const a=idx().filter(x=>x.u!==u); a.push({u,s:b.size}); setIdx(a); trim(cache);
