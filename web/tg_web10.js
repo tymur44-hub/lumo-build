@@ -77,9 +77,10 @@ function lgThrowLabel(k,v){
   if(k==='football') return v>=3?'Гол!':'Мимо';
   return v===1?'Орёл':'Решка'; }
 const lgSeen=new Set();
+const lgHm=d=>String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 function lgWrap(m,inner,cls){ const mine=m.sender_id===S.me.id; const c=cur()||{};
   const nm=c.type==='group'&&!mine?`<div style="font-weight:700;font-size:13px;color:var(--a2);margin-bottom:4px;text-align:left">${esc(profName(m.sender_id))}</div>`:'';
-  return `<div class="m ${mine?'me':''} tail grp first" data-id="${m.id}"><div class="b ${cls}">${nm}${inner}<div class="tm">${hm(new Date(m.created_at))}</div>${reactsHtml(m)}</div></div>`; }
+  return `<div class="m ${mine?'me':''} tail grp first" data-id="${m.id}"><div class="b ${cls}">${nm}${inner}<div class="tm">${lgHm(new Date(m.created_at))}</div>${reactsHtml(m)}</div></div>`; }
 function lgDiceHtml(m){ const mt=m.meta||{}, k=mt.g||'dice', v=+mt.v||1;
   const fresh=!lgSeen.has(m.id)&&Date.now()-new Date(m.created_at).getTime()<6000; lgSeen.add(m.id);
   return lgWrap(m,`<div class="lgd ${k}${fresh?' anim':''}">${lgThrowSvg(k,v)}</div><div class="lgres">${esc(lgThrowLabel(k,v))}</div>`,'lgdb'); }
