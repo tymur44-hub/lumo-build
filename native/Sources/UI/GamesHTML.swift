@@ -30,11 +30,11 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-famil
 .status.me{color:var(--a1)}
 .board-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 0}
 /* крестики-нолики */
-.ttt{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:min(86vw,340px);aspect-ratio:1}
-.ttt button{border:0;border-radius:18px;background:var(--panel);display:grid;place-items:center;cursor:pointer;padding:16%;transition:transform .12s,background .2s}
+.ttt{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));gap:8px;width:min(86vw,340px);height:min(86vw,340px)}
+.ttt button{border:0;border-radius:18px;background:var(--panel);display:block;position:relative;cursor:pointer;padding:0;min-width:0;min-height:0;width:100%;height:100%;overflow:hidden;transition:transform .12s,background .2s}
 .ttt button:active{transform:scale(.95)}
 .ttt button.win{background:color-mix(in srgb,var(--a1) 26%,var(--panel))}
-.ttt svg{width:100%;height:100%;overflow:visible}
+.ttt svg{position:absolute;left:18%;top:18%;width:64%;height:64%;overflow:visible}
 .ttt .x line,.mk.x line{stroke:var(--a2);stroke-width:12;stroke-linecap:round}
 .ttt .o circle,.mk.o circle{stroke:#ff6f8e;stroke-width:12;fill:none}
 .mk.x line,.mk.o circle{stroke-width:14}
