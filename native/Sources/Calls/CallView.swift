@@ -36,6 +36,9 @@ struct RTCVideoView: UIViewRepresentable {
 struct CallView: View {
     @EnvironmentObject var calls: CallManager
     @State private var now = Date()
+    /// в видеозвонке кнопки сами прячутся через 5 секунд, касание экрана возвращает их
+    @State private var uiShown = true
+    @State private var lastTouch = Date()
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var showRemote: Bool { calls.video && calls.state == .active && calls.p2p && calls.remoteVideo != nil && !calls.peerCamOff }
@@ -44,6 +47,7 @@ struct CallView: View {
     var body: some View {
         ZStack {
             AuroraBackground(intensity: calls.state == .active ? 0.8 : 1, speed: calls.state == .active ? 0.7 : 1.4)
+            if calls.video && calls.state == .active { PiPAnchor().frame(width: 2, height: 2).opacity(0.01).allowsHitTesting(false) }
             if showRemote {
                 RTCVideoView(track: calls.remoteVideo).ignoresSafeArea()
             } else if showRelay, let im = calls.relayImage {
@@ -68,9 +72,13 @@ struct CallView: View {
                         Spacer()
                     }
                     .padding(.horizontal, 20).padding(.top, 10)
+                    .opacity(hideUI ? 0 : 1)
                 }
                 Spacer()
                 controls.padding(.bottom, 30).padding(.horizontal, 10)
+                    .opacity(hideUI ? 0 : 1)
+                    .offset(y: hideUI ? 40 : 0)
+                    .allowsHitTesting(!hideUI)
             }
             if calls.video, let lv = calls.localVideo, !calls.camOff, calls.state != .incoming {
                 VStack {
@@ -86,8 +94,25 @@ struct CallView: View {
                 }
             }
         }
-        .onReceive(tick) { now = $0 }
+        .contentShape(Rectangle())
+        .onTapGesture { touch() }
+        .onReceive(tick) {
+            now = $0
+            if (showRemote || showRelay) && uiShown && now.timeIntervalSince(lastTouch) > 5 {
+                withAnimation(.easeInOut(duration: 0.45)) { uiShown = false }
+            }
+        }
+        .onChange(of: calls.remoteVideo) { CallPiP.shared.setTrack(calls.video ? $0 : nil) }
+        .onChange(of: calls.relayImage) { if let im = $0 { CallPiP.shared.push(im) } }
+        .onAppear { CallPiP.shared.setTrack(calls.video ? calls.remoteVideo : nil) }
         .statusBarHidden(showRemote || showRelay)
+    }
+
+    private var hideUI: Bool { (showRemote || showRelay) && !uiShown }
+
+    private func touch() {
+        lastTouch = Date()
+        if !uiShown { withAnimation(.easeInOut(duration: 0.3)) { uiShown = true } }
     }
 
     private var statusLine: String {
@@ -129,7 +154,7 @@ struct CallView: View {
 
     private func roundButton(_ icon: String, color: Color, fg: Color = .white, label: String, action: @escaping () -> Void) -> some View {
         VStack(spacing: 6) {
-            Button(action: action) {
+            Button(action: { lastTouch = Date(); action() }) {
                 Image(systemName: icon)
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundColor(fg)

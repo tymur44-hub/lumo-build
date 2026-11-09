@@ -44,12 +44,35 @@ class MainActivity : FragmentActivity() {
             LumoTheme { Root() }
             // во время звонка окно Lumo показывается поверх экрана блокировки и включает экран
             val inCall = ru.volshebnymir.lumo.core.Calls.state != ru.volshebnymir.lumo.core.Calls.State.Idle
+            val pipOk = ru.volshebnymir.lumo.core.Calls.state == ru.volshebnymir.lumo.core.Calls.State.Active && ru.volshebnymir.lumo.core.Calls.video
+            androidx.compose.runtime.LaunchedEffect(pipOk) { if (Build.VERSION.SDK_INT >= 31) runCatching { pipParams()?.let { setPictureInPictureParams(it) } } }
             androidx.compose.runtime.LaunchedEffect(inCall) {
                 setShowWhenLocked(inCall); setTurnScreenOn(inCall)
                 if (inCall) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
         }
+    }
+
+    /** свернули Lumo во время видеозвонка — собеседник остаётся в окошке поверх других приложений */
+    private fun pipParams(): android.app.PictureInPictureParams? {
+        if (Build.VERSION.SDK_INT < 26) return null
+        val C = ru.volshebnymir.lumo.core.Calls
+        val b = android.app.PictureInPictureParams.Builder().setAspectRatio(android.util.Rational(9, 16))
+        if (Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(C.state == C.State.Active && C.video).setSeamlessResizeEnabled(true)
+        return b.build()
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        val C = ru.volshebnymir.lumo.core.Calls
+        if (Build.VERSION.SDK_INT in 26..30 && C.state == C.State.Active && C.video &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) runCatching { pipParams()?.let { enterPictureInPictureMode(it) } }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        ru.volshebnymir.lumo.ui.CallsUi.pip = isInPictureInPictureMode
     }
 
     override fun onNewIntent(intent: Intent) {

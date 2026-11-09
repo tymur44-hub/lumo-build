@@ -37,7 +37,9 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
-            android:configChanges="orientation|screenSize|keyboardHidden|uiMode">
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode">
             <!-- lumo://open — веб-версия с главного экрана предлагает открыть приложение -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

@@ -1,5 +1,13 @@
 package ru.volshebnymir.lumo.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.ui.input.pointer.PointerEventPass
+
+import androidx.compose.ui.input.pointer.pointerInput
+
 import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -124,6 +132,9 @@ private fun PulseRings(size: Int) {
 }
 
 object CallsUi {
+    /** окно звонка сейчас в режиме «картинка в картинке» */
+    var pip by mutableStateOf(false)
+
     @Composable
     fun Overlay() {
         val show = Calls.state != Calls.State.Idle
@@ -140,11 +151,19 @@ object CallsUi {
         val relay = Calls.relayImage
         val showRelay = Calls.video && active && !Calls.p2p && relay != null && !Calls.peerCamOff
         val status = Calls.statusText.ifEmpty { Calls.startedAt?.let { Fmt.duration((now - it) / 1000.0) } ?: "" }
-        Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, null) {}) {
+        // в видеозвонке кнопки сами плавно прячутся через 5 секунд, касание экрана возвращает их
+        var lastTouch by remember { mutableLongStateOf(System.currentTimeMillis()) }
+        val videoOn = showRemote || showRelay
+        val hide = (videoOn && now - lastTouch > 5000) || pip
+        val uiAlpha by animateFloatAsState(if (hide) 0f else 1f, tween(450), label = "ui")
+        Box(Modifier.fillMaxSize().pointerInput(Unit) {
+            awaitPointerEventScope { while (true) { awaitPointerEvent(PointerEventPass.Initial); lastTouch = System.currentTimeMillis(); now = lastTouch } }
+        }.clickable(remember { MutableInteractionSource() }, null) {}) {
             AuroraBackground(if (active) 0.7f else 1.4f)
             if (showRemote) VideoView(Calls.remoteVideo, false, false, Modifier.fillMaxSize())
             else if (showRelay && relay != null) Image(relay.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (!(pip && videoOn)) Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().graphicsLayer { alpha = if (videoOn) uiAlpha else 1f },
+                horizontalAlignment = Alignment.CenterHorizontally) {
                 if (!showRemote && !showRelay) {
                     Spacer(Modifier.height(50.dp))
                     Box(Modifier.height(220.dp), contentAlignment = Alignment.Center) {
@@ -159,11 +178,11 @@ object CallsUi {
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp))
                 }
                 Spacer(Modifier.weight(1f))
-                Controls()
+                if (!(videoOn && hide)) Controls() else Spacer(Modifier.height(150.dp))
                 Spacer(Modifier.height(30.dp))
             }
             val lv = Calls.localVideo
-            if (Calls.video && lv != null && !Calls.camOff && Calls.state != Calls.State.Incoming) {
+            if (!pip && Calls.video && lv != null && !Calls.camOff && Calls.state != Calls.State.Incoming) {
                 VideoView(lv, true, true, Modifier.statusBarsPadding().padding(top = 50.dp, end = 16.dp).align(Alignment.TopEnd)
                     .size(112.dp, 160.dp).clip(RoundedCornerShape(16.dp)).border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(16.dp)))
             }
