@@ -766,6 +766,13 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         }
         guard let fmt = fit.max(by: { area($0) < area($1) }) ?? formats.first else { return }
         let maxFps = fmt.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? 30
+        // камера продолжает снимать, когда Lumo свёрнут во время видеозвонка (окошко поверх других приложений)
+        let s = cap.captureSession
+        if s.isMultitaskingCameraAccessSupported && !s.isMultitaskingCameraAccessEnabled {
+            s.beginConfiguration()
+            s.isMultitaskingCameraAccessEnabled = true
+            s.commitConfiguration()
+        }
         cap.startCapture(with: dev, format: fmt, fps: Int(min(30, maxFps)))
     }
 
