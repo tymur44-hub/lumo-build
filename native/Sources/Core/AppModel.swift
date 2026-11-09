@@ -1599,6 +1599,31 @@ final class AppModel: ObservableObject {
         Realtime.shared.broadcast(ch, event: "typing", payload: ["uid": me.id, "name": me.name, "act": act])
     }
 
+    // MARK: черновики — недописанный текст по чатам, хранится на устройстве
+    private var drafts: [String: String] = [:]
+    @Published private(set) var draftsRev = 0
+    private var draftsOwner: String?
+    private var draftsKey: String? { myId.map { "lm_drafts_" + $0 } }
+    func draft(_ chatId: String) -> String? {
+        loadDraftsIfNeeded()
+        let d = drafts[chatId] ?? ""
+        return d.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : d
+    }
+    /// publish=false — тихо сохранить при наборе (без перерисовки всего приложения на каждую букву)
+    func setDraft(_ chatId: String, _ text: String, publish: Bool = true) {
+        loadDraftsIfNeeded()
+        let v = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : String(text.prefix(4000))
+        if drafts[chatId] == v { if publish { draftsRev += 1 }; return }
+        drafts[chatId] = v
+        if let k = draftsKey { UserDefaults.standard.set(drafts, forKey: k) }
+        if publish { draftsRev += 1 }
+    }
+    private func loadDraftsIfNeeded() {
+        guard let k = draftsKey, draftsOwner != k else { return }
+        draftsOwner = k
+        drafts = (UserDefaults.standard.dictionary(forKey: k) as? [String: String]) ?? [:]
+    }
+
     func typingText(_ chatId: String) -> String? {
         guard let t = typing[chatId], !t.isEmpty else { return nil }
         func verb(_ uid: String) -> String {

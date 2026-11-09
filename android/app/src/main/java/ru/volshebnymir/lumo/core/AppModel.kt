@@ -69,6 +69,31 @@ object AppModel {
     val chats = mutableStateListOf<ChatItem>()
     var chatsLoaded by mutableStateOf(false)
     val messages = mutableStateMapOf<String, List<Message>>()
+    // черновики: недописанный текст по чатам, хранится на устройстве
+    val drafts = mutableStateMapOf<String, String>()
+    private var draftsOwner: String? = null
+    private fun draftsLoad() {
+        val k = myId?.let { "lm_drafts_$it" } ?: return
+        if (draftsOwner == k) return
+        draftsOwner = k
+        drafts.clear()
+        runCatching {
+            val o = org.json.JSONObject(ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE).getString(k, "{}") ?: "{}")
+            o.keys().forEach { id -> o.optString(id).takeIf { it.isNotBlank() }?.let { drafts[id] = it } }
+        }
+    }
+    fun draft(chatId: String): String? { return drafts[chatId]?.takeIf { it.isNotBlank() } }
+    fun setDraft(chatId: String, text: String) {
+        runCatching { draftsLoad() }
+        val v = text.takeIf { it.isNotBlank() }?.take(4000)
+        if (drafts[chatId] == v) return
+        if (v == null) drafts.remove(chatId) else drafts[chatId] = v
+        val k = draftsOwner ?: return
+        runCatching {
+            val o = org.json.JSONObject(); drafts.forEach { (id, t) -> o.put(id, t) }
+            ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE).edit().putString(k, o.toString()).apply()
+        }
+    }
     val hasMore = mutableStateMapOf<String, Boolean>()
     val profiles = mutableStateMapOf<String, Profile>()
     val reactions = mutableStateMapOf<Int, List<Reaction>>()
@@ -510,6 +535,7 @@ object AppModel {
     // ---------- чаты ----------
 
     suspend fun loadChats() {
+        runCatching { draftsLoad() }
         if (!loggedIn) return
         try {
             val rows = (Api.rpc("lm_chats_v2") as? JSONArray).objects()

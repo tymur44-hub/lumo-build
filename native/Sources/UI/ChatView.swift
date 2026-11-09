@@ -234,12 +234,15 @@ struct ChatView: View {
         .task(id: chat?.peerId) { if isBotChat, let pid = chat?.peerId { await model.loadBotMenu(pid) } }
         .onAppear {
             model.openChatId = chatId
+            if text.isEmpty, editing == nil, let d = model.draft(chatId) { text = d }
             Notifier.clear(chat: chatId)
             if model.demo == "profile" || model.demo == "qr" || model.demo == "contact" { showInfo = true }
             if model.demo == "select" { selecting = true; selected = [3, 5] }
             if model.demo == "menu" { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { menuMsg = (model.messages[chatId] ?? []).first { $0.id == 4 } } }
         }
+        .onChange(of: text) { if editing == nil { model.setDraft(chatId, $0, publish: $0.isEmpty) } }
         .onDisappear {
+            if editing == nil { model.setDraft(chatId, text) }
             if model.openChatId == chatId { model.openChatId = nil }
             AudioPlayer.shared.stop()
         }

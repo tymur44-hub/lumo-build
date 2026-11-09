@@ -436,6 +436,10 @@ struct ChatRow: View {
                 HStack(alignment: .top) {
                     if let t = model.typingText(chat.id) {
                         Text(t).font(.system(size: 14.5, weight: .semibold)).foregroundColor(Theme.a2).lineLimit(1)
+                    } else if model.openChatId != chat.id, let d = model.draft(chat.id) {
+                        (Text("Черновик: ").foregroundColor(Theme.danger).fontWeight(.semibold)
+                         + Text(d.replacingOccurrences(of: "\n", with: " ")).foregroundColor(Theme.muted))
+                            .font(.system(size: 14.5)).lineLimit(2)
                     } else {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             if chat.lastId != nil, !chat.lastDeleted, let ic = Message.previewIcon(kind: chat.lastKind ?? "") {

@@ -462,7 +462,12 @@ fun ChatRow(c: ChatItem, modifier: Modifier = Modifier) {
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val t = AppModel.typingText(c.id)
+                    val dr = if (AppModel.openChatId != c.id) AppModel.draft(c.id) else null
                     if (t != null) Text(t, color = p.a2, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                    else if (dr != null) Text(androidx.compose.ui.text.buildAnnotatedString {
+                        pushStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFFE5484D), fontWeight = FontWeight.SemiBold)); append("Черновик: "); pop()
+                        append(dr.replace('\n', ' '))
+                    }, color = p.muted, fontSize = 14.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     else {
                         kindIcon(c.lastKind)?.takeIf { c.lastId != null && !c.lastDeleted }?.let { Icon(it, null, tint = p.muted, modifier = Modifier.size(16.dp).padding(end = 4.dp)) }
                         Text(c.preview(AppModel.myId), color = p.muted, fontSize = 14.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))

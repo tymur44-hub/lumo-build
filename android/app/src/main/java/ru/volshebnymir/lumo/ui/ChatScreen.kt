@@ -126,9 +126,10 @@ fun ChatScreen(chatId: String) {
     val scope = rememberCoroutineScope()
     val chat = AppModel.chat(chatId)
     val msgs = AppModel.messages[chatId] ?: emptyList()
-    var text by rememberSaveable(chatId) { mutableStateOf("") }
+    var text by rememberSaveable(chatId) { mutableStateOf(AppModel.draft(chatId) ?: "") }
     var reply by remember { mutableStateOf<Message?>(null) }
     var editing by remember { mutableStateOf<Message?>(null) }
+    LaunchedEffect(text) { if (editing == null) AppModel.setDraft(chatId, text) }
     var menuFor by remember { mutableStateOf<Message?>(null) }
     var showScheduled by remember { mutableStateOf(false) }
     var viewer by remember { mutableStateOf<Message?>(null) }
