@@ -275,14 +275,14 @@ struct ImageScreen: View {
                 .offset(offset)
                 .gesture(MagnificationGesture()
                     .onChanged { v in scale = max(1, min(5, last * v)) }
-                    .onEnded { _ in last = scale; if scale <= 1 { withAnimation { offset = .zero } } })
+                    .onEnded { _ in last = scale; if scale <= 1 { withAnimation(Motion.snappy) { offset = .zero } } })
                 .simultaneousGesture(DragGesture()
                     .onChanged { v in offset = v.translation }
                     .onEnded { v in
                         if scale <= 1 && v.translation.height > 120 { dismiss() }
-                        else if scale <= 1 { withAnimation { offset = .zero } }
+                        else if scale <= 1 { withAnimation(Motion.snappy) { offset = .zero } }
                     })
-                .onTapGesture(count: 2) { withAnimation { scale = scale > 1 ? 1 : 2.5; last = scale; offset = .zero } }
+                .onTapGesture(count: 2) { withAnimation(Motion.snappy) { scale = scale > 1 ? 1 : 2.5; last = scale; offset = .zero } }
             HStack {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark").font(.headline).foregroundColor(.white)

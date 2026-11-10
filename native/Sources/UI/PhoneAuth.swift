@@ -271,14 +271,14 @@ struct PhoneAuthView: View {
                 }
                 if mode == .bind {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
-                    withAnimation { step = .done }
+                    withAnimation(Motion.snappy) { step = .done }
                     await store.load()
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                     onClose?()
                 } else if let th = j.str("token_hash") {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                     isNew = (j["created"] as? Bool) ?? false
-                    withAnimation { step = .done }
+                    withAnimation(Motion.snappy) { step = .done }
                     try? await Task.sleep(nanoseconds: 1_600_000_000)
                     try await model.phoneLogin(th, created: isNew)
                     onClose?()

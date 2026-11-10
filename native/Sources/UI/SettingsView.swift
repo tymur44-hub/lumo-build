@@ -171,6 +171,7 @@ struct SettingsView: View {
             }
             .background(Theme.bg.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            .background(SwipeBackInstaller().frame(width: 0, height: 0))
             .navigationDestination(for: SettingsPage.self) { p in
                 switch p {
                 case .premium: PremiumPageView()

@@ -125,6 +125,7 @@ struct ContactsView: View {
             }
             .background(Theme.bg.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            .background(SwipeBackInstaller().frame(width: 0, height: 0))
             .onChange(of: q) { t in search(t) }
             .sheet(item: $person) { p in PersonSheet(userId: p.value).environmentObject(model) }
             .sheet(isPresented: $share) { ShareSheet(items: [model.profileLink]) }

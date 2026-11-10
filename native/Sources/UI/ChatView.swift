@@ -324,7 +324,7 @@ struct ChatView: View {
     }
 
     private func endSelecting() {
-        withAnimation { selecting = false; selected = [] }
+        withAnimation(Motion.snappy) { selecting = false; selected = [] }
     }
 
     private func toggle(_ m: Message) {
@@ -707,6 +707,9 @@ struct ChatView: View {
                         .rotationEffect(.degrees(180))
                         .scaleEffect(x: -1, y: 1)
                         .id(f.id)
+                        // новое сообщение «выезжает» снизу, удалённое быстро сжимается
+                        .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity),
+                                                removal: .opacity.combined(with: .scale(scale: 0.85))))
                     }
                     if model.hasMore[chatId] == true {
                         ProgressView()
@@ -715,6 +718,7 @@ struct ChatView: View {
                     }
                 }
                 .padding(.horizontal, 8)
+                .animation(Motion.snappy, value: model.messages[chatId]?.last?.id)
             }
             .rotationEffect(.degrees(180))
             .scaleEffect(x: -1, y: 1)
@@ -722,7 +726,7 @@ struct ChatView: View {
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: model.messages[chatId]?.last?.id) { _ in
                 if model.messages[chatId]?.last?.senderId == model.myId {
-                    withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .top) }
+                    withAnimation(Motion.snappy) { proxy.scrollTo("bottom", anchor: .top) }
                 } else if !atBottom {
                     newBelow += 1
                 }
@@ -731,7 +735,7 @@ struct ChatView: View {
             .overlay(alignment: .bottomTrailing) {
                 if !atBottom {
                     Button {
-                        withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo("bottom", anchor: .top) }
+                        withAnimation(Motion.snappy) { proxy.scrollTo("bottom", anchor: .top) }
                         newBelow = 0
                     } label: {
                         Image(systemName: "chevron.down")
@@ -758,7 +762,7 @@ struct ChatView: View {
             .animation(.easeOut(duration: 0.18), value: atBottom)
             .onChange(of: highlight) { id in
                 guard let id = id else { return }
-                withAnimation { proxy.scrollTo(id, anchor: .center) }
+                withAnimation(Motion.snappy) { proxy.scrollTo(id, anchor: .center) }
                 Task { try? await Task.sleep(nanoseconds: 1_600_000_000); if highlight == id { highlight = nil } }
             }
         }
@@ -1249,7 +1253,7 @@ struct ComposerView: View {
                         }
                         if !rec.recording {
                             if abs(v.translation.width) < 10 && abs(v.translation.height) < 10 {
-                                withAnimation { videoMode.toggle() }
+                                withAnimation(Motion.snappy) { videoMode.toggle() }
                                 model.say(videoMode ? "Удерживайте, чтобы записать кружок" : "Удерживайте, чтобы записать голосовое")
                             }
                             return

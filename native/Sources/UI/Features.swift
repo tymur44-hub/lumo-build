@@ -749,7 +749,7 @@ struct CapsuleBubble: View {
     private func tap(ready: Bool) {
         if !ready {
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
-            withAnimation(.default) { shake = 12 }
+            withAnimation(Motion.snappy) { shake = 12 }
             withAnimation(.interpolatingSpring(stiffness: 600, damping: 6).delay(0.05)) { shake = 0 }
             model.say("Ещё рано. Откроется " + CapsuleStore.dateText(openAt))
             return

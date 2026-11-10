@@ -352,7 +352,7 @@ struct SendMenuOverlay: View {
                     HStack { ForEach(Array(fxList.prefix(7)), id: \.self) { cell($0) } }
                     if more { HStack { ForEach(Array(fxList.dropFirst(7)), id: \.self) { cell($0) } } }
                     else {
-                        Button { withAnimation { more = true } } label: {
+                        Button { withAnimation(Motion.snappy) { more = true } } label: {
                             Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundColor(.white)
                                 .frame(width: 32, height: 32).background(Circle().fill(Theme.a1.opacity(0.5)))
                         }

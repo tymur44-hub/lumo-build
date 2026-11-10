@@ -27,7 +27,7 @@ struct ChatWallSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(preview ? "Назад" : "Закрыть") { if preview { withAnimation(.easeInOut(duration: 0.3)) { preview = false } } else { dismiss() } }
+                    Button(preview ? "Назад" : "Закрыть") { if preview { withAnimation(Motion.snappy) { preview = false } } else { dismiss() } }
                 }
             }
         }
@@ -36,7 +36,7 @@ struct ChatWallSheet: View {
             Task {
                 if let d = try? await item.loadTransferable(type: Data.self), let im = UIImage(data: d) {
                     image = im; preset = nil
-                    withAnimation(.easeInOut(duration: 0.3)) { preview = true }
+                    withAnimation(Motion.snappy) { preview = true }
                 }
             }
         }
@@ -51,7 +51,7 @@ struct ChatWallSheet: View {
                             .frame(height: 140).clipShape(RoundedRectangle(cornerRadius: 16))
                             .overlay(alignment: .topTrailing) { if wallIsPremium(i) { Image(systemName: "star.fill").font(.system(size: 13)).foregroundColor(Color(hex: 0xffc247)).padding(8) } }
                             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.line))
-                            .onTapGesture { preset = i; image = nil; withAnimation(.easeInOut(duration: 0.3)) { preview = true } }
+                            .onTapGesture { preset = i; image = nil; withAnimation(Motion.snappy) { preview = true } }
                     }
                 }
                 PhotosPicker(selection: $pick, matching: .images) {

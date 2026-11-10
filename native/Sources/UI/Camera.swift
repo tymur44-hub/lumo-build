@@ -230,7 +230,7 @@ struct UserQRSheet: View {
                         UIPasteboard.general.string = "@" + username
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { copied = true }
-                        Task { try? await Task.sleep(nanoseconds: 1_500_000_000); withAnimation { copied = false } }
+                        Task { try? await Task.sleep(nanoseconds: 1_500_000_000); withAnimation(Motion.snappy) { copied = false } }
                     } label: {
                         HStack(spacing: 8) {
                             Text("@" + username).font(.system(size: 22, weight: .bold))

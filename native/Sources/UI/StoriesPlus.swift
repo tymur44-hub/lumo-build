@@ -180,7 +180,7 @@ struct StoryShareSheet: View {
         .padding(.horizontal, 12).padding(.vertical, 9)
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation { choice = key }
+            withAnimation(Motion.snappy) { choice = key }
             if key == "only" && sel.isEmpty { pick = .only }
             if key == "close" && close.isEmpty { pick = .close }
         }

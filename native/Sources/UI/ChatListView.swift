@@ -63,6 +63,7 @@ struct ChatListView: View {
             NavigationStack(path: $model.path) {
                 listContent
                     .toolbar(.hidden, for: .navigationBar)
+                    .background(SwipeBackInstaller().frame(width: 0, height: 0))
                     .navigationDestination(for: String.self) { id in ChatView(chatId: id) }
             }
         }

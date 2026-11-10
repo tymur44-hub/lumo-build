@@ -202,7 +202,7 @@ struct IncomingBannerView: View {
         .padding(.horizontal, 10)
         .offset(y: min(drag, 0))
         .gesture(DragGesture().onChanged { v in if v.translation.height < 0 { drag = v.translation.height } }
-            .onEnded { v in if v.translation.height < -20 { model.banner = nil } else { withAnimation { drag = 0 } } })
+            .onEnded { v in if v.translation.height < -20 { model.banner = nil } else { withAnimation(Motion.snappy) { drag = 0 } } })
         .onTapGesture {
             let chatId = banner.chatId
             model.banner = nil

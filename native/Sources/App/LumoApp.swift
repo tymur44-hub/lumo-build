@@ -122,7 +122,7 @@ struct RootView: View {
             if model.loggedIn && phones.loaded && phones.status == "required" {
                 PhoneAuthView(mode: .bind, required: true).transition(.opacity)
             }
-            if !permsDone { PermissionsView { withAnimation { permsDone = true } }.transition(.opacity) }
+            if !permsDone { PermissionsView { withAnimation(Motion.snappy) { permsDone = true } }.transition(.opacity) }
             MiniNoteOverlay()
             if rc.needsUpdate { UpdateRequiredScreen().transition(.opacity).zIndex(10) }
             if let t = model.toast {
@@ -164,6 +164,7 @@ struct ChatDetail: View {
         NavigationStack {
             if let id = model.path.last {
                 ChatView(chatId: id).id(id)
+                    .background(SwipeBackInstaller().frame(width: 0, height: 0))
             } else {
                 ZStack {
                     Theme.chatBg.ignoresSafeArea()

@@ -1214,9 +1214,9 @@ struct NewChatView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     SectionTitle(text: "Ссылка")
                     card {
-                        typeRow("Публичная", on: isPublic) { withAnimation { isPublic = true } }
+                        typeRow("Публичная", on: isPublic) { withAnimation(Motion.snappy) { isPublic = true } }
                         Divider().overlay(Theme.line).padding(.leading, 56)
-                        typeRow("Частная", on: !isPublic) { withAnimation { isPublic = false } }
+                        typeRow("Частная", on: !isPublic) { withAnimation(Motion.snappy) { isPublic = false } }
                     }
                     footnote(isPublic ? "Публичные \(isChannel ? "каналы" : "группы") можно найти через поиск, вступить в них может любой пользователь."
                                       : "На частные \(isChannel ? "каналы" : "группы") можно вступить только по ссылке-приглашению.")
