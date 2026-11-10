@@ -516,13 +516,18 @@ object AppModel {
     // имена, которые я дал контактам, хранятся на устройстве (и дублируются на сервер для других устройств)
     private val aliasKey get() = myId?.let { "lm_aliases_$it" }
     private val pendingAliases = mutableSetOf<String>()
-    fun localAliases(): Map<String, String> = runCatching {
+    /** всё, что записано на устройстве; пустая строка — имя сброшено на этом устройстве */
+    private fun localAliasesRaw(): Map<String, String> = runCatching {
         val k = aliasKey ?: return emptyMap()
         val o = org.json.JSONObject(ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE).getString(k, "{}") ?: "{}")
-        o.keys().asSequence().associateWith { o.optString(it) }.filterValues { it.isNotBlank() }
+        o.keys().asSequence().associateWith { o.optString(it) }
     }.getOrDefault(emptyMap())
-    private fun saveAliases() { val k = aliasKey ?: return; runCatching {
-        val o = org.json.JSONObject(); aliases.forEach { (id, a) -> o.put(id, a) }
+    fun localAliases(): Map<String, String> = localAliasesRaw().filterValues { it.isNotBlank() }
+    private fun saveAliases(cleared: String? = null) { val k = aliasKey ?: return; runCatching {
+        val o = org.json.JSONObject()
+        localAliasesRaw().forEach { (id, a) -> if (a.isBlank()) o.put(id, "") }   // отметки «сброшено» сохраняем
+        aliases.forEach { (id, a) -> o.put(id, a) }
+        if (cleared != null) o.put(cleared, "")
         ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE).edit().putString(k, o.toString()).apply() } }
 
     suspend fun loadContacts() {
@@ -531,8 +536,15 @@ object AppModel {
         contacts.clear(); contacts.addAll(rows.mapNotNull { it.str("contact_id") })
         val fresh = HashMap<String, String>()
         rows.forEach { r -> val id = r.str("contact_id"); val a = r.str("alias"); if (id != null && !a.isNullOrEmpty()) fresh[id] = a }
-        localAliases().forEach { (id, a) -> if (fresh[id] == null && id in pendingAliases && contacts.contains(id)) fresh[id] = a }
+        // главное — то, что записано на этом устройстве: оно важнее сервера, а сервер догоняем
+        val resync = mutableListOf<Pair<String, String>>()
+        localAliasesRaw().forEach { (id, a) ->
+            if (!contacts.contains(id)) return@forEach
+            if (a.isBlank()) { if (fresh.remove(id) != null) resync += id to "" }
+            else if (fresh[id] != a) { fresh[id] = a; resync += id to a }
+        }
         aliases.keys.retainAll(fresh.keys); aliases.putAll(fresh); saveAliases()
+        resync.forEach { (id, a) -> scope.launch { runCatching { Api.rpc("lm_set_alias", jsonOf("p_user" to id, "p_alias" to a)) } } }
         loadProfiles(contacts)
     }
 
@@ -555,7 +567,7 @@ object AppModel {
         // сразу на устройстве — имя меняется мгновенно и не зависит от сети
         val v = alias.trim()
         if (v.isEmpty()) aliases.remove(id) else aliases[id] = v
-        saveAliases(); pendingAliases.add(id)
+        saveAliases(if (v.isEmpty()) id else null); pendingAliases.add(id)
         runCatching { Api.rpc("lm_set_alias", jsonOf("p_user" to id, "p_alias" to alias)) }.onSuccess { pendingAliases.remove(id) }.onFailure { say(it.message ?: "Ошибка") }
         loadContacts(); loadChats()
     }

@@ -280,7 +280,7 @@ object Calls {
             callId = cid; role = "callee"; peerId = from; chatId = p.str("chatId")
             secInit(from)
             video = p.bool("video"); speaker = video; muted = false; camOff = false; peerCamOff = false
-            peerName = p.str("name") ?: "Lumo"; peerAvatar = p.str("avatar"); peerColor = p.int("color") ?: 0
+            peerName = AppModel.aliases[from]?.takeIf { it.isNotBlank() } ?: p.str("name") ?: "Lumo"; peerAvatar = p.str("avatar"); peerColor = p.int("color") ?: 0
             state = State.Incoming
             statusText = if (video) "Входящий видеозвонок" else "Входящий звонок"
             log("ring_in", jsonOf("from" to from))
