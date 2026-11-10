@@ -1,0 +1,2 @@
+/* ===== Стикеры с сервера (наборы задаются в lm_config.look.stickers) ===== */
+(function(){ const st=document.createElement('style'); st.textContent='.rstk{width:120px;height:120px;object-fit:contain;display:block}.eg.stk .rstk{width:100%;height:auto;aspect-ratio:1}.eg.stk .rspk{grid-column:1/-1;font-size:12px;font-weight:700;color:var(--muted);padding:8px 4px 2px}'; document.head.appendChild(st); })();
