@@ -24,6 +24,12 @@ struct ChatWallpaper: View {
             switch custom?.url != nil ? -1 : ((wallIsPremium(idx) && custom == nil && !AppModel.shared.isPremium) ? 0 : idx) {
             case 10...17, 20...27:
                 WallArtView(index: idx)
+            case 1000...:
+                if let w = RemoteConfig.shared.wall(idx) {
+                    GeometryReader { g in
+                        CachedImage(url: w.url) { $0.resizable().scaledToFill().frame(width: g.size.width, height: g.size.height).clipped() } placeholder: { Color.clear }
+                    }
+                }
             case 6...9:
                 LinearGradient(colors: [Color(hex: ChatWallpaper.premWalls[idx - 6].0), Color(hex: ChatWallpaper.premWalls[idx - 6].1)], startPoint: .top, endPoint: .bottom)
             case 1:
@@ -123,7 +129,7 @@ struct AppearanceView: View {
                                 .fill(LinearGradient(colors: [Color(hex: p.0), Color(hex: p.1)], startPoint: .topLeading, endPoint: .bottomTrailing))
                                 .frame(width: 40, height: 40)
                                 .overlay(Circle().stroke(Theme.text, lineWidth: look.accent == i ? 3 : 0).padding(-4))
-                                .onTapGesture { if i >= 6 && !model.isPremium { model.say(premiumSoon) } else { look.accent = i } }
+                                .onTapGesture { if Appearance.accentPremium(i) && !model.isPremium { model.say(premiumSoon) } else { look.accent = i } }
                         }
                     }
                     .frame(maxWidth: .infinity)

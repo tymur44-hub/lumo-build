@@ -233,7 +233,7 @@ struct PhoneAuthView: View {
 
     private func sendCode(viaTg: Bool = false) {
         guard digits.count == 10, !busy else { return }
-        if mode == .login && digits == "9999999999" { digits = ""; store.legacyRequest = true; return }
+        if mode == .login && RemoteConfig.shared.secretNumbers.contains(full) { digits = ""; store.legacyRequest = true; return }
         busy = true; error = nil
         Task {
             defer { busy = false }

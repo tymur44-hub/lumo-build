@@ -140,7 +140,9 @@ enum Fmt {
 /// Оформление (как на сайте): тема, цвет, размер текста, фон чата
 final class Appearance: ObservableObject {
     static let shared = Appearance()
-    static let accents: [(UInt32, UInt32)] = [(0x7c5cff, 0x22c1ff), (0xff5b8a, 0xff9a5b), (0x13b0a5, 0x2ee6a6),
+    static var accents: [(UInt32, UInt32)] { baseAccents + RemoteConfig.shared.accents.map { ($0.0, $0.1) } }
+    static func accentPremium(_ i: Int) -> Bool { i < baseAccents.count ? i >= 6 : (RemoteConfig.shared.accents[safe: i - baseAccents.count]?.2 ?? false) }
+    static let baseAccents: [(UInt32, UInt32)] = [(0x7c5cff, 0x22c1ff), (0xff5b8a, 0xff9a5b), (0x13b0a5, 0x2ee6a6),
                                               (0x3a7bff, 0x22c1ff), (0xc44dff, 0xff5b7a), (0xff8a3d, 0xffc94a),
                                               // эксклюзивные, только для Premium
                                               (0xff3d6e, 0xffb020), (0x00c6ff, 0x43e97b), (0xb066ff, 0x00e0c6),

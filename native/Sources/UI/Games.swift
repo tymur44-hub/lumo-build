@@ -425,7 +425,7 @@ struct GameWeb: UIViewRepresentable {
         let conf: [String: Any] = ["api": Net.base + "/functions/v1/lumo-games", "apikey": Config.anonKey, "token": token,
                                    "gameId": gameId, "theme": dark ? "dark" : "light"]
         let js = (try? JSONSerialization.data(withJSONObject: conf)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-        let html = gamesHTML.replacingOccurrences(of: "/*CFG*/", with: "window.LUMO_GAME=\(js);")
+        let html = (RemoteConfig.shared.gamesHTML() ?? gamesHTML).replacingOccurrences(of: "/*CFG*/", with: "window.LUMO_GAME=\(js);")
         w.loadHTMLString(html, baseURL: URL(string: "https://lumomess.ru/"))
         return w
     }

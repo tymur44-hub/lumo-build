@@ -41,7 +41,7 @@ struct LumoApp: App {
                 }
         }
         .onChange(of: phase) { p in
-            if p == .active { model.scenePhase(true); ExtraStore.shared.scene(active: true) }
+            if p == .active { model.scenePhase(true); ExtraStore.shared.scene(active: true); Task { await RemoteConfig.shared.refresh() } }
             else if p == .background { model.scenePhase(false); ExtraStore.shared.scene(active: false) }
         }
     }
@@ -107,6 +107,7 @@ struct RootView: View {
     @ObservedObject private var phones = PhoneStore.shared
     @AppStorage("lm_perms_done") private var permsDone = false
     @ObservedObject private var savedAccounts = Accounts.shared
+    @ObservedObject private var rc = RemoteConfig.shared
 
     var body: some View {
         ZStack {
@@ -123,6 +124,7 @@ struct RootView: View {
             }
             if !permsDone { PermissionsView { withAnimation { permsDone = true } }.transition(.opacity) }
             MiniNoteOverlay()
+            if rc.needsUpdate { UpdateRequiredScreen().transition(.opacity).zIndex(10) }
             if let t = model.toast {
                 VStack {
                     Spacer()

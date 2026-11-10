@@ -111,9 +111,10 @@ struct AttachSheet: View {
     private let maxPick = 10
 
     private var tabs: [(String, String)] {
-        var t = [("Галерея", "photo.on.rectangle.fill"), ("Файл", "doc.fill"), ("Геопозиция", "location.fill"),
+        var t: [(String, String)] = [("Галерея", "photo.on.rectangle.fill"), ("Файл", "doc.fill"), ("Геопозиция", "location.fill"),
                  ("Опрос", "chart.bar.fill"), ("Звук", "play.circle.fill"), ("Контакт", "person.crop.circle.fill"),
-                 ("Камера", "camera.fill"), ("Кружок", "video.circle.fill"), ("Капсула", "hourglass"), ("Игры", "gamecontroller.fill")]
+                 ("Камера", "camera.fill"), ("Кружок", "video.circle.fill"), ("Капсула", "hourglass")]
+        if RemoteConfig.shared.on("games") { t.append(("Игры", "gamecontroller.fill")) }
         if canLumens { t.append(("Люмены", "sparkle")) }
         return t
     }

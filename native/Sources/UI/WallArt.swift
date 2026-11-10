@@ -3,8 +3,9 @@ import SwiftUI
 /// Номера обоев те же, что на Android: 0 — без обоев, 1–5 и 10–17 — для всех, 6–9 и 20–27 — Premium
 let wallFree = [0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17]
 let wallPremium = [6, 7, 8, 9, 20, 21, 22, 23, 24, 25, 26, 27]
-let wallAll = wallFree + wallPremium
-func wallIsPremium(_ i: Int) -> Bool { (6...9).contains(i) || i >= 20 }
+var wallAll: [Int] { wallFree + wallPremium + RemoteConfig.shared.walls.map(\.id) }
+/// 1000+n — обои с сервера
+func wallIsPremium(_ i: Int) -> Bool { i >= 1000 ? (RemoteConfig.shared.wall(i)?.premium ?? false) : ((6...9).contains(i) || i >= 20) }
 
 private struct SeededRNG {
     var s: UInt64

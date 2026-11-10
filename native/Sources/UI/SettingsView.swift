@@ -129,9 +129,11 @@ struct SettingsView: View {
                             }
                             .padding(.vertical, 9).padding(.horizontal, 4).contentShape(Rectangle())
                         }
+                        if RemoteConfig.shared.on("gifts") {
                         divider
                         NavigationLink(value: SettingsPage.gifts) {
                             SettingsRow(icon: "gift.fill", color: Color(hex: 0x2bc4a8), title: "Подарки", subtitle: "Коллекционные подарки за люмены")
+                        }
                         }
                         divider
                         NavigationLink(value: SettingsPage.capsules) {

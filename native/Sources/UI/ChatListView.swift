@@ -94,7 +94,8 @@ struct ChatListView: View {
                     .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 10)
 
                 if query.trimmingCharacters(in: .whitespaces).isEmpty {
-                    if storiesOpen {
+                    AnnounceCard()
+                    if storiesOpen && RemoteConfig.shared.on("stories") {
                         StoriesBar(open: { storyStart = $0 }, add: { addStory = true }, menu: { archiveMode = $0 })
                             .padding(.bottom, 8)
                             .transition(.move(edge: .top).combined(with: .opacity))

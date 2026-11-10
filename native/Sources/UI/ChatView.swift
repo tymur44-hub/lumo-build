@@ -1384,6 +1384,19 @@ struct StickerPanel: View {
                         }
                     }
                     .padding(10)
+                    // наборы стикеров с сервера
+                    ForEach(RemoteConfig.shared.packs) { p in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(p.name).font(.system(size: 13, weight: .bold)).foregroundColor(Theme.muted).padding(.horizontal, 14)
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 10) {
+                                ForEach(p.items) { s in
+                                    Button { onSticker(stickerImgPrefix + s.url.absoluteString) } label: { RemoteStickerView(url: s.url, size: 58) }
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                        }
+                        .padding(.bottom, 10)
+                    }
                 }
             }
         }

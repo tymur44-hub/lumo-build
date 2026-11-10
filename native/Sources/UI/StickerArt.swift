@@ -124,6 +124,8 @@ struct StickerBodyView: View {
     var body: some View {
         if let b = body_, b.hasPrefix(stickerArtPrefix) {
             StickerArtView(id: String(b.dropFirst(stickerArtPrefix.count)), size: size)
+        } else if let b = body_, b.hasPrefix(stickerImgPrefix), let u = URL(string: String(b.dropFirst(stickerImgPrefix.count))) {
+            RemoteStickerView(url: u, size: size)
         } else {
             Text(body_ ?? "").font(.system(size: size * 0.66))
         }
