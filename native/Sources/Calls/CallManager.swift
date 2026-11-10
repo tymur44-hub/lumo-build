@@ -68,10 +68,11 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
     private var audioActive = false
     /// На некоторых iPhone системный экран звонка (CallKit) недоступен — сразу сбрасывается.
     /// Тогда звоним без него: своё окно звонка, свой звонок-мелодия и уведомление.
-    private var callKitBroken: Bool {
-        get { Date().timeIntervalSince1970 - UserDefaults.standard.double(forKey: "lm_ck_broken_at") < 3 * 86400 }
-        set { UserDefaults.standard.set(newValue ? Date().timeIntervalSince1970 : 0, forKey: "lm_ck_broken_at") }
-    }
+    /// Раньше одна ошибка отключала системный экран на 3 дня — теперь только на текущий звонок,
+    /// следующий звонок снова пробует показать системное окно «Вам звонят».
+    private var callKitBroken = false
+    private var reportTries = 0
+    private let callObserver = CXCallObserver()
     private var ringTimer: Timer?
     private var iceServers: [RTCIceServer]?
     /// когда получены TURN-серверы (их пароли живут сутки — обновляем каждые 6 часов)
@@ -95,6 +96,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         provider = CXProvider(configuration: cfg)
         super.init()
         provider.setDelegate(self, queue: nil)
+        UserDefaults.standard.removeObject(forKey: "lm_ck_broken_at")
         RTCAudioSession.sharedInstance().useManualAudio = true
         RTCAudioSession.sharedInstance().isAudioEnabled = false
     }
@@ -488,11 +490,22 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
 
     private func reportIncoming() {
         startCallNotifications()
-        if callKitBroken {
-            uuid = nil
-            startOwnRing()
-            return
+        callKitBroken = false
+        reportTries = 0
+        reportToCallKit()
+    }
+
+    /// закрыть «зависшие» системные звонки Lumo, из‑за которых iOS не показывает новый
+    private func endStaleCalls() {
+        for c in callObserver.calls where !c.hasEnded && c.uuid != uuid {
+            provider.reportCall(with: c.uuid, endedAt: Date(), reason: .remoteEnded)
         }
+    }
+
+    private func reportToCallKit() {
+        guard state == .incoming else { return }
+        reportTries += 1
+        endStaleCalls()
         let u = UUID()
         uuid = u
         let up = CXCallUpdate()
@@ -511,10 +524,16 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
                 let cm = CallManager.shared
                 cm.log(e == nil ? "report_ok" : "report_err", ["err": e ?? ""])
                 if e != nil {
-                    // системный экран звонка не показался — звоним своим окном, звуком и уведомлениями
                     cm.uuid = nil
-                    cm.callKitBroken = true
-                    if cm.state == .incoming { cm.startOwnRing() }
+                    guard cm.state == .incoming else { return }
+                    if cm.reportTries < 2 {
+                        // вторая попытка через мгновение (после закрытия старых звонков)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { CallManager.shared.reportToCallKit() }
+                    } else {
+                        // системный экран так и не показался — звоним своим окном, звуком и уведомлениями
+                        cm.callKitBroken = true
+                        cm.startOwnRing()
+                    }
                 }
             }
         }
@@ -636,6 +655,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         guard state != .idle else { return }
         log("end", ["status": status, "remote": remote, "why": why])
         stopOwnRing()
+        callKitBroken = false
         let wasCaller = role == "caller"
         let dur = startedAt.map { Int(Date().timeIntervalSince($0).rounded()) } ?? 0
         let cid = chatId
@@ -1077,8 +1097,10 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
     nonisolated func providerDidReset(_ provider: CXProvider) {
         Task { @MainActor in
             self.log("cx_reset")
-            // сброс системного экрана звонка (даже без звонка, при запуске) — на этом iPhone CallKit не работает
+            // сброс системного экрана звонка: для текущего звонка продолжаем без него, следующий снова попробует
+            let hadCall = self.uuid != nil
             self.uuid = nil
+            guard hadCall else { return }
             self.callKitBroken = true
             if self.state == .incoming {
                 // системный экран звонка не работает на этом iPhone — звоним своим окном
