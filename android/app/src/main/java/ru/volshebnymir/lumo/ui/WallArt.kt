@@ -19,13 +19,15 @@ import kotlin.math.*
 /** Номера обоев общие для чатов и настроек, такие же на iPhone: 0 — без обоев, 1–5 и 10–17 — для всех, 6–9 и 20–27 — Premium */
 val WALL_FREE = listOf(0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17)
 val WALL_PREMIUM = listOf(6, 7, 8, 9, 20, 21, 22, 23, 24, 25, 26, 27)
-val WALL_ALL = WALL_FREE + WALL_PREMIUM
-fun wallIsPremium(i: Int) = i in 6..9 || i >= 20
+/** 1000+n — обои с сервера */
+val WALL_ALL: List<Int> get() = WALL_FREE + WALL_PREMIUM + ru.volshebnymir.lumo.core.RemoteConfig.walls.map { it.id }
+fun wallIsPremium(i: Int) = if (i >= 1000) (ru.volshebnymir.lumo.core.RemoteConfig.wall(i)?.premium ?: false) else (i in 6..9 || i >= 20)
 
 /** Слой обоев с нужным номером (поверх цвета фона чата) */
 @Composable
 fun WallLayer(i: Int, p: Palette, modifier: Modifier = Modifier.fillMaxSize()) {
-    if (i >= 10) WallArt(i, modifier)
+    if (i >= 1000) RemoteWallLayer(i, modifier)
+    else if (i >= 10) WallArt(i, modifier)
     else wallPresetBrush(i, p)?.let { Box(modifier.background(it)) }
 }
 

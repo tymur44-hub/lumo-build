@@ -116,8 +116,10 @@ fun WalletScreen() {
         Card {
             SettingsRow(Icons.Filled.AddCard, Color(0xFF2BD67B), "Пополнить", "Покупка люменов — в разработке") { AppModel.say("Пополнение пока недоступно") }
             Divider()
+            if (ru.volshebnymir.lumo.core.RemoteConfig.on("gifts")) {
             SettingsRow(Icons.Filled.CardGiftcard, Color(0xFFFF5E8A), "Подарки", "NFT-подарки за люмены") { AppModel.push(Screen.Gifts) }
             Divider()
+            }
             SettingsRow(Icons.Filled.Info, p.a1, "Как это работает", "Откройте профиль человека и нажмите «Люмены», либо удерживайте его сообщение, либо нажмите на скрепку в личном чате.") {}
         }
         Text("ИСТОРИЯ", color = p.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 22.dp))

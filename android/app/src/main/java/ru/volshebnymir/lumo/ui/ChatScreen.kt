@@ -1228,7 +1228,7 @@ private fun Composer(
                         onLumens = { sendLumensTo = chat?.peerId },
                         onPost = { kind, body, media, meta -> val r = takeReply(); scope.launch { AppModel.send(chatId, kind, body, media, meta, replyTo = r) } },
                         onCapsule = onCapsule?.takeIf { chat?.canPost != false },
-                        onGames = onGames?.takeIf { chat?.canPost != false && chat?.isChannel != true },
+                        onGames = onGames?.takeIf { chat?.canPost != false && chat?.isChannel != true && ru.volshebnymir.lumo.core.RemoteConfig.on("games") },
                     )
                 }
                 Row(Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).background(p.panel2), verticalAlignment = Alignment.Bottom) {
@@ -1334,6 +1334,18 @@ private fun StickerPanel(onEmoji: (String) -> Unit, onSticker: (String) -> Unit,
                     val id = STICKER_IDS[i]
                     Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(10.dp)).bouncy { onSticker(STICKER_ART_PREFIX + id) }, contentAlignment = Alignment.Center) {
                         StickerImage(id, 54.dp)
+                    }
+                }
+                // наборы стикеров с сервера
+                ru.volshebnymir.lumo.core.RemoteConfig.packs.forEach { pk ->
+                    item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        Text(pk.name, color = p.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, top = 10.dp, bottom = 4.dp))
+                    }
+                    items(pk.items.size) { i ->
+                        val s = pk.items[i]
+                        Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(10.dp)).bouncy { onSticker(ru.volshebnymir.lumo.core.STICKER_IMG_PREFIX + s.url) }, contentAlignment = Alignment.Center) {
+                            RemoteSticker(s.url, 58.dp)
+                        }
                     }
                 }
             } else {

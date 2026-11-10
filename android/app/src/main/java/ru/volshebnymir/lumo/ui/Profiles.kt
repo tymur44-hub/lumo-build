@@ -914,7 +914,7 @@ fun AppearanceScreen() {
                     row.forEach { (i, ab) ->
                         Box(Modifier.size(40.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Color(ab.first), Color(ab.second))))
                             .border(3.dp, if (Look.accent == i) p.text else Color.Transparent, CircleShape)
-                            .bouncy { if (i >= 6 && !AppModel.isPremium) AppModel.say(ru.volshebnymir.lumo.core.PREMIUM_SOON) else { Look.accent = i; Look.save() } })
+                            .bouncy { if (Look.accentPremium(i) && !AppModel.isPremium) AppModel.say(ru.volshebnymir.lumo.core.PREMIUM_SOON) else { Look.accent = i; Look.save() } })
                     }
                 }
             }

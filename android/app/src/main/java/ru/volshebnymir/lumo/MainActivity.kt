@@ -1,5 +1,6 @@
 package ru.volshebnymir.lumo
 
+import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -20,6 +21,7 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(0), navigationBarStyle = SystemBarStyle.dark(0))
         super.onCreate(savedInstanceState)
         AppModel.init(applicationContext)
+        ru.volshebnymir.lumo.core.RemoteConfig.init(applicationContext)
         AppModel.openUrl = { u -> runCatching { startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(u))) } }
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
@@ -104,6 +106,6 @@ class MainActivity : FragmentActivity() {
         if (requestCode == 2) ru.volshebnymir.lumo.core.Calls.answer()
     }
 
-    override fun onResume() { super.onResume(); AppModel.foreground(true) }
+    override fun onResume() { super.onResume(); AppModel.foreground(true); AppModel.scope.launch { ru.volshebnymir.lumo.core.RemoteConfig.refresh() } }
     override fun onPause() { super.onPause(); AppModel.foreground(false) }
 }

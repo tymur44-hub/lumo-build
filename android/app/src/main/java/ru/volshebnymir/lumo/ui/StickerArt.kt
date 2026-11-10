@@ -116,6 +116,8 @@ fun StickerImage(id: String, size: Dp, modifier: Modifier = Modifier) {
 fun StickerBody(body: String?, size: Dp, modifier: Modifier = Modifier) {
     if (body != null && body.startsWith(STICKER_ART_PREFIX)) {
         StickerImage(body.removePrefix(STICKER_ART_PREFIX), size, modifier)
+    } else if (body != null && body.startsWith(ru.volshebnymir.lumo.core.STICKER_IMG_PREFIX)) {
+        RemoteSticker(body.removePrefix(ru.volshebnymir.lumo.core.STICKER_IMG_PREFIX), size, modifier)
     } else {
         androidx.compose.material3.Text(body ?: "", fontSize = androidx.compose.ui.unit.TextUnit(size.value * 0.66f, androidx.compose.ui.unit.TextUnitType.Sp), modifier = modifier)
     }

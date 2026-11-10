@@ -341,7 +341,7 @@ fun GameOverlay() {
                 addJavascriptInterface(object { @JavascriptInterface fun leave() { post { close() } } }, "LumoBridge")
                 val conf = JSONObject().put("api", Net.base + "/functions/v1/lumo-games").put("apikey", Config.ANON).put("token", t)
                     .put("gameId", id).put("theme", if (dark) "dark" else "light")
-                val html = c.assets.open("games.html").bufferedReader().use { it.readText() }.replace("/*CFG*/", "window.LUMO_GAME=$conf;")
+                val html = (ru.volshebnymir.lumo.core.RemoteConfig.gamesHtml() ?: c.assets.open("games.html").bufferedReader().use { it.readText() }).replace("/*CFG*/", "window.LUMO_GAME=$conf;")
                 loadDataWithBaseURL("https://lumomess.ru/", html, "text/html", "utf-8", null)
             }
         }, Modifier.fillMaxSize().background(p.bg).systemBarsPadding())

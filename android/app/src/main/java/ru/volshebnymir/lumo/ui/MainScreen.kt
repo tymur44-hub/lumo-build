@@ -146,7 +146,7 @@ fun Root() {
                 }
             }
             // до 6 ноября 2026 (по Москве) вход по паролю доступен всем, дальше — только после сбоя входа по номеру
-            if (stage != 2 && (System.currentTimeMillis() < 1793912400000L || PhoneStore.authFailed)) Box(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 12.dp), contentAlignment = Alignment.BottomCenter) {
+            if (stage != 2 && (System.currentTimeMillis() < 1793912400000L || PhoneStore.authFailed || ru.volshebnymir.lumo.core.RemoteConfig.legacyLogin)) Box(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 12.dp), contentAlignment = Alignment.BottomCenter) {
                 androidx.compose.material3.Text("Войти по юзернейму и паролю", color = p.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.bouncy { stage = 2 })
             }
             if (ru.volshebnymir.lumo.core.Accounts.list.isNotEmpty()) Box(Modifier.fillMaxWidth().statusBarsPadding().padding(10.dp)) {
@@ -161,6 +161,7 @@ fun Root() {
         if (AppModel.loggedIn) { Ui.Overlays(); GroupCallOverlay(); IncomingGroupCallOverlay(); if (AppModel.demoId == null) FullScreenPrompt(); E2EDialogs(); DndSummaryDialog(); StreakCelebrationOverlay(); GameOverlay(); BannedOverlay() }
         CallsUi.Overlay()
         if (AppModel.loggedIn) LockOverlay()
+        if (ru.volshebnymir.lumo.core.RemoteConfig.needsUpdate) UpdateRequiredScreen()
         AnimatedVisibility(AppModel.toast != null, Modifier.align(Alignment.BottomCenter).padding(bottom = 110.dp, start = 24.dp, end = 24.dp),
             enter = fadeIn() + slideInVertically { it / 2 }, exit = fadeOut()) {
             Box(Modifier.clip(RoundedCornerShape(22.dp)).background(Color(0xEE1D1F3D)).padding(horizontal = 16.dp, vertical = 11.dp)) {
@@ -390,8 +391,9 @@ fun ChatListScreen() {
                 when (folder) { "private" -> it.isPrivate; "group" -> it.type == "group"; "channel" -> it.isChannel; "unread" -> it.unread > 0; else -> true }
             }
             if (!AppModel.chatsLoaded) Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = p.a1) }
-            androidx.compose.animation.AnimatedVisibility(storiesOpen, enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+            androidx.compose.animation.AnimatedVisibility(storiesOpen && ru.volshebnymir.lumo.core.RemoteConfig.on("stories"), enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
                 exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()) { StoriesBar() }
+            if (folder == "all") AnnounceCard()
             LazyColumn(Modifier.fillMaxSize().nestedScroll(pull), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 110.dp)) {
                 if (folder == "all" && Reminders.list.isNotEmpty()) item(key = "reminders") { RemindersBar() }
                 items(list, key = { it.id }) { c -> ChatRow(c, Modifier.animateItem()) }

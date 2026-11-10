@@ -23,7 +23,9 @@ object Look {
     var accent by mutableIntStateOf(0)
     var fontSize by mutableFloatStateOf(16f)
 
-    val accents = listOf(
+    val accents: List<Pair<Long, Long>> get() = baseAccents + ru.volshebnymir.lumo.core.RemoteConfig.accents.map { it.first to it.second }
+    fun accentPremium(i: Int) = if (i < baseAccents.size) i >= 6 else (ru.volshebnymir.lumo.core.RemoteConfig.accents.getOrNull(i - baseAccents.size)?.third ?: false)
+    val baseAccents = listOf(
         0xFF7C5CFF to 0xFF22C1FF, 0xFFFF5B8A to 0xFFFF9A5B, 0xFF13B0A5 to 0xFF2EE6A6,
         0xFF3A7BFF to 0xFF22C1FF, 0xFFC44DFF to 0xFFFF5B7A, 0xFFFF8A3D to 0xFFFFC94A,
         // эксклюзивные, только для Premium
