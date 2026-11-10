@@ -127,38 +127,93 @@ struct ThrowArt: View {
 struct ThrowBubble: View {
     let m: Message
     let mine: Bool
-    @State private var landed = true
+    /// идёт анимация броска (только у свежих сообщений, один раз)
+    @State private var playing = false
     private static var seen = Set<Int>()
 
     var body: some View {
         let k = m.meta.str("g") ?? "dice", v = m.meta.int("v") ?? 1
         VStack(spacing: 2) {
-            ThrowArt(kind: k, v: v)
-                .frame(width: 132, height: 132)
-                .rotationEffect(.degrees(landed ? 0 : (k == "coin" ? 0 : -200)))
-                .rotation3DEffect(.degrees(landed || k != "coin" ? 0 : 1440), axis: (0, 1, 0))
-                .scaleEffect(landed ? 1 : 0.6)
-                .offset(y: landed ? 0 : -30)
-                .opacity(landed ? 1 : 0.2)
+            ZStack {
+                if playing {
+                    ThrowPlayer(kind: k, v: v) { withAnimation(.easeOut(duration: 0.2)) { playing = false } }
+                } else {
+                    ThrowFinal(kind: k, v: v)
+                }
+            }
+            .frame(width: 150, height: 150)
             Text(LumoGames.label(k, v)).font(.system(size: 15, weight: .heavy))
                 .foregroundColor(mine ? .white : Theme.text)
-                .opacity(landed ? 1 : 0)
+                .opacity(playing ? 0 : 1)
             Text(Fmt.time(m.createdAt)).font(.system(size: 11)).foregroundColor(mine ? .white.opacity(0.7) : Theme.muted)
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 6)
-        .frame(width: 168)
+        .padding(.horizontal, 8).padding(.top, 6).padding(.bottom, 6)
+        .frame(width: 170)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(mine ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.panel)))
         .onAppear {
             guard !ThrowBubble.seen.contains(m.id) else { return }
             ThrowBubble.seen.insert(m.id)
-            if Date().timeIntervalSince(m.createdAt) < 6 {
-                landed = false
-                withAnimation(.spring(response: 0.9, dampingFraction: 0.62)) { landed = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
-            }
+            if Date().timeIntervalSince(m.createdAt) < 6 { playing = true }
         }
     }
+}
+
+/// Финальный кадр броска (картинка из того же движка, что и анимация, — переход незаметен)
+struct ThrowFinal: View {
+    let kind: String
+    let v: Int
+    var body: some View {
+        if let im = UIImage(named: "throw_\(kind)_\(v).png") ?? Bundle.main.path(forResource: "throw_\(kind)_\(v)", ofType: "png").flatMap(UIImage.init(contentsOfFile:)) {
+            Image(uiImage: im).resizable().interpolation(.high).scaledToFit()
+        } else {
+            ThrowArt(kind: kind, v: v)
+        }
+    }
+}
+
+/// Живая анимация броска: страница throws.html (canvas) в прозрачном WebView
+struct ThrowPlayer: UIViewRepresentable {
+    let kind: String
+    let v: Int
+    let onEnd: () -> Void
+
+    final class Coord: NSObject, WKScriptMessageHandler {
+        var onEnd: () -> Void
+        var ended = false
+        init(onEnd: @escaping () -> Void) { self.onEnd = onEnd }
+        func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
+            let s = message.body as? String ?? ""
+            if s == "hit" { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+            if s == "end", !ended { ended = true; DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { self.onEnd() } }
+        }
+    }
+    func makeCoordinator() -> Coord { Coord(onEnd: onEnd) }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let cfg = WKWebViewConfiguration()
+        cfg.userContentController.add(WeakHandler(context.coordinator), name: "lumo")
+        let w = WKWebView(frame: CGRect(x: 0, y: 0, width: 150, height: 150), configuration: cfg)
+        w.isOpaque = false; w.backgroundColor = .clear; w.scrollView.backgroundColor = .clear
+        w.scrollView.isScrollEnabled = false; w.isUserInteractionEnabled = false
+        if let url = Bundle.main.url(forResource: "throws", withExtension: "html") {
+            var c = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+            c.fragment = "k=\(kind)&v=\(v)"
+            w.loadFileURL(c.url ?? url, allowingReadAccessTo: url.deletingLastPathComponent())
+        } else { DispatchQueue.main.async { context.coordinator.onEnd() } }
+        // страховка: если страница не ответила — показываем результат
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { if !context.coordinator.ended { context.coordinator.ended = true; context.coordinator.onEnd() } }
+        return w
+    }
+    func updateUIView(_ w: WKWebView, context: Context) {}
+    static func dismantleUIView(_ w: WKWebView, coordinator: Coord) { w.configuration.userContentController.removeScriptMessageHandler(forName: "lumo") }
+}
+
+/// Чтобы WebView не удерживал координатор (иначе утечка)
+final class WeakHandler: NSObject, WKScriptMessageHandler {
+    weak var target: WKScriptMessageHandler?
+    init(_ t: WKScriptMessageHandler) { target = t }
+    func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) { target?.userContentController(c, didReceive: m) }
 }
 
 struct GameIcon: View {

@@ -1,5 +1,6 @@
 package ru.volshebnymir.lumo.ui
 
+import androidx.compose.ui.graphics.asImageBitmap
 import android.annotation.SuppressLint
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -140,25 +141,65 @@ fun ThrowArt(kind: String, v: Int, modifier: Modifier) {
     }
 }
 
-/** Сообщение-бросок: свежие сообщения прилетают с анимацией */
+/** Сообщение-бросок: у свежих сообщений — живая анимация (throws.html), потом финальный кадр из того же движка */
 @Composable
 fun ThrowBubble(m: Message, mine: Boolean) {
     val p = P
     val k = m.meta.optString("g", "dice"); val v = m.meta.optInt("v", 1)
     val fresh = remember(m.id) { val f = !LumoGames.seen.contains(m.id) && System.currentTimeMillis() - m.createdAt.time < 6000; LumoGames.seen.add(m.id); f }
-    val t = remember(m.id) { Animatable(if (fresh) 0f else 1f) }
-    LaunchedEffect(m.id) { if (fresh) t.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 140f)) }
-    Column(Modifier.width(168.dp).clip(RoundedCornerShape(18.dp)).background(if (mine) p.accent else SolidColor(p.panel)).padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 6.dp),
+    var playing by remember(m.id) { mutableStateOf(fresh) }
+    val labelA by androidx.compose.animation.core.animateFloatAsState(if (playing) 0f else 1f, tween(220), label = "lbl")
+    Column(Modifier.width(170.dp).clip(RoundedCornerShape(18.dp)).background(if (mine) p.accent else SolidColor(p.panel)).padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        val a = t.value
-        ThrowArt(k, v, Modifier.size(132.dp).graphicsLayer {
-            if (k == "coin") rotationY = (1 - a) * 1440f else rotationZ = (1 - a) * -200f
-            translationY = (1 - a) * -30.dp.toPx(); scaleX = .6f + .4f * a; scaleY = .6f + .4f * a; alpha = (.2f + .8f * a).coerceIn(0f, 1f)
-        })
+        Box(Modifier.size(150.dp)) {
+            if (playing) ThrowPlayer(k, v) { playing = false } else ThrowFinal(k, v, Modifier.fillMaxSize())
+        }
         Text(LumoGames.label(k, v), color = if (mine) Color.White else p.text, fontWeight = FontWeight.Black, fontSize = 15.sp,
-            modifier = Modifier.graphicsLayer { alpha = ((a - .85f) / .15f).coerceIn(0f, 1f) })
+            modifier = Modifier.graphicsLayer { alpha = labelA })
         Text(fmtTime(m), color = if (mine) Color.White.copy(alpha = .7f) else p.muted, fontSize = 11.sp, modifier = Modifier.align(Alignment.End))
     }
+}
+
+private val throwCache = HashMap<String, androidx.compose.ui.graphics.ImageBitmap?>()
+
+/** Финальный кадр броска (картинка из движка анимаций) */
+@Composable
+fun ThrowFinal(k: String, v: Int, modifier: Modifier = Modifier) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val key = "${k}_$v"
+    val bmp = remember(key) {
+        throwCache.getOrPut(key) { runCatching { ctx.assets.open("throws/$key.png").use { android.graphics.BitmapFactory.decodeStream(it)?.asImageBitmap() } }.getOrNull() }
+    }
+    if (bmp != null) androidx.compose.foundation.Image(bmp, null, modifier, contentScale = androidx.compose.ui.layout.ContentScale.Fit)
+    else ThrowArt(k, v, modifier)
+}
+
+/** Живая анимация броска в прозрачном WebView */
+@android.annotation.SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun ThrowPlayer(k: String, v: Int, onEnd: () -> Unit) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val endCb by androidx.compose.runtime.rememberUpdatedState(onEnd)
+    var ended by remember { mutableStateOf(false) }
+    val finish = { if (!ended) { ended = true; endCb() } }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(4500); finish() } // страховка
+    AndroidView(factory = { c ->
+        WebView(c).apply {
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            settings.javaScriptEnabled = true
+            isVerticalScrollBarEnabled = false; isHorizontalScrollBarEnabled = false
+            setOnTouchListener { _, _ -> true }
+            addJavascriptInterface(object {
+                @JavascriptInterface fun post(m: String) {
+                    view.post {
+                        if (m == "hit") view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                        if (m == "end") view.postDelayed({ finish() }, 150)
+                    }
+                }
+            }, "LumoAndroid")
+            loadUrl("file:///android_asset/throws.html#k=$k&v=$v")
+        }
+    }, modifier = Modifier.fillMaxSize(), onRelease = { it.destroy() })
 }
 
 private fun fmtTime(m: Message): String = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(m.createdAt)
