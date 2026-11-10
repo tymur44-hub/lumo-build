@@ -3,33 +3,76 @@ import AVFoundation
 import Combine
 import WebRTC
 
-/// Видео собеседника или своё (WebRTC → Metal)
+/// Видео собеседника или своё (WebRTC → Metal).
+/// Кадр всегда в правильных пропорциях: если пропорции экрана и видео близки — заполняем экран,
+/// иначе (например, на iPad горизонтально, а у собеседника вертикальное видео) показываем целиком, без растягивания и обрезки.
 struct RTCVideoView: UIViewRepresentable {
     let track: RTCVideoTrack?
     var mirror = false
+    var fill = false
 
     final class Coordinator { var track: RTCVideoTrack? }
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeUIView(context: Context) -> RTCMTLVideoView {
-        let v = RTCMTLVideoView(frame: .zero)
-        v.videoContentMode = .scaleAspectFill
-        v.clipsToBounds = true
-        if mirror { v.transform = CGAffineTransform(scaleX: -1, y: 1) }
+    func makeUIView(context: Context) -> AspectVideoView {
+        let v = AspectVideoView()
+        v.alwaysFill = fill
+        if mirror { v.video.transform = CGAffineTransform(scaleX: -1, y: 1) }
         return v
     }
 
-    func updateUIView(_ v: RTCMTLVideoView, context: Context) {
+    func updateUIView(_ v: AspectVideoView, context: Context) {
+        v.alwaysFill = fill
         if context.coordinator.track !== track {
-            context.coordinator.track?.remove(v)
-            track?.add(v)
+            context.coordinator.track?.remove(v.video)
+            track?.add(v.video)
             context.coordinator.track = track
         }
     }
 
-    static func dismantleUIView(_ v: RTCMTLVideoView, coordinator: Coordinator) {
-        coordinator.track?.remove(v)
+    static func dismantleUIView(_ v: AspectVideoView, coordinator: Coordinator) {
+        coordinator.track?.remove(v.video)
         coordinator.track = nil
+    }
+}
+
+final class AspectVideoView: UIView, RTCVideoViewDelegate {
+    let video = RTCMTLVideoView(frame: .zero)
+    var alwaysFill = false { didSet { if oldValue != alwaysFill { setNeedsLayout() } } }
+    private var size = CGSize.zero
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        clipsToBounds = true
+        backgroundColor = .black
+        video.videoContentMode = .scaleAspectFit
+        video.delegate = self
+        addSubview(video)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func videoView(_ videoView: RTCVideoRenderer, didChangeVideoSize s: CGSize) {
+        DispatchQueue.main.async {
+            guard s.width > 0, s.height > 0, s != self.size else { return }
+            self.size = s
+            self.setNeedsLayout()
+            UIView.animate(withDuration: 0.25) { self.layoutIfNeeded() }
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let b = bounds
+        guard size.width > 0, size.height > 0, b.width > 0, b.height > 0 else { video.frame = b; return }
+        let vr = size.width / size.height, br = b.width / b.height
+        // заполняем, только если обрежется не больше ~25% кадра
+        let fill = alwaysFill || max(vr, br) / min(vr, br) < 1.34
+        let scale = fill ? max(b.width / size.width, b.height / size.height) : min(b.width / size.width, b.height / size.height)
+        let w = size.width * scale, h = size.height * scale
+        let t = video.transform
+        video.transform = .identity
+        video.frame = CGRect(x: (b.width - w) / 2, y: (b.height - h) / 2, width: w, height: h)
+        video.transform = t
     }
 }
 
@@ -41,7 +84,8 @@ struct CallView: View {
     @State private var lastTouch = Date()
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    private var showRemote: Bool { calls.video && calls.state == .active && calls.p2p && calls.remoteVideo != nil && !calls.peerCamOff }
+    // при повторном подключении остаётся последний кадр собеседника
+    private var showRemote: Bool { calls.video && calls.state == .active && (calls.p2p || calls.reconnecting) && calls.remoteVideo != nil && !calls.peerCamOff }
     private var showRelay: Bool { calls.video && calls.state == .active && !calls.p2p && calls.relayImage != nil && !calls.peerCamOff }
 
     var body: some View {
@@ -80,11 +124,21 @@ struct CallView: View {
                     .offset(y: hideUI ? 40 : 0)
                     .allowsHitTesting(!hideUI)
             }
+            if calls.reconnecting {
+                HStack(spacing: 10) {
+                    ProgressView().tint(.white)
+                    Text("Повторное подключение…").font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                }
+                .padding(.horizontal, 18).padding(.vertical, 11)
+                .background(.ultraThinMaterial, in: Capsule())
+                .environment(\.colorScheme, .dark)
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
+            }
             if calls.video, let lv = calls.localVideo, !calls.camOff, calls.state != .incoming {
                 VStack {
                     HStack {
                         Spacer()
-                        RTCVideoView(track: lv, mirror: true)
+                        RTCVideoView(track: lv, mirror: true, fill: true)
                             .frame(width: 112, height: 160)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.3)))
@@ -105,6 +159,7 @@ struct CallView: View {
         .onChange(of: calls.remoteVideo) { CallPiP.shared.setTrack(calls.video ? $0 : nil) }
         .onChange(of: calls.relayImage) { if let im = $0 { CallPiP.shared.push(im) } }
         .onAppear { CallPiP.shared.setTrack(calls.video ? calls.remoteVideo : nil) }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: calls.reconnecting)
         .statusBarHidden(showRemote || showRelay)
     }
 

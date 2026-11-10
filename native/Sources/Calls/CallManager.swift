@@ -31,6 +31,12 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
     /// Кадр собеседника через резервный канал (когда прямого соединения нет)
     @Published var relayImage: UIImage?
     @Published var p2p = false
+    /// связь прервалась во время разговора — показываем «Повторное подключение…» и восстанавливаем WebRTC
+    @Published var reconnecting = false
+    private var downSince: Date?
+    private var reconnTimer: Timer?
+    /// Звук и видео идут только напрямую через WebRTC (свой TURN), через сервер Supabase — только сигналы
+    private let useRelay = false
 
     private(set) var peerId: String?
     private var callId: String?
@@ -286,7 +292,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         let from = p.str("from") ?? ""
         let cid = p.str("callId") ?? ""
         if t == "kf" { return }
-        if t == "rm" { onRelay(p, from: from, cid: cid); return }
+        if t == "rm" { if useRelay { onRelay(p, from: from, cid: cid) }; return }
         if t == "ring" {
             if doneCalls.contains(cid) { return }
             if cid != callId { log("ring_in", ["cid": cid, "from": from, "cur": callId ?? ""]) }
@@ -680,6 +686,10 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         relayImage = nil
         pendingJPEG = nil
         p2p = false
+        reconnTimer?.invalidate()
+        reconnTimer = nil
+        reconnecting = false
+        downSince = nil
         audioActive = false
         remoteVideo = nil
         videoSource = nil
@@ -766,7 +776,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
             videoSource = vs
             capturer = RTCCameraVideoCapturer(delegate: vs)
             localVideo = f.videoTrack(with: vs, trackId: "v0")
-            localVideo?.add(relay)
+            if useRelay { localVideo?.add(relay) }
             front = true
             startCapture()
         }
@@ -922,6 +932,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         case .connected:
             restarts = 0
             statusText = ""
+            finishReconnect()
             becomeActive()
             p2p = true
             relayImage = nil
@@ -930,16 +941,47 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         case .failed, .disconnected:
             p2p = false
             updateAudio()
-            let delay: UInt64 = s == .failed ? 300_000_000 : 2_000_000_000
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: delay)
-                guard self.pc === p, p.connectionState != .connected, p.connectionState != .closed, self.restarts < 8 else { return }
-                self.restarts += 1
-                if self.role == "caller" { self.createOffer(restart: true) } else { self.sig(self.peerId ?? "", ["t": "restart"]) }
-            }
+            startReconnect(fast: s == .failed)
         default:
             break
         }
+    }
+
+    /// Восстановление связи: перезапуск ICE сразу и затем каждые 3 секунды, пока не соединимся (до 45 секунд)
+    private func startReconnect(fast: Bool) {
+        guard state == .active || state == .connecting else { return }
+        if state == .active {
+            if downSince == nil { downSince = Date(); log("reconnect_start") }
+            reconnecting = true
+            statusText = "Повторное подключение…"
+        }
+        reconnTimer?.invalidate()
+        let first: TimeInterval = fast ? 0.3 : 1.0
+        reconnTimer = Timer.scheduledTimer(withTimeInterval: first, repeats: false) { _ in
+            Task { @MainActor in CallManager.shared.reconnectTick() }
+        }
+    }
+
+    private func reconnectTick() {
+        guard state == .active || state == .connecting, let p = pc else { return }
+        if p.connectionState == .connected { finishReconnect(); return }
+        if p.connectionState == .closed { return }
+        restarts += 1
+        if restarts % 4 == 0 { iceServers = nil }
+        if role == "caller" { createOffer(restart: true) } else { sig(peerId ?? "", ["t": "restart"]) }
+        reconnTimer?.invalidate()
+        reconnTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { _ in
+            Task { @MainActor in CallManager.shared.reconnectTick() }
+        }
+    }
+
+    private func finishReconnect() {
+        reconnTimer?.invalidate()
+        reconnTimer = nil
+        if reconnecting { log("reconnect_ok", ["sec": Int(Date().timeIntervalSince(downSince ?? Date()))]) }
+        reconnecting = false
+        downSince = nil
+        if state == .active { statusText = "" }
     }
 
     /// Сменилась сеть (Wi-Fi ↔ LTE, VPN) во время звонка — сразу перезапускаем ICE, а не ждём обрыва
@@ -948,6 +990,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         restarts = 0
         iceServers = nil
         if role == "caller" { createOffer(restart: true) } else { sig(peerId ?? "", ["t": "restart"]) }
+        if pc?.connectionState != .connected { startReconnect(fast: true) }
     }
 
     /// Разговор начался (прямое соединение или резервный канал)
@@ -970,6 +1013,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
     // MARK: - резервный канал (как на сайте)
 
     private func startRelay() {
+        guard useRelay else { return }
         relaySeq = 0
         relayRSeq = -1
         pendingJPEG = nil
@@ -985,6 +1029,11 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
     private func updateAudio() {
         let inCall = state == .connecting || state == .active
         let direct = pc?.connectionState == .connected
+        guard useRelay else {
+            RTCAudioSession.sharedInstance().isAudioEnabled = audioActive
+            if relay.running { relay.stopAudio() }
+            return
+        }
         RTCAudioSession.sharedInstance().isAudioEnabled = audioActive && (!inCall || direct)
         if inCall && !direct && audioActive {
             if !relay.running && relay.startAudio() { applySpeaker() }
@@ -1054,7 +1103,9 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         guard state == .active else { return }
         let connected = pc?.connectionState == .connected
         let silent = Date().timeIntervalSince(lastPeer)
-        if (!connected && silent > 15) || silent > 40 {
+        if !connected && downSince == nil { startReconnect(fast: false) }
+        let down = downSince.map { Date().timeIntervalSince($0) } ?? 0
+        if (!connected && down > 45) || (!connected && silent > 45) || silent > 60 {
             if let p = peerId { sig(p, ["t": "hangup"]) }
             end("ended", why: "peer_lost")
             AppModel.shared.say("Связь с собеседником потеряна")

@@ -348,11 +348,17 @@ object AppModel {
     /** Переключиться на сохранённый аккаунт */
     fun switchAccount(id: String) {
         val acc = Accounts.list.firstOrNull { it.id == id } ?: return
+        // снимок старого аккаунта — потом он «перелистнётся», как страница книги
+        ru.volshebnymir.lumo.ui.AccountFlip.capture()
         scope.launch {
             if (loggedIn) { presence(false); resetAfterLogout() }
             Api.restore(acc)
             loggedIn = true
             start()
+            // ждём, пока новый аккаунт подгрузится, но не дольше 0.7 секунды
+            val deadline = System.currentTimeMillis() + 700
+            while (chats.isEmpty() && System.currentTimeMillis() < deadline) kotlinx.coroutines.delay(50)
+            ru.volshebnymir.lumo.ui.AccountFlip.turn()
         }
     }
 

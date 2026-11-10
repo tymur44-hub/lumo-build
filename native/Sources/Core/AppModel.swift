@@ -335,10 +335,17 @@ final class AppModel: ObservableObject {
     /// Переключиться на сохранённый аккаунт
     func switchAccount(_ id: String) async {
         guard let acc = Accounts.shared.list.first(where: { $0.id == id }) else { return }
+        // снимок старого аккаунта — потом он «перелистнётся», как страница книги
+        AccountFlip.shared.capture()
         if loggedIn { presence(false); resetAfterLogout() }
         API.shared.restore(acc.session)
         loggedIn = true
-        await start()
+        let started = Task { @MainActor in await self.start() }
+        // ждём, пока новый аккаунт подгрузится (из памяти телефона это быстро), но не дольше 0.7 секунды
+        let deadline = Date().addingTimeInterval(0.7)
+        while chats.isEmpty && Date() < deadline { try? await Task.sleep(nanoseconds: 50_000_000) }
+        AccountFlip.shared.turn()
+        await started.value
     }
 
     /// Соединение пропало/появилось. «Соединение…» показываем, только если связи нет дольше секунды

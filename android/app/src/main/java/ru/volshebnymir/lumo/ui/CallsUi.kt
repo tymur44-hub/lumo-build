@@ -147,7 +147,7 @@ object CallsUi {
         var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
         LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
         val active = Calls.state == Calls.State.Active
-        val showRemote = Calls.video && active && Calls.p2p && Calls.remoteVideo != null && !Calls.peerCamOff
+        val showRemote = Calls.video && active && (Calls.p2p || Calls.reconnecting) && Calls.remoteVideo != null && !Calls.peerCamOff
         val relay = Calls.relayImage
         val showRelay = Calls.video && active && !Calls.p2p && relay != null && !Calls.peerCamOff
         val status = Calls.statusText.ifEmpty { Calls.startedAt?.let { Fmt.duration((now - it) / 1000.0) } ?: "" }
@@ -180,6 +180,15 @@ object CallsUi {
                 Spacer(Modifier.weight(1f))
                 if (!(videoOn && hide)) Controls() else Spacer(Modifier.height(150.dp))
                 Spacer(Modifier.height(30.dp))
+            }
+            AnimatedVisibility(Calls.reconnecting && !pip, Modifier.align(Alignment.Center),
+                enter = scaleIn(initialScale = 0.85f) + fadeIn(), exit = scaleOut(targetScale = 0.85f) + fadeOut()) {
+                Row(Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 18.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Повторное подключение…", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                }
             }
             val lv = Calls.localVideo
             if (!pip && Calls.video && lv != null && !Calls.camOff && Calls.state != Calls.State.Incoming) {

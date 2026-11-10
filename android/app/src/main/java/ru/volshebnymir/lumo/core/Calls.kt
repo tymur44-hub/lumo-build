@@ -83,6 +83,12 @@ object Calls {
     var statusText by mutableStateOf("")
     var relayImage by mutableStateOf<Bitmap?>(null)
     var p2p by mutableStateOf(false)
+    /// связь прервалась во время разговора — «Повторное подключение…», WebRTC восстанавливается
+    var reconnecting by mutableStateOf(false)
+    private var downSince = 0L
+    private var reconnJob: Job? = null
+    /// Звук и видео — только напрямую через WebRTC (свой TURN); через сервер Supabase идут лишь сигналы
+    private val useRelay = false
 
     val eglBase: EglBase by lazy { EglBase.create() }
 
@@ -267,7 +273,7 @@ object Calls {
         val from = p.str("from") ?: ""
         val cid = p.str("callId") ?: ""
         if (t == "kf") return
-        if (t == "rm") { onRelay(p, from, cid); return }
+        if (t == "rm") { if (useRelay) onRelay(p, from, cid); return }
         if (t == "ring") {
             if (cid in doneCalls) return
             if (state != State.Idle) {
@@ -467,6 +473,7 @@ object Calls {
         remoteVideo = null
         Relay.stop()
         relayImage = null; pendingJPEG = null; p2p = false
+        reconnJob?.cancel(); reconnJob = null; reconnecting = false; downSince = 0L
         pendingOffer = null; iceQueue.clear()
         secJob?.cancel(); secChat = null
         state = State.Idle; startedAt = null; callId = null; peerId = null; role = ""
@@ -537,7 +544,7 @@ object Calls {
             cap.initialize(th, ctx, vs.capturerObserver)
             cap.startCapture(1280, 720, 30)
             capturer = cap; videoSource = vs; texHelper = th
-            localVideo = f.createVideoTrack("v0", vs).also { it.addSink(Relay.sink) }
+            localVideo = f.createVideoTrack("v0", vs).also { if (useRelay) it.addSink(Relay.sink) }
         }
         updateProximity()
     }
@@ -651,6 +658,9 @@ object Calls {
         when (s) {
             PeerConnection.PeerConnectionState.CONNECTED -> {
                 restarts = 0; statusText = ""
+                reconnJob?.cancel(); reconnJob = null
+                if (reconnecting) log("reconnect_ok", jsonOf("sec" to ((now() - downSince) / 1000)))
+                reconnecting = false; downSince = 0L
                 becomeActive()
                 p2p = true; relayImage = null
                 Relay.stopAudio()
@@ -658,15 +668,40 @@ object Calls {
             }
             PeerConnection.PeerConnectionState.FAILED, PeerConnection.PeerConnectionState.DISCONNECTED -> {
                 p2p = false
-                scope.launch {
-                    delay(if (s == PeerConnection.PeerConnectionState.FAILED) 500 else 4000)
-                    if (pc !== p || p.connectionState() == PeerConnection.PeerConnectionState.CONNECTED || restarts >= 3) return@launch
-                    restarts++
-                    if (role == "caller") createOffer(true) else sig(peerId ?: "", jsonOf("t" to "restart"))
-                }
+                startReconnect(s == PeerConnection.PeerConnectionState.FAILED)
             }
             else -> {}
         }
+    }
+
+    /// Восстановление связи: перезапуск ICE сразу и затем каждые 3 секунды, пока не соединимся (до 45 секунд)
+    private fun startReconnect(fast: Boolean) {
+        if (state != State.Active && state != State.Connecting) return
+        if (state == State.Active) {
+            if (downSince == 0L) { downSince = now(); log("reconnect_start") }
+            reconnecting = true
+            statusText = "Повторное подключение…"
+        }
+        reconnJob?.cancel()
+        reconnJob = scope.launch {
+            delay(if (fast) 300 else 1000)
+            while (state == State.Active || state == State.Connecting) {
+                val p = pc ?: return@launch
+                val cs = runCatching { p.connectionState() }.getOrNull()
+                if (cs == PeerConnection.PeerConnectionState.CONNECTED) { finishReconnect(); return@launch }
+                if (cs == PeerConnection.PeerConnectionState.CLOSED) return@launch
+                restarts++
+                if (role == "caller") createOffer(true) else sig(peerId ?: "", jsonOf("t" to "restart"))
+                delay(3000)
+            }
+        }
+    }
+
+    private fun finishReconnect() {
+        reconnJob?.cancel(); reconnJob = null
+        if (reconnecting) log("reconnect_ok", jsonOf("sec" to ((now() - downSince) / 1000)))
+        reconnecting = false; downSince = 0L
+        if (state == State.Active) statusText = ""
     }
 
     private fun becomeActive() {
@@ -682,6 +717,7 @@ object Calls {
     // ---------- резервный канал ----------
 
     private fun startRelay() {
+        if (!useRelay) return
         relaySeq = 0; relayRSeq = -1; pendingJPEG = null
         Relay.muted = muted
         relayJob?.cancel()
@@ -747,7 +783,10 @@ object Calls {
         }
         if (state != State.Active) return
         val silent = now() - lastPeer
-        if ((!direct() && silent > 15_000) || silent > 40_000) {
+        val d = direct()
+        if (!d && downSince == 0L) startReconnect(false)
+        val down = if (downSince > 0) now() - downSince else 0L
+        if ((!d && down > 45_000) || (!d && silent > 45_000) || silent > 60_000) {
             peerId?.let { sig(it, jsonOf("t" to "hangup")) }
             end("ended", why = "peer_lost"); AppModel.say("Связь с собеседником потеряна")
         }

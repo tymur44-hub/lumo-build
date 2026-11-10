@@ -123,6 +123,7 @@ struct RootView: View {
             if model.loggedIn && phones.loaded && phones.status == "required" {
                 PhoneAuthView(mode: .bind, required: true).transition(.opacity)
             }
+            AccountFlipOverlay()
             if !permsDone { PermissionsView { withAnimation(Motion.snappy) { permsDone = true } }.transition(.opacity) }
             MiniNoteOverlay()
             if rc.needsUpdate { UpdateRequiredScreen().transition(.opacity).zIndex(10) }

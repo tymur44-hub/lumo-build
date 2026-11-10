@@ -42,8 +42,10 @@ class MainActivity : FragmentActivity() {
             }
         }
         handle(intent)
+        ru.volshebnymir.lumo.ui.AccountFlip.root = java.lang.ref.WeakReference(window.decorView)
         setContent {
             LumoTheme { Root() }
+            ru.volshebnymir.lumo.ui.AccountFlip.Overlay()
             // во время звонка окно Lumo показывается поверх экрана блокировки и включает экран
             val inCall = ru.volshebnymir.lumo.core.Calls.state != ru.volshebnymir.lumo.core.Calls.State.Idle
             val pipOk = ru.volshebnymir.lumo.core.Calls.state == ru.volshebnymir.lumo.core.Calls.State.Active && ru.volshebnymir.lumo.core.Calls.video
