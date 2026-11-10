@@ -40,8 +40,20 @@ object LumoPlayer {
             StandaloneDatabaseProvider(ctx.applicationContext)).also { cache = it }
     }
 
+    /** очистить скачанные видео */
+    fun clear(ctx: Context) { runCatching { val c = cache(ctx); c.keys.toList().forEach { c.removeResource(it) } } }
+
     fun build(ctx: Context): ExoPlayer {
-        val up = DefaultDataSource.Factory(ctx, DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true))
+        // всё, что видео тянет из сети, попадает в «Использование трафика»
+        val counter = object : androidx.media3.datasource.TransferListener {
+            override fun onTransferInitializing(source: androidx.media3.datasource.DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean) {}
+            override fun onTransferStart(source: androidx.media3.datasource.DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean) {}
+            override fun onBytesTransferred(source: androidx.media3.datasource.DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean, bytesTransferred: Int) {
+                if (isNetwork) NetStats.add(DataKind.Video, recvBytes = bytesTransferred.toLong())
+            }
+            override fun onTransferEnd(source: androidx.media3.datasource.DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean) {}
+        }
+        val up = DefaultDataSource.Factory(ctx, DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true).setTransferListener(counter))
         val cached = CacheDataSource.Factory().setCache(cache(ctx)).setUpstreamDataSourceFactory(up)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         return ExoPlayer.Builder(ctx).setMediaSourceFactory(DefaultMediaSourceFactory(ctx).setDataSourceFactory(cached)).build()

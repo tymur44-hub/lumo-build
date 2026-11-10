@@ -159,6 +159,8 @@ fun SettingsScreen() {
             Divider()
             SettingsRow(Icons.Filled.Lock, Color(0xFF8E8EA8), "Конфиденциальность", "Время захода, звонки, блокировки") { AppModel.push(Screen.Privacy) }
             Divider()
+            SettingsRow(Icons.Filled.Storage, Color(0xFF4CC764), "Данные и память", "Кэш, трафик, автозагрузка медиа") { AppModel.push(Screen.DataStorage) }
+            Divider()
             SettingsRow(Icons.Filled.Palette, Color(0xFF22A6FF), "Оформление",
                 (when (Look.theme) { "light" -> "Светлая тема"; "dark" -> "Тёмная тема"; else -> "Как в системе" }) + " · цвет, текст") { AppModel.push(Screen.Appearance) }
             Divider()

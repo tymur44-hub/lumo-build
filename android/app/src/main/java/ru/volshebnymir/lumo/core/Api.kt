@@ -138,6 +138,7 @@ object Net {
 object Api {
     val http: OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(Net.interceptor)
+        .addNetworkInterceptor(NetStats.interceptor)
         .proxySelector(Net.proxySelector)
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)

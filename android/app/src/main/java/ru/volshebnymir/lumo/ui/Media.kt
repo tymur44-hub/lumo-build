@@ -196,10 +196,23 @@ object Voice {
         stop()
         current = m.id
         progress = 0f
+        // голосовое скачивается один раз и дальше играет с телефона
+        if (m.localPath == null && src.startsWith("http")) {
+            val id = m.id
+            ru.volshebnymir.lumo.core.AppModel.scope.launch {
+                val f = ru.volshebnymir.lumo.core.FileStore.fetch(src, ru.volshebnymir.lumo.core.DataKind.Voice)
+                if (current == id && mp == null) start(f?.path ?: src)
+            }
+            return
+        }
+        start(src)
+    }
+
+    private fun start(src: String) {
         val p = MediaPlayer()
         mp = p
         runCatching {
-            p.setDataSource(ru.volshebnymir.lumo.core.Net.px(src) ?: src)
+            p.setDataSource(if (src.startsWith("http")) ru.volshebnymir.lumo.core.Net.px(src) ?: src else src)
             p.setOnPreparedListener { runCatching { it.playbackParams = it.playbackParams.setSpeed(speed) }; it.start(); playing = true }
             p.setOnCompletionListener { stop() }
             p.setOnErrorListener { _, _, _ -> stop(); true }

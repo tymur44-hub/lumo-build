@@ -279,7 +279,11 @@ fun ChatScreen(chatId: String) {
                                     if (selecting) { if (m.id in selected) selected.remove(m.id) else if (m.id > 0) selected.add(m.id) }
                                     else if (m.parts.isNotEmpty()) scope.launch { AppModel.fetchBig(ctx, m)?.let { MediaUtil.openLocal(ctx, it) } }
                                     else if (m.kind == "image" || m.kind == "video") viewer = m
-                                    else if (m.kind == "file") MediaUtil.open(ctx, m.mediaUrl)
+                                    else if (m.kind == "file") m.mediaUrl?.let { u -> scope.launch {
+                                        // файл скачивается один раз и дальше открывается с телефона
+                                        val f = ru.volshebnymir.lumo.core.FileStore.fetch(u, ru.volshebnymir.lumo.core.DataKind.File)
+                                        if (f != null) MediaUtil.openLocal(ctx, f) else AppModel.say("Не удалось скачать файл")
+                                    } }
                                 },
                                 onLong = { m -> if (selecting) { if (m.id > 0 && m.id !in selected) selected.add(m.id) } else if (m.kind != "system") menuFor = m },
                                 onReply = { m -> if (chat?.canPost != false && m.id > 0) { reply = m; editing = null } },
@@ -848,7 +852,7 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
         } else when (m.kind) {
             "image" -> {
                 val ratio = ((m.width ?: 1.0) / (m.height ?: 1.0)).toFloat().coerceIn(0.5f, 2f)
-                AsyncImage(m.localPath ?: m.mediaUrl, null, Modifier.width(260.dp).aspectRatio(ratio).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
+                AutoPhoto(m.localPath ?: m.mediaUrl, m.fileSize, Modifier.width(260.dp).aspectRatio(ratio).clip(RoundedCornerShape(14.dp)))
             }
             "video" -> Box(Modifier.width(260.dp).aspectRatio(((m.width ?: 16.0) / (m.height ?: 9.0)).toFloat().coerceIn(0.56f, 1.8f)).clip(RoundedCornerShape(14.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
                 AsyncImage(m.localPath ?: m.mediaUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -864,9 +868,14 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
                     Icon(Icons.Filled.Description, null, tint = Color.White)
                 }
                 Spacer(Modifier.width(10.dp))
+                var onPhone by remember(m.mediaUrl) { mutableStateOf(m.mediaUrl?.let { ru.volshebnymir.lumo.core.FileStore.local(it, ru.volshebnymir.lumo.core.DataKind.File) } != null) }
+                LaunchedEffect(m.mediaUrl) {
+                    val u = m.mediaUrl ?: return@LaunchedEffect
+                    if (!onPhone && ru.volshebnymir.lumo.core.AutoDownload.allow(ru.volshebnymir.lumo.core.DataKind.File, m.fileSize)) onPhone = ru.volshebnymir.lumo.core.FileStore.fetch(u, ru.volshebnymir.lumo.core.DataKind.File) != null
+                }
                 Column(Modifier.widthIn(max = 200.dp)) {
                     Text(m.fileName, color = fg, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(m.fileSize?.let { Fmt.size(it) } ?: "Файл", color = sub, fontSize = 12.5.sp)
+                    Text((m.fileSize?.let { Fmt.size(it) } ?: "Файл") + if (onPhone) " · на телефоне" else "", color = sub, fontSize = 12.5.sp)
                 }
             }
             "call" -> Row(verticalAlignment = Alignment.CenterVertically) {

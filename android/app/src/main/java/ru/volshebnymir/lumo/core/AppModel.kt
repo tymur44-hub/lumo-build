@@ -52,6 +52,10 @@ sealed class Screen {
     data object Dnd : Screen()
     data object Capsules : Screen()
     data object Streaks : Screen()
+    data object DataStorage : Screen()
+    data object StorageUsage : Screen()
+    data object NetUsage : Screen()
+    data class AutoDl(val cellular: Boolean) : Screen()
 }
 
 enum class Tab { Contacts, Chats, Settings }
@@ -101,6 +105,8 @@ object AppModel {
     val online = mutableStateMapOf<String, Boolean>()
     val contacts = mutableStateListOf<String>()
     val aliases = mutableStateMapOf<String, String>()
+    /** нажатие «Чаты» на нижней панели — список прокручивается наверх */
+    var chatsTopTick by mutableIntStateOf(0)
     var tab by mutableStateOf(Tab.Chats)
     val stack = mutableStateListOf<Screen>()
     var toast by mutableStateOf<String?>(null)
@@ -211,6 +217,8 @@ object AppModel {
         if (!loggedIn || started || demoId != null) return
         started = true
         myId?.let { E2E.installLocal(it) }   // ключ с устройства — до сети
+        // свои имена для контактов — с устройства, до сети (иначе мелькают имена, которые люди дали себе сами)
+        if (aliases.isEmpty()) aliases.putAll(localAliases())
         scope.launch {
             netStatus = "Соединение…"
             Realtime.onState = { ok -> netChanged(ok) }
@@ -505,10 +513,26 @@ object AppModel {
 
     // ---------- контакты ----------
 
+    // имена, которые я дал контактам, хранятся на устройстве (и дублируются на сервер для других устройств)
+    private val aliasKey get() = myId?.let { "lm_aliases_$it" }
+    private val pendingAliases = mutableSetOf<String>()
+    fun localAliases(): Map<String, String> = runCatching {
+        val k = aliasKey ?: return emptyMap()
+        val o = org.json.JSONObject(ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE).getString(k, "{}") ?: "{}")
+        o.keys().asSequence().associateWith { o.optString(it) }.filterValues { it.isNotBlank() }
+    }.getOrDefault(emptyMap())
+    private fun saveAliases() { val k = aliasKey ?: return; runCatching {
+        val o = org.json.JSONObject(); aliases.forEach { (id, a) -> o.put(id, a) }
+        ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE).edit().putString(k, o.toString()).apply() } }
+
     suspend fun loadContacts() {
-        val rows = runCatching { Api.select("lm_contacts", mapOf("select" to "contact_id,alias,created_at", "order" to "created_at.desc")) }.getOrNull() ?: return
+        val rows = runCatching { Api.select("lm_contacts", mapOf("select" to "contact_id,alias,created_at", "order" to "created_at.desc")) }.getOrNull()
+        if (rows == null) { if (aliases.isEmpty()) aliases.putAll(localAliases()); return }
         contacts.clear(); contacts.addAll(rows.mapNotNull { it.str("contact_id") })
-        aliases.clear(); rows.forEach { r -> val id = r.str("contact_id"); val a = r.str("alias"); if (id != null && !a.isNullOrEmpty()) aliases[id] = a }
+        val fresh = HashMap<String, String>()
+        rows.forEach { r -> val id = r.str("contact_id"); val a = r.str("alias"); if (id != null && !a.isNullOrEmpty()) fresh[id] = a }
+        localAliases().forEach { (id, a) -> if (fresh[id] == null && id in pendingAliases && contacts.contains(id)) fresh[id] = a }
+        aliases.keys.retainAll(fresh.keys); aliases.putAll(fresh); saveAliases()
         loadProfiles(contacts)
     }
 
@@ -528,7 +552,11 @@ object AppModel {
     }
 
     suspend fun setAlias(id: String, alias: String) {
-        runCatching { Api.rpc("lm_set_alias", jsonOf("p_user" to id, "p_alias" to alias)) }.onFailure { say(it.message ?: "Ошибка") }
+        // сразу на устройстве — имя меняется мгновенно и не зависит от сети
+        val v = alias.trim()
+        if (v.isEmpty()) aliases.remove(id) else aliases[id] = v
+        saveAliases(); pendingAliases.add(id)
+        runCatching { Api.rpc("lm_set_alias", jsonOf("p_user" to id, "p_alias" to alias)) }.onSuccess { pendingAliases.remove(id) }.onFailure { say(it.message ?: "Ошибка") }
         loadContacts(); loadChats()
     }
 

@@ -193,6 +193,10 @@ private fun ScreenContent(s: Screen?) {
         Screen.CallsHistory -> CallsHistoryScreen()
         Screen.Notifications -> NotificationsScreen()
         Screen.Privacy -> PrivacyScreen()
+        Screen.DataStorage -> DataStorageScreen()
+        Screen.StorageUsage -> StorageUsageScreen()
+        Screen.NetUsage -> NetUsageScreen()
+        is Screen.AutoDl -> AutoDlScreen(s.cellular)
         Screen.Blocked -> BlockedScreen()
         is Screen.ChatSearch -> ChatSearchScreen(s.chatId)
         is Screen.PrivacyKey -> PrivacyKeyScreen(s.key)
@@ -344,6 +348,7 @@ fun androidx.compose.foundation.layout.RowScope.TabItem(t: Tab, icon: ImageVecto
     Box(
         Modifier.weight(1f).clip(RoundedCornerShape(30.dp)).background(if (on) p.a1.copy(alpha = 0.16f) else Color.Transparent)
             .bouncy {
+                if (t == Tab.Chats) AppModel.chatsTopTick++
                 AppModel.tab = t
                 scope.launch { pop.animateTo(1.1f, tween(200)); pop.animateTo(1f, spring(0.85f, Spring.StiffnessLow)) }
                 when (t) {
@@ -475,7 +480,10 @@ fun ChatListScreen() {
             androidx.compose.animation.AnimatedVisibility(storiesOpen && ru.volshebnymir.lumo.core.RemoteConfig.on("stories"), enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
                 exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()) { StoriesBar() }
             if (folder == "all") AnnounceCard()
-            LazyColumn(Modifier.fillMaxSize().nestedScroll(pull), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 110.dp)) {
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            // нажали «Чаты» на панели — наверх списка
+            LaunchedEffect(AppModel.chatsTopTick) { if (AppModel.chatsTopTick > 0) listState.animateScrollToItem(0) }
+            LazyColumn(Modifier.fillMaxSize().nestedScroll(pull), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 110.dp)) {
                 if (folder == "all" && Reminders.list.isNotEmpty()) item(key = "reminders") { RemindersBar() }
                 items(list, key = { it.id }) { c -> ChatRow(c, Modifier.animateItem()) }
                 if (AppModel.chatsLoaded && list.isEmpty()) item {
