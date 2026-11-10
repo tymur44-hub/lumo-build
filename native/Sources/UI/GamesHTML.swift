@@ -66,8 +66,25 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-famil
 .sea div.hit{background:#ff6f5b}.sea div.sunk{background:#b8344d}
 .sea div.miss::after{content:"";width:22%;height:22%;border-radius:50%;background:var(--muted);opacity:.7}
 .sea div.hit::after,.sea div.sunk::after{content:"";width:46%;height:46%;background:linear-gradient(45deg,transparent 42%,#fff 42%,#fff 58%,transparent 58%),linear-gradient(-45deg,transparent 42%,#fff 42%,#fff 58%,transparent 58%)}
-.sea div.new{animation:pop .4s ease}
-@keyframes pop{0%{transform:scale(.4)}60%{transform:scale(1.15)}100%{transform:none}}
+/* --- живые эффекты --- */
+.ttt{position:relative}
+.ttt .wl{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:2}
+.wl line{stroke:#fff;stroke-width:10;stroke-linecap:round;filter:drop-shadow(0 0 8px rgba(255,255,255,.7));stroke-dasharray:1000;stroke-dashoffset:1000}
+.wl.go line{animation:wl .45s cubic-bezier(.3,.7,.3,1) .15s forwards}.wl.done line{stroke-dashoffset:0}
+@keyframes wl{to{stroke-dashoffset:0}}
+.ttt button:active{transform:scale(.94)}
+.pc.ghost{position:absolute;left:11%;top:11%;pointer-events:none}
+#fx{position:fixed;inset:0;pointer-events:none;z-index:7;overflow:hidden}
+#fx .sh{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#9aa3b5 45%,#3a4252);box-shadow:0 4px 10px rgba(0,0,0,.45)}
+#fx .rp{position:absolute;border:2px solid rgba(160,210,255,.9);border-radius:50%}
+#fx .pt{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%}
+#fx .fl{position:absolute;border-radius:50%;background:radial-gradient(circle,#fff 0,#ffd27a 30%,rgba(255,110,40,.6) 55%,rgba(255,80,20,0) 72%)}
+.sea div.new::after{animation:pop .4s ease .34s both}
+.sea div.new.hit,.sea div.new.sunk{animation:hitbg .45s ease .34s both}
+@keyframes hitbg{0%{background:var(--cell)}}
+.shake{animation:shk .45s cubic-bezier(.36,.07,.19,.97)}
+@keyframes shk{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(3px)}30%,50%,70%{transform:translateX(-5px)}40%,60%{transform:translateX(5px)}}
+@keyframes pop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.15)}100%{transform:none}}
 /* кнопки */
 .acts{display:flex;gap:10px;margin-top:14px}
 .btn{flex:1;height:52px;border:0;border-radius:16px;font:inherit;font-size:16px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;color:#fff;background:linear-gradient(135deg,var(--a1),var(--a2));transition:transform .12s,opacity .2s}
@@ -172,6 +189,80 @@ function render(){
     if(a==='resign') return ask('Сдаться?',G.stake?'Ставка уйдёт сопернику.':'Победа достанется сопернику.','Сдаться',function(){ act({action:'resign'}); });
     act({action:a}); }; });
   bind();
+  try{ fx(); }catch(e){}
+}
+/* ---- живые эффекты: движение шашек, линия победы, выстрелы ---- */
+var fxCkBoard=null, fxCkKey=null, fxSeaKey=null, fxTttWin=null;
+function fxLayer(){ var l=document.getElementById('fx'); if(!l){ l=document.createElement('div'); l.id='fx'; document.body.appendChild(l); } return l; }
+function rnd(a,b){ return a+Math.random()*(b-a); }
+function fx(){ if(G.kind==='checkers') fxCk(); else if(G.kind==='sea') fxSea(); else fxTtt(); }
+function fxTtt(){
+  var b=G.state.board, L=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]], w=null;
+  L.forEach(function(l){ if(b[l[0]]!=='.'&&b[l[0]]===b[l[1]]&&b[l[0]]===b[l[2]]) w=l; });
+  var box=document.querySelector('.ttt'); if(!w||!box) return;
+  var cells=box.querySelectorAll('button'), br=box.getBoundingClientRect();
+  var c=function(i){ var e=cells[i]; return [e.offsetLeft+e.offsetWidth/2, e.offsetTop+e.offsetHeight/2]; }; br={width:box.clientWidth,height:box.clientHeight};
+  var a=c(w[0]), z=c(w[2]), dx=z[0]-a[0], dy=z[1]-a[1], len=Math.hypot(dx,dy)||1, ex=dx/len*28, ey=dy/len*28;
+  var key=w.join(','), fresh=fxTttWin!==key; fxTttWin=key;
+  box.insertAdjacentHTML('beforeend','<svg class="wl '+(fresh?'go':'done')+'" viewBox="0 0 '+br.width+' '+br.height+'"><line x1="'+(a[0]-ex)+'" y1="'+(a[1]-ey)+'" x2="'+(z[0]+ex)+'" y2="'+(z[1]+ey)+'"/></svg>');
+}
+function ckCell(p){ return document.querySelector('.ck [data-r="'+p[0]+'"][data-c="'+p[1]+'"]'); }
+function fxCk(){
+  var b=G.state.board, last=G.state.last||[], key=JSON.stringify(last);
+  if(fxCkKey===null){ fxCkKey=key; fxCkBoard=b; return; }   // первый показ — без анимации
+  if(key===fxCkKey){ fxCkBoard=b; return; }
+  var prev=fxCkBoard; fxCkKey=key; fxCkBoard=b;
+  if(last.length<2) return;
+  var dest=ckCell(last[last.length-1]), pc=dest&&dest.querySelector('.pc'); if(!pc) return;
+  var dr=dest.getBoundingClientRect(), seg=last.length-1, frames=[];
+  var pos=function(p){ var r=ckCell(p).getBoundingClientRect(); return [r.left-dr.left, r.top-dr.top]; };
+  for(var i=0;i<seg;i++){
+    var A=pos(last[i]), B=pos(last[i+1]), jump=Math.abs(last[i+1][0]-last[i][0])>1;
+    frames.push({offset:i/seg, transform:'translate('+A[0]+'px,'+A[1]+'px) scale(1)', boxShadow:'0 3px 0 rgba(0,0,0,.35)'});
+    frames.push({offset:(i+.5)/seg, transform:'translate('+((A[0]+B[0])/2)+'px,'+((A[1]+B[1])/2-(jump?14:6))+'px) scale('+(jump?1.22:1.1)+')', boxShadow:'0 14px 14px rgba(0,0,0,.35)'});
+  }
+  frames.push({offset:1, transform:'translate(0,0) scale(1)', boxShadow:'0 3px 0 rgba(0,0,0,.35)'});
+  var D=Math.min(1600, 300*seg+80);
+  pc.style.zIndex=3; pc.style.position='relative';
+  var an=pc.animate(frames,{duration:D,easing:'cubic-bezier(.35,.1,.25,1)'}); an.onfinish=function(){ pc.style.zIndex=''; };
+  // приземление: лёгкая отдача
+  setTimeout(function(){ pc.animate([{transform:'scale(1.08,.92)'},{transform:'scale(1)'}],{duration:180,easing:'ease-out'}); },D);
+  // сбитые шашки: исчезают в момент, когда через них перепрыгнули
+  if(prev){ var from=last[0][0]*8+last[0][1];
+    for(var i2=0;i2<seg;i2++){ var a2=last[i2], z2=last[i2+1], dr2=Math.sign(z2[0]-a2[0]), dc2=Math.sign(z2[1]-a2[1]);
+      for(var r=a2[0]+dr2,c=a2[1]+dc2;r!==z2[0];r+=dr2,c+=dc2){ var idx=r*8+c; if(idx===from||prev[idx]==='.'||b[idx]!=='.') continue;
+        (function(cell,ch,delay){ if(!cell) return; var g=document.createElement('span'); g.className='pc ghost '+ch.toLowerCase(); if(ch===ch.toUpperCase()) g.innerHTML=I.crown; cell.appendChild(g);
+          var rot=rnd(-40,40); g.animate([{opacity:1,transform:'scale(1)'},{opacity:1,transform:'scale(1.12) translateY(-4px)',offset:.25},{opacity:0,transform:'scale(.2) translateY(-30px) rotate('+rot+'deg)'}],{duration:520,delay:delay,easing:'cubic-bezier(.4,0,.6,1)',fill:'both'}).onfinish=function(){ g.remove(); };
+        })(ckCell([r,c]), prev[idx], (i2+.5)/seg*D);
+      } } }
+}
+function seaCellEl(big,x,y){ return document.querySelector('.sea.'+(big?'big':'sm')+' [data-x="'+x+'"][data-y="'+y+'"]'); }
+function fxSea(){
+  var l=G.state.last, key=l?l.by+':'+l.x+':'+l.y+':'+((G.state.shots||{})[l.by]||[]).length:'';
+  if(fxSeaKey===null){ fxSeaKey=key; return; } if(!l||key===fxSeaKey) return; fxSeaKey=key;
+  var mine=l.by===G.me, cell=seaCellEl(mine,l.x,l.y); if(!cell) return;
+  var r=cell.getBoundingClientRect(), cx=r.left+r.width/2, cy=r.top+r.height/2, L=fxLayer();
+  // снаряд летит по дуге
+  var sh=document.createElement('div'); sh.className='sh'; L.appendChild(sh);
+  var sx=mine?innerWidth/2:cx+rnd(-40,40), sy=mine?innerHeight+20:-30;
+  var T=360, k=[]; for(var i=0;i<=10;i++){ var t=i/10, x=sx+(cx-sx)*t, y=sy+(cy-sy)*t-Math.sin(t*Math.PI)*(mine?120:40); k.push({transform:'translate('+x+'px,'+y+'px) scale('+(mine?1.8-1.2*t:0.8+0.2*t)+')',offset:t}); }
+  sh.animate(k,{duration:T,easing:'cubic-bezier(.45,.05,.55,.95)',fill:'both'}).onfinish=function(){ sh.remove(); boom(); };
+  function boom(){
+    if(l.h){
+      var big=!!l.sunk, n=big?22:14;
+      var f=document.createElement('div'); f.className='fl'; var fs=big?110:70; f.style.left=(cx-fs/2)+'px'; f.style.top=(cy-fs/2)+'px'; f.style.width=f.style.height=fs+'px'; L.appendChild(f);
+      f.animate([{opacity:1,transform:'scale(.2)'},{opacity:.95,transform:'scale(1)',offset:.35},{opacity:0,transform:'scale(1.35)'}],{duration:big?650:480,easing:'ease-out'}).onfinish=function(){ f.remove(); };
+      for(var i=0;i<n;i++){ var p=document.createElement('div'); p.className='pt'; var ang=rnd(0,Math.PI*2), sp=rnd(30,big?110:70), col=['#fff3b0','#ffb347','#ff6f3c','#5b5b66'][i%4]; p.style.background=col; p.style.left=cx+'px'; p.style.top=cy+'px'; L.appendChild(p);
+        var dx=Math.cos(ang)*sp, dy=Math.sin(ang)*sp; p.animate([{transform:'translate(0,0) scale(1)',opacity:1},{transform:'translate('+dx*.6+'px,'+(dy*.6-10)+'px) scale(.9)',opacity:1,offset:.5},{transform:'translate('+dx+'px,'+(dy+40)+'px) scale(.3)',opacity:0}],{duration:rnd(500,big?1000:750),easing:'cubic-bezier(.2,.7,.4,1)'}).onfinish=function(){ this.effect.target.remove(); }; }
+      var grid=cell.parentNode; grid.classList.remove('shake'); void grid.offsetWidth; grid.classList.add('shake');
+      try{ navigator.vibrate&&navigator.vibrate(big?[30,40,30]:25); }catch(e){}
+    } else {
+      for(var j=0;j<3;j++){ var rp=document.createElement('div'); rp.className='rp'; rp.style.left=(cx-r.width/2)+'px'; rp.style.top=(cy-r.width/2)+'px'; rp.style.width=rp.style.height=r.width+'px'; L.appendChild(rp);
+        rp.animate([{opacity:.9,transform:'scale(.3)'},{opacity:0,transform:'scale(2.4)'}],{duration:700,delay:j*120,easing:'ease-out',fill:'both'}).onfinish=function(){ this.effect.target.remove(); }; }
+      for(var q=0;q<8;q++){ var d=document.createElement('div'); d.className='pt'; d.style.background='rgba(170,215,255,.95)'; d.style.left=cx+'px'; d.style.top=cy+'px'; L.appendChild(d);
+        var a3=rnd(Math.PI*1.1,Math.PI*1.9), s3=rnd(14,34); d.animate([{transform:'translate(0,0)',opacity:1},{transform:'translate('+Math.cos(a3)*s3+'px,'+(Math.sin(a3)*s3-14)+'px)',opacity:1,offset:.45},{transform:'translate('+Math.cos(a3)*s3*1.4+'px,'+(Math.sin(a3)*s3+18)+'px) scale(.4)',opacity:0}],{duration:600,easing:'ease-out'}).onfinish=function(){ this.effect.target.remove(); }; }
+    }
+  }
 }
 /* ---- крестики-нолики ---- */
 var tttLast='';
