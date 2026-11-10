@@ -1,5 +1,9 @@
 package ru.volshebnymir.lumo.ui
 
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.abs
 import android.content.Intent
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
@@ -171,49 +175,126 @@ fun Root() {
     }
 }
 
+/** мгновенный переход без анимации — после свайпа «назад» экран уже уехал пальцем */
+private var navInstant = false
+
+@Composable
+private fun ScreenContent(s: Screen?) {
+    when (s) {
+        null -> Tabs()
+        is Screen.Chat -> ChatScreen(s.id)
+        is Screen.Info -> InfoScreen(s.chatId)
+        is Screen.Person -> PersonScreen(s.userId)
+        Screen.MyProfile -> MyProfileScreen()
+        Screen.EditProfile -> EditProfileScreen()
+        Screen.Appearance -> AppearanceScreen()
+        Screen.About -> AboutScreen()
+        Screen.NewChat -> NewChatScreen()
+        Screen.CallsHistory -> CallsHistoryScreen()
+        Screen.Notifications -> NotificationsScreen()
+        Screen.Privacy -> PrivacyScreen()
+        Screen.Blocked -> BlockedScreen()
+        is Screen.ChatSearch -> ChatSearchScreen(s.chatId)
+        is Screen.PrivacyKey -> PrivacyKeyScreen(s.key)
+        Screen.EditUsername -> EditUsernameScreen()
+        Screen.EditColor -> EditColorScreen()
+        Screen.Premium -> PremiumScreen()
+        Screen.MsgPrivacy -> MsgPrivacyScreen()
+        Screen.Devices -> DevicesScreen()
+        Screen.Language -> LanguageScreen()
+        Screen.Phone -> PhoneSettingsScreen()
+        Screen.Wallet -> WalletScreen()
+        Screen.Gifts -> GiftsScreen()
+        is Screen.Comments -> CommentsScreen(s.chatId, s.postId)
+        is Screen.EditChat -> EditChatScreen(s.chatId)
+        Screen.TwoFa -> TwoFaScreen()
+        Screen.Reminders -> RemindersScreen()
+        Screen.Dnd -> DndScreen()
+        Screen.Capsules -> CapsulesScreen()
+        Screen.Streaks -> StreakInfoScreen()
+    }
+}
+
 @Composable
 fun MainScreen() {
     val p = P
     LaunchedEffect(Unit) { AppModel.start() }
-    BackHandler(AppModel.stack.isNotEmpty()) { AppModel.pop() }
+    BackHandler(AppModel.stack.isNotEmpty()) { navInstant = false; AppModel.pop() }
     val top = AppModel.stack.lastOrNull()
-    AnimatedContent(top, transitionSpec = {
-        val forward = (targetState != null && initialState == null) || AppModel.stack.size > 0 && targetState != null && initialState != null && AppModel.stack.contains(initialState!!)
-        if (forward) slideInHorizontally(tween(260)) { it } togetherWith slideOutHorizontally(tween(260)) { -it / 4 } + fadeOut(tween(260))
-        else slideInHorizontally(tween(260)) { -it / 4 } + fadeIn() togetherWith slideOutHorizontally(tween(260)) { it }
-    }, label = "nav") { s ->
-        when (s) {
-            null -> Tabs()
-            is Screen.Chat -> ChatScreen(s.id)
-            is Screen.Info -> InfoScreen(s.chatId)
-            is Screen.Person -> PersonScreen(s.userId)
-            Screen.MyProfile -> MyProfileScreen()
-            Screen.EditProfile -> EditProfileScreen()
-            Screen.Appearance -> AppearanceScreen()
-            Screen.About -> AboutScreen()
-            Screen.NewChat -> NewChatScreen()
-            Screen.CallsHistory -> CallsHistoryScreen()
-            Screen.Notifications -> NotificationsScreen()
-            Screen.Privacy -> PrivacyScreen()
-            Screen.Blocked -> BlockedScreen()
-            is Screen.ChatSearch -> ChatSearchScreen(s.chatId)
-            is Screen.PrivacyKey -> PrivacyKeyScreen(s.key)
-            Screen.EditUsername -> EditUsernameScreen()
-            Screen.EditColor -> EditColorScreen()
-            Screen.Premium -> PremiumScreen()
-            Screen.MsgPrivacy -> MsgPrivacyScreen()
-            Screen.Devices -> DevicesScreen()
-            Screen.Language -> LanguageScreen()
-            Screen.Phone -> PhoneSettingsScreen()
-            Screen.Wallet -> WalletScreen()
-            Screen.Gifts -> GiftsScreen()
-            is Screen.Comments -> CommentsScreen(s.chatId, s.postId)
-            is Screen.EditChat -> EditChatScreen(s.chatId)
-            Screen.TwoFa -> TwoFaScreen()
-            Screen.Reminders -> RemindersScreen()
-            Screen.Dnd -> DndScreen()
-            Screen.Capsules -> CapsulesScreen()
-            Screen.Streaks -> StreakInfoScreen()
+    val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    val keyOf = { s: Screen? -> s?.toString() ?: "tabs" }
+    val scope = rememberCoroutineScope()
+    val drag = remember { Animatable(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val w = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+        val prev = if (AppModel.stack.size >= 2) AppModel.stack[AppModel.stack.size - 2] else null
+        // под экраном — предыдущий, он «выезжает» из-под пальца, как в Telegram
+        if (top != null && (dragging || drag.value > 0f)) {
+            val k = drag.value / w
+            Box(Modifier.fillMaxSize().graphicsLayer { translationX = -w * 0.28f * (1f - k) }) {
+                holder.SaveableStateProvider(keyOf(prev)) { ScreenContent(prev) }
+            }
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f * (1f - k))))
+        }
+        Box(
+            Modifier.fillMaxSize()
+                .graphicsLayer { translationX = drag.value; shadowElevation = if (drag.value > 0f) 24f else 0f }
+                .pointerInput(top) {
+                    if (top == null) return@pointerInput
+                    val slop = viewConfiguration.touchSlop
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        var dx = 0f; var dy = 0f; var claimed = false
+                        val vt = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                        vt.addPosition(down.uptimeMillis, down.position)
+                        while (true) {
+                            val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                            val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!c.pressed) break
+                            val d = c.position - c.previousPosition
+                            vt.addPosition(c.uptimeMillis, c.position)
+                            if (!claimed) {
+                                if (c.isConsumed) break
+                                dx += d.x; dy += d.y
+                                if (abs(dy) > slop && abs(dy) > abs(dx)) break
+                                if (dx < -slop) break
+                                if (dx > slop && dx > abs(dy) * 2f) { claimed = true; dragging = true }
+                            } else {
+                                c.consume()
+                                val nv = (drag.value + d.x).coerceIn(0f, w)
+                                scope.launch { drag.snapTo(nv) }
+                            }
+                        }
+                        if (claimed) {
+                            val v = vt.calculateVelocity().x
+                            scope.launch {
+                                if (drag.value > w * 0.35f || v > 900f) {
+                                    drag.animateTo(w, spring(dampingRatio = 1f, stiffness = 700f, visibilityThreshold = 1f), initialVelocity = v)
+                                    navInstant = true
+                                    AppModel.pop()
+                                    drag.snapTo(0f)
+                                    dragging = false
+                                } else {
+                                    drag.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 600f), initialVelocity = v)
+                                    dragging = false
+                                }
+                            }
+                        }
+                    }
+                }
+        ) {
+            AnimatedContent(top, transitionSpec = {
+                if (navInstant) { navInstant = false; androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None }
+                else {
+                    val forward = (targetState != null && initialState == null) || AppModel.stack.size > 0 && targetState != null && initialState != null && AppModel.stack.contains(initialState!!)
+                    val ease = androidx.compose.animation.core.FastOutSlowInEasing
+                    if (forward) slideInHorizontally(tween(240, easing = ease)) { it } togetherWith slideOutHorizontally(tween(240, easing = ease)) { -it / 4 } + fadeOut(tween(240))
+                    else slideInHorizontally(tween(240, easing = ease)) { -it / 4 } + fadeIn(tween(160)) togetherWith slideOutHorizontally(tween(240, easing = ease)) { it }
+                }
+            }, label = "nav") { s ->
+                holder.SaveableStateProvider(keyOf(s)) { ScreenContent(s) }
+            }
         }
     }
 }
@@ -223,7 +304,7 @@ fun Tabs() {
     val p = P
     Box(Modifier.fillMaxSize().background(p.bg)) {
         AnimatedContent(AppModel.tab, transitionSpec = {
-            (fadeIn(tween(320)) + androidx.compose.animation.scaleIn(tween(320), initialScale = 0.985f)) togetherWith fadeOut(tween(220))
+            (fadeIn(tween(180)) + androidx.compose.animation.scaleIn(tween(200), initialScale = 0.985f)) togetherWith fadeOut(tween(120))
         }, label = "tabs") { t ->
             when (t) {
                 Tab.Chats -> ChatListScreen()
