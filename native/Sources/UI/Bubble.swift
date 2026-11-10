@@ -561,9 +561,7 @@ struct MessageRow: View {
                 let w: CGFloat = 250
                 let ratio = (m.width ?? 1) > 0 ? CGFloat((m.height ?? 1) / (m.width ?? 1)) : 1
                 let h = min(340, max(120, w * ratio))
-                CachedImage(url: u) { img in img.resizable().scaledToFill() } placeholder: {
-                    ZStack { Color.white.opacity(0.06); ProgressView() }
-                }
+                AutoPhoto(url: u, size: m.fileSize)
                 .frame(width: w, height: h)
                 .clipShape(RoundedRectangle(cornerRadius: 13))
                 .onTapGesture { onImage(u) }
@@ -574,6 +572,7 @@ struct MessageRow: View {
         case "video":
             if let u = m.mediaURL.flatMap(URL.init(string:)) {
                 VideoThumb(url: u).onTapGesture { onVideo(u) }
+                    .task { if MediaCache.shared.local(u) == nil, AutoDownloadSettings.shared.allow(.video, bytes: m.fileSize) { _ = await MediaCache.shared.fetch(u) } }
             } else {
                 ZStack { Color.white.opacity(0.06); ProgressView() }.frame(width: 250, height: 180)
                     .clipShape(RoundedRectangle(cornerRadius: 13))
@@ -581,22 +580,7 @@ struct MessageRow: View {
         case "voice":
             VoiceView(m: m, mine: mine)
         case "file":
-            Button {
-                if let u = m.mediaURL.flatMap(URL.init(string:)) { UIApplication.shared.open(u) }
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "doc.fill").font(.title3)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(mine ? Color.white.opacity(0.2) : Theme.a1))
-                        .foregroundColor(.white)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(m.fileName).font(.system(size: 15, weight: .semibold)).lineLimit(2)
-                        if let s = m.fileSize { Text(Fmt.size(s)).font(.caption).opacity(0.7) }
-                    }
-                    .foregroundColor(mine ? .white : Theme.text)
-                }
-            }
-            .disabled(m.mediaURL == nil)
+            FileBubbleView(m: m, mine: mine)
         case "call":
             let st = m.metaStatus ?? ""
             let missed = st == "missed" || st == "rejected"

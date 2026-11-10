@@ -154,8 +154,8 @@ final class Realtime: NSObject, URLSessionWebSocketDelegate {
             case .failure: failed = true
             case .success(let msg):
                 switch msg {
-                case .string(let s): text = s
-                case .data(let d): text = String(data: d, encoding: .utf8)
+                case .string(let s): text = s; NetStats.shared.add(.messages, recv: s.utf8.count + 8)
+                case .data(let d): text = String(data: d, encoding: .utf8); NetStats.shared.add(.messages, recv: d.count + 8)
                 @unknown default: text = nil
                 }
             }

@@ -172,7 +172,7 @@ struct RemoteStickerView: View {
     let url: URL
     var size: CGFloat = 96
     var body: some View {
-        CachedImage(url: url) { $0.resizable().scaledToFit() } placeholder: { RoundedRectangle(cornerRadius: 14).fill(Theme.panel2.opacity(0.5)) }
+        CachedImage(url: url, kind: .sticker) { $0.resizable().scaledToFit() } placeholder: { RoundedRectangle(cornerRadius: 14).fill(Theme.panel2.opacity(0.5)) }
             .frame(width: size, height: size)
     }
 }

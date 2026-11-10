@@ -171,6 +171,8 @@ final class AppModel: ObservableObject {
         if me == nil, let id = myId, let r = LocalCache.loadMe(id) { let p = Profile(json: r); me = p; profiles[id] = p }
         // ключ шифрования с устройства — сразу, до сети: сохранённые сообщения расшифровываются и без интернета
         if let id = myId { E2E.shared.installLocal(id) }
+        // свои имена для контактов — с устройства, ещё до сети (иначе мелькают имена, которые люди дали себе сами)
+        if aliases.isEmpty { aliases = localAliases() }
         // список чатов из кэша — сразу, до сети (потом обновится с сервера)
         if chats.isEmpty, let cached = LocalCache.loadChats() { await applyChats(cached, prefetch: false) }
         netStatus = "Соединение…"
@@ -628,12 +630,37 @@ final class AppModel: ObservableObject {
 
     // MARK: - контакты и блокировки
 
+    // имена, которые я дал контактам, хранятся на устройстве (и дублируются на сервер для других устройств)
+    private var aliasKey: String? { myId.map { "lm_aliases_" + $0 } }
+    /// всё, что записано на устройстве; пустая строка — имя сброшено на этом устройстве
+    private func localAliasesRaw() -> [String: String] { aliasKey.flatMap { UserDefaults.standard.dictionary(forKey: $0) as? [String: String] } ?? [:] }
+    func localAliases() -> [String: String] { localAliasesRaw().filter { !$0.value.isEmpty } }
+    private func saveAliases(cleared: String? = nil) {
+        guard let k = aliasKey else { return }
+        var d = localAliasesRaw().filter { $0.value.isEmpty }   // отметки «сброшено» сохраняем
+        for (id, a) in aliases { d[id] = a }
+        if let c = cleared { d[c] = "" }
+        UserDefaults.standard.set(d, forKey: k)
+    }
+
     func loadContacts() async {
-        let rows = (try? await API.shared.select("lm_contacts", ["select": "contact_id,alias,note,photo,created_at", "order": "created_at.desc"])) ?? []
+        // нет сети или ошибка — оставляем то, что уже есть на устройстве
+        guard let rows = try? await API.shared.select("lm_contacts", ["select": "contact_id,alias,note,photo,created_at", "order": "created_at.desc"]) else {
+            if aliases.isEmpty { aliases = localAliases() }
+            return
+        }
         contacts = rows.compactMap { $0.str("contact_id") }
         var a: [String: String] = [:]
         for r in rows { if let id = r.str("contact_id"), let al = r.str("alias"), !al.isEmpty { a[id] = al } }
+        // главное — то, что записано на этом устройстве: оно важнее сервера, а сервер догоняем
+        var resync: [(String, String)] = []
+        for (id, al) in localAliasesRaw() where contacts.contains(id) {
+            if al.isEmpty { if a[id] != nil { a.removeValue(forKey: id); resync.append((id, "")) } }
+            else if a[id] != al { a[id] = al; resync.append((id, al)) }
+        }
         aliases = a
+        saveAliases()
+        for (id, al) in resync { Task { _ = try? await API.shared.rpc("lm_set_alias", ["p_user": id, "p_alias": al]) } }
         var notes: [String: String] = [:], photos: [String: String] = [:]
         for r in rows {
             guard let id = r.str("contact_id") else { continue }
@@ -689,9 +716,17 @@ final class AppModel: ObservableObject {
         } catch { say(error.localizedDescription) }
     }
 
+    private var pendingAliases = Set<String>()
     func setAlias(_ id: String, _ alias: String) async {
+        // сразу на устройстве — имя меняется мгновенно и не зависит от сети
+        let v = alias.trimmingCharacters(in: .whitespaces)
+        if v.isEmpty { aliases.removeValue(forKey: id) } else { aliases[id] = v }
+        saveAliases(cleared: v.isEmpty ? id : nil)
+        for i in chats.indices where chats[i].peerId == id { chats[i].peerName = v.isEmpty ? (profiles[id]?.name ?? chats[i].peerName) : v }
+        pendingAliases.insert(id)
         do {
             _ = try await API.shared.rpc("lm_set_alias", ["p_user": id, "p_alias": alias])
+            pendingAliases.remove(id)
             await loadContacts()
             await loadChats()
             say(alias.trimmingCharacters(in: .whitespaces).isEmpty ? "Имя сброшено" : "Имя сохранено — его видите только вы")

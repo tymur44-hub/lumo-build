@@ -188,6 +188,8 @@ final class API {
             (respData, resp) = try await Net.session.data(for: req)
         }
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if let d = data { NetStats.shared.add(DataKind.of(contentType: headers["Content-Type"] ?? ""), sent: d.count, recv: respData.count) }
+        else { NetStats.shared.add(.messages, sent: (req.httpBody?.count ?? 0) + 400, recv: respData.count + 300) }
         let obj = respData.isEmpty ? nil : try? JSONSerialization.jsonObject(with: respData, options: [.fragmentsAllowed])
         if !(200..<300).contains(code) {
             let j = obj as? JSON ?? [:]
@@ -238,6 +240,7 @@ final class API {
         req.setValue("false", forHTTPHeaderField: "x-upsert")
         req.setValue("max-age=31536000", forHTTPHeaderField: "Cache-Control")
         let (respData, resp) = try await Net.session.upload(for: req, from: data, delegate: UploadProgress(progress))
+        NetStats.shared.add(DataKind.of(contentType: contentType), sent: data.count, recv: respData.count)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         if !(200..<300).contains(code) {
             let j = (try? JSONSerialization.jsonObject(with: respData)) as? JSON ?? [:]

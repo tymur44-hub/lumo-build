@@ -309,7 +309,8 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
             muted = false
             camOff = false
             peerCamOff = false
-            peerName = p.str("name") ?? "Lumo"
+            // имя — как оно записано у меня в контактах
+            peerName = AppModel.shared.aliases[from].flatMap { $0.isEmpty ? nil : $0 } ?? p.str("name") ?? "Lumo"
             peerAvatar = p.str("avatar")
             peerColor = p.int("color") ?? 0
             state = .incoming

@@ -193,7 +193,7 @@ struct VideoNoteView: View {
             } else {
                 AudioPlayer.shared.stop()
                 try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
-                let p = AVPlayer(url: url.px)
+                let p = AVPlayer(url: MediaCache.shared.local(url) ?? url.px)
                 player = p
                 paused = false
                 progress = 0
@@ -215,7 +215,11 @@ struct VideoNoteView: View {
             }
         }
         .onDisappear { player?.pause(); player = nil; big = false; paused = false; progress = 0 }
-        .task { thumb = await Media.thumbnail(url) }
+        .task {
+            // кружок небольшой — сразу сохраняем на телефон, дальше он играет без сети
+            if MediaCache.shared.local(url) == nil, AutoDownloadSettings.shared.current.enabled { _ = await MediaCache.shared.fetch(url) }
+            thumb = await Media.thumbnail(url)
+        }
     }
 }
 
@@ -320,7 +324,8 @@ final class MiniNotePlayer: ObservableObject {
         stop()
         AudioPlayer.shared.stop()
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
-        let p = AVPlayer(url: url.px)
+        let p = AVPlayer(url: MediaCache.shared.local(url) ?? url.px)
+        if MediaCache.shared.local(url) == nil { Task { _ = await MediaCache.shared.fetch(url) } }
         observer = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { @Sendable t in
             Task { @MainActor in
                 let mp = MiniNotePlayer.shared

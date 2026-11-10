@@ -14,6 +14,7 @@ enum LocalCache {
         return url
     }
 
+    static var dirURL: URL { dir }
     private static func file(_ name: String) -> URL { dir.appendingPathComponent(name + ".json") }
 
     private static func safe(_ s: String) -> String {

@@ -239,7 +239,9 @@ struct ChatListView: View {
     }
 
     private var chatList: some View {
+        ScrollViewReader { proxy in
         ScrollView {
+            Color.clear.frame(height: 0).id("chatsTop")
             GeometryReader { g in Color.clear.preference(key: ProfileScrollKey.self, value: g.frame(in: .named("clist")).minY) }.frame(height: 0)
             LazyVStack(spacing: 0) {
                 if folder == .all { RemindersBar() }
@@ -298,6 +300,11 @@ struct ChatListView: View {
                 Task { await model.loadChats(); await model.loadStories() }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred(); storiesOpen = true
             } else if y < -24, storiesOpen { storiesOpen = false }
+        }
+        // нажали «Чаты» на панели — наверх списка
+        .onReceive(NotificationCenter.default.publisher(for: .lumoChatsTop)) { _ in
+            withAnimation(Motion.snappy) { proxy.scrollTo("chatsTop", anchor: .top) }
+        }
         }
         .chatDeletion($deleting)
     }

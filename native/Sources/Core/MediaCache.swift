@@ -46,6 +46,7 @@ actor MediaCache {
             do {
                 let (tmp, resp) = try await Net.session.download(from: u.px)
                 guard let r = resp as? HTTPURLResponse, (200..<300).contains(r.statusCode) else { return nil }
+                NetStats.shared.add(.video, recv: (try? FileManager.default.attributesOfItem(atPath: tmp.path)[.size] as? Int) ?? 0)
                 try? FileManager.default.removeItem(at: dst)
                 try FileManager.default.moveItem(at: tmp, to: dst)
                 return dst

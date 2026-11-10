@@ -71,3 +71,8 @@ struct SwipeBackInstaller: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> VC { let v = VC(); v.view.isUserInteractionEnabled = false; return v }
     func updateUIViewController(_ v: VC, context: Context) {}
 }
+
+extension Notification.Name {
+    /// нажали «Чаты» на нижней панели — прокрутить список чатов наверх
+    static let lumoChatsTop = Notification.Name("lumoChatsTop")
+}

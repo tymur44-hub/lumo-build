@@ -32,7 +32,8 @@ enum Media {
 
     static func thumbnail(_ url: URL) async -> UIImage? {
         if let c = thumbs.object(forKey: url.absoluteString as NSString) { return c }
-        let gen = AVAssetImageGenerator(asset: AVURLAsset(url: url.px))
+        let src = MediaCache.shared.local(url) ?? url.px
+        let gen = AVAssetImageGenerator(asset: AVURLAsset(url: src))
         gen.appliesPreferredTrackTransform = true
         gen.maximumSize = CGSize(width: 640, height: 640)
         let img: UIImage? = await withCheckedContinuation { cont in
@@ -158,7 +159,17 @@ final class AudioPlayer: NSObject, ObservableObject, WKScriptMessageHandler {
         try? AVAudioSession.sharedInstance().setActive(true)
         let ext = u.pathExtension.lowercased()
         if ext == "webm" || ext == "ogg" || ext == "opus" { playWeb(u); return }
-        let p = AVPlayer(url: u.px)
+        // голосовое скачивается один раз и дальше играет с телефона
+        if let l = FileStore.shared.local(u, .voice) { start(l, id: id); return }
+        Task { @MainActor in
+            let l = await FileStore.shared.fetch(u, .voice)
+            guard self.currentId == id else { return }
+            self.start(l ?? u.px, id: id)
+        }
+    }
+
+    private func start(_ src: URL, id: Int) {
+        let p = AVPlayer(url: src)
         player = p
         observer = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { @Sendable t in
             Task { @MainActor in

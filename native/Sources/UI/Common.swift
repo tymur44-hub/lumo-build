@@ -92,6 +92,26 @@ final class ImageCache {
         return i
     }
     func set(_ u: URL, _ i: UIImage) { cache.setObject(i, forKey: u as NSURL) }
+    func purgeMemory() { cache.removeAllObjects() }
+    /// стикеры лежат отдельно — так их видно в «Использовании памяти»
+    private let stkDir: URL = DeviceStorage.ensure(.sticker)
+    private func stkFile(_ u: URL) -> URL {
+        var h: UInt64 = 1469598103934665603
+        for b in u.absoluteString.utf8 { h = (h ^ UInt64(b)) &* 1099511628211 }
+        return stkDir.appendingPathComponent(String(h, radix: 36))
+    }
+    func has(_ u: URL) -> Bool { cache.object(forKey: u as NSURL) != nil || FileManager.default.fileExists(atPath: file(u).path) || FileManager.default.fileExists(atPath: stkFile(u).path) }
+    /// картинка с телефона, а если её нет — из сети (и сразу на телефон)
+    func load(_ u: URL, kind: DataKind = .photo) async -> UIImage? {
+        if let i = get(u) { return i }
+        if let d = try? Data(contentsOf: stkFile(u)), let i = UIImage(data: d) { cache.setObject(i, forKey: u as NSURL); return i }
+        guard let res = try? await Net.session.data(from: u.px), let i = UIImage(data: res.0) else { return nil }
+        NetStats.shared.add(kind, recv: res.0.count)
+        cache.setObject(i, forKey: u as NSURL)
+        let f = kind == .sticker ? stkFile(u) : file(u)
+        DispatchQueue.global(qos: .utility).async { try? res.0.write(to: f, options: .atomic) }
+        return i
+    }
     func set(_ u: URL, _ i: UIImage, data: Data) {
         cache.setObject(i, forKey: u as NSURL)
         let f = file(u)
@@ -103,10 +123,12 @@ struct CachedImage<Content: View, Placeholder: View>: View {
     let url: URL
     let content: (Image) -> Content
     let placeholder: () -> Placeholder
+    var kind: DataKind = .photo
     @State private var image: UIImage?
 
-    init(url: URL, @ViewBuilder content: @escaping (Image) -> Content, @ViewBuilder placeholder: @escaping () -> Placeholder) {
+    init(url: URL, kind: DataKind = .photo, @ViewBuilder content: @escaping (Image) -> Content, @ViewBuilder placeholder: @escaping () -> Placeholder) {
         self.url = url
+        self.kind = kind
         self.content = content
         self.placeholder = placeholder
         _image = State(initialValue: ImageCache.shared.get(url))
@@ -118,10 +140,7 @@ struct CachedImage<Content: View, Placeholder: View>: View {
         }
         .task(id: url) {
             if image != nil { return }
-            if let c = ImageCache.shared.get(url) { image = c; return }
-            guard let res = try? await Net.session.data(from: url.px), let i = UIImage(data: res.0) else { return }
-            ImageCache.shared.set(url, i, data: res.0)
-            image = i
+            if let i = await ImageCache.shared.load(url, kind: kind) { image = i }
         }
     }
 }
@@ -294,6 +313,7 @@ struct TabItemButton: View {
     var body: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if t == .chats { NotificationCenter.default.post(name: .lumoChatsTop, object: nil) }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { tab = t }
             animate()
         } label: {
