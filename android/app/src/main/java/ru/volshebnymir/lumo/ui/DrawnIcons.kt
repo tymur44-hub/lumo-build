@@ -1,5 +1,7 @@
 package ru.volshebnymir.lumo.ui
 
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -35,8 +37,24 @@ import kotlin.math.max
 import kotlin.math.sin
 
 /** Нарисованные анимированные значки статуса (не эмодзи): рисуются кистью, у каждого своя анимация */
+private val statusSheets = HashMap<String, androidx.compose.ui.graphics.ImageBitmap?>()
+
 @Composable
 fun DrawnStatus(key: String, size: Dp, modifier: Modifier = Modifier) {
+    // лента кадров (8x6, 48 кадров, 24 к/с), нарисована заранее — одинакова на всех платформах
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val sheet = remember(key) {
+        statusSheets.getOrPut(key) { runCatching { ctx.assets.open("status/$key.webp").use { android.graphics.BitmapFactory.decodeStream(it)?.asImageBitmap() } }.getOrNull() }
+    }
+    if (sheet != null) {
+        val frame by androidx.compose.runtime.produceState(0) { while (true) androidx.compose.runtime.withFrameMillis { value = ((it / 1000.0 * 24).toLong() % 48).toInt() } }
+        Canvas(modifier.size(size)) {
+            val fw = sheet.width / 8; val fh = sheet.height / 6
+            drawImage(sheet, srcOffset = androidx.compose.ui.unit.IntOffset((frame % 8) * fw, (frame / 8) * fh), srcSize = androidx.compose.ui.unit.IntSize(fw, fh),
+                dstSize = androidx.compose.ui.unit.IntSize(this.size.width.toInt(), this.size.height.toInt()), filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
+        }
+        return
+    }
     val tr = rememberInfiniteTransition(label = "drawn")
     val t by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart), label = "t")
     Canvas(modifier.size(size)) {

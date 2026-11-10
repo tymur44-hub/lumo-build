@@ -1,0 +1,1 @@
+(function(){ const st=document.createElement('style'); st.textContent='.aemo.lst{width:1.3em;height:1.3em;vertical-align:-.28em;animation:none}.aemo.lst svg{overflow:hidden;animation:none}'; document.head.appendChild(st); })();

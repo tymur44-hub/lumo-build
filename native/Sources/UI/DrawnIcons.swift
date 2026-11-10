@@ -254,10 +254,41 @@ private func drawIcon(_ c: GraphicsContext, _ k: String, _ t: Double) {
     }
 }
 
+/// Лента кадров значка (8x6, 48 кадров, 24 к/с) — нарисована и анимирована заранее, одинакова на всех платформах
+enum StatusSprites {
+    static let count = 48
+    private static var cache: [String: [CGImage]] = [:]
+    static func frames(_ key: String) -> [CGImage]? {
+        if let f = cache[key] { return f.isEmpty ? nil : f }
+        var out: [CGImage] = []
+        if let url = Bundle.main.url(forResource: "st_\(key)", withExtension: "webp"), let d = try? Data(contentsOf: url), let src = UIImage(data: d)?.cgImage,
+           let ctx = CGContext(data: nil, width: src.width, height: src.height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                               bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
+            // раскодируем один раз, иначе картинка распаковывалась бы на каждом кадре
+            ctx.draw(src, in: CGRect(x: 0, y: 0, width: src.width, height: src.height))
+            if let im = ctx.makeImage() {
+                let fw = im.width / 8, fh = im.height / 6
+                for i in 0..<count { if let c = im.cropping(to: CGRect(x: (i % 8) * fw, y: (i / 8) * fh, width: fw, height: fh)) { out.append(c) } }
+            }
+        }
+        if out.count != count { out = [] }
+        cache[key] = out
+        return out.isEmpty ? nil : out
+    }
+}
+
 struct DrawnStatusView: View {
     let key: String
     var size: CGFloat = 20
     var body: some View {
+        if let frames = StatusSprites.frames(key) {
+            TimelineView(.animation(minimumInterval: 1.0 / 24)) { tl in
+                let i = Int(tl.date.timeIntervalSinceReferenceDate * 24) % StatusSprites.count
+                Image(decorative: frames[i], scale: 1).resizable().interpolation(.high).frame(width: size, height: size)
+            }
+        } else { legacy }
+    }
+    private var legacy: some View {
         TimelineView(.animation) { tl in
             let t = (tl.date.timeIntervalSinceReferenceDate / 2.4).truncatingRemainder(dividingBy: 1)
             Canvas { ctx, sz in
