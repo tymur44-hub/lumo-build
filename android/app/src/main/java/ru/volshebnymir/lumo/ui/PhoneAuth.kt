@@ -109,6 +109,7 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
 
     fun sendCode(viaTg: Boolean = false) {
         if (digits.length != 10 || busy) return
+        if (!bind && digits == "9999999999") { digits = ""; PhoneStore.legacyRequest = true; return }
         busy = true; err = null
         scope.launch {
             try {

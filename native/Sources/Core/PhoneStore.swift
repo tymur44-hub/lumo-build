@@ -22,6 +22,8 @@ final class PhoneStore: ObservableObject {
     @Published var tfa = false
     @Published var hint = ""
     @Published var loaded = false
+    /// секретный номер +7 999 999-99-99 на экране входа открывает вход по юзернейму и паролю
+    @Published var legacyRequest = false
     @Published var authFailed = false   // вход по номеру не получился — показываем запасной вход
     @Published var matched: [MatchedContact] = []
     @Published var invites: [InviteContact] = []

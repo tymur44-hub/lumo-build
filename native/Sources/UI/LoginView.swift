@@ -22,6 +22,7 @@ struct LoginGate: View {
                     .font(.footnote.weight(.semibold)).foregroundColor(Theme.muted).padding(.bottom, 14)
             }
         }
+        .onChange(of: phones.legacyRequest) { if $0 { phones.legacyRequest = false; legacy = true } }
     }
 }
 

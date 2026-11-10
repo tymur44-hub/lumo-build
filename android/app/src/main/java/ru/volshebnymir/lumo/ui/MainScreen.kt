@@ -132,6 +132,7 @@ fun Root() {
         if (!permsDone) PermissionsScreen { prefs.edit().putBoolean("lm_perms_done", true).apply(); permsDone = true }
         else if (AppModel.loggedIn) MainScreen() else {
             var stage by remember { mutableIntStateOf(0) } // 0 приветствие, 1 номер, 2 вход по паролю
+            LaunchedEffect(PhoneStore.legacyRequest) { if (PhoneStore.legacyRequest) { PhoneStore.legacyRequest = false; stage = 2 } }
             androidx.compose.animation.AnimatedContent(stage, transitionSpec = {
                 (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(420)) +
                     androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(450)) { it / 4 }) togetherWith
