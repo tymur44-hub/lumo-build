@@ -1,0 +1,10 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>html,body{margin:0;padding:0;background:transparent;overflow:hidden;width:100%;height:100%}canvas{display:block;width:100vw;height:100vw}</style></head>
+<body><canvas id="c"></canvas>
+<script>/*THROWS*/</script>
+<script>
+function post(m){ try{ window.webkit.messageHandlers.lumo.postMessage(m); }catch(e){} try{ LumoAndroid.post(m); }catch(e){} }
+window.lumoPlay=function(k,v){ var c=document.getElementById('c'); LumoThrows.play(c,k,+v,function(){ post('end'); },function(){ post('hit'); }); };
+window.lumoFinal=function(k,v){ LumoThrows.final(document.getElementById('c'),k,+v); };
+var q=new URLSearchParams(location.hash.slice(1)); if(q.get('k')) setTimeout(function(){ lumoPlay(q.get('k'),q.get('v')); },16);
+</script></body></html>

@@ -1,0 +1,1 @@
+[["return lgWrap(m,`<div class=\"lgd ${k}${fresh?' anim':''}\">${lgThrowSvg(k,v)}</div><div class=\"lgres\">${esc(lgThrowLabel(k,v))}</div>`,'lgdb'); }","return lgWrap(m,`<canvas class=\"lgd lgcv\" data-k=\"${k}\" data-v=\"${v}\" data-id=\"${m.id}\"${fresh?' data-fresh=\"1\"':''}></canvas><div class=\"lgres\">${esc(lgThrowLabel(k,v))}</div>`,'lgdb'); }",1]]
