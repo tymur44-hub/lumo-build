@@ -14,7 +14,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
 
     enum State { case idle, calling, incoming, connecting, active }
 
-    @Published var state: State = .idle { didSet { updateProximity() } }
+    @Published var state: State = .idle { didSet { updateProximity(); updateTone() } }
     @Published var video = false { didSet { updateProximity() } }
     @Published var muted = false
     @Published var speaker = false { didSet { updateProximity() } }
@@ -27,7 +27,13 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
     @Published var remoteVideo: RTCVideoTrack?
     @Published var localVideo: RTCVideoTrack?
     @Published var showUI = false
-    @Published var statusText = ""
+    @Published var statusText = "" { didSet { if state == .calling { updateTone() } } }
+
+    /// звук исходящего звонка: «Звонок…» — двойной «пип», «Вызов…» — длинные гудки; иначе — тишина
+    private func updateTone() {
+        guard state == .calling else { CallTones.shared.stop(); return }
+        CallTones.shared.play(statusText == "Вызов…" ? .ringback : .connecting)
+    }
     /// Кадр собеседника через резервный канал (когда прямого соединения нет)
     @Published var relayImage: UIImage?
     @Published var p2p = false

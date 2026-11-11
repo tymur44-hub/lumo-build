@@ -96,6 +96,35 @@ object Calls {
 
     private lateinit var ctx: Context
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    // ---------- звук исходящего звонка ----------
+    // «Звонок…» — двойной «пип» каждые 1,6 с; «Вызов…» — длинные гудки 425 Гц (1 с звука, 4 с тишины), как в телефонной сети
+    private var toneJob: kotlinx.coroutines.Job? = null
+    private var toneKind = ""
+    init {
+        scope.launch {
+            androidx.compose.runtime.snapshotFlow { state to statusText }.collect { (st, txt) ->
+                val k = if (st != State.Calling) "" else if (txt == "Вызов…") "ring" else "conn"
+                if (k != toneKind) { toneKind = k; playTone(k) }
+            }
+        }
+    }
+    private fun playTone(k: String) {
+        toneJob?.cancel(); toneJob = null
+        if (k.isEmpty()) return
+        toneJob = scope.launch(Dispatchers.Default) {
+            val tg = runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_VOICE_CALL, if (k == "ring") 75 else 60) }.getOrNull() ?: return@launch
+            try {
+                while (true) {
+                    if (k == "ring") { tg.startTone(android.media.ToneGenerator.TONE_SUP_RINGTONE, 1000); kotlinx.coroutines.delay(5000) }
+                    else {
+                        tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 90); kotlinx.coroutines.delay(170)
+                        tg.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 110); kotlinx.coroutines.delay(1430)
+                    }
+                }
+            } finally { runCatching { tg.stopTone(); tg.release() } }
+        }
+    }
     private val bg = Executors.newSingleThreadExecutor()
 
     var peerId: String? = null; private set
