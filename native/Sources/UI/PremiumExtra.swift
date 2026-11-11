@@ -189,25 +189,31 @@ struct IncomingBannerView: View {
     @State private var drag: CGFloat = 0
 
     var body: some View {
-        HStack(spacing: 12) {
-            AvatarView(name: banner.title, url: banner.avatarURL, color: banner.color, size: 42)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(banner.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
-                Text(banner.body).font(.system(size: 14)).foregroundColor(Theme.muted).lineLimit(2)
+        // кнопка на всю площадь баннера: нажатие в любом месте (и на пустом справа) открывает чат
+        Button {
+            let chatId = banner.chatId
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            model.banner = nil
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            model.open(chatId)
+        } label: {
+            HStack(spacing: 12) {
+                AvatarView(name: banner.title, url: banner.avatarURL, color: banner.color, size: 42)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(banner.title).font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.text).lineLimit(1)
+                    Text(banner.body).font(.system(size: 14)).foregroundColor(Theme.muted).lineLimit(2)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(12)
+            .contentShape(RoundedRectangle(cornerRadius: 20))
+            .lumoGlass(RoundedRectangle(cornerRadius: 20))
         }
-        .padding(12)
-        .lumoGlass(RoundedRectangle(cornerRadius: 20))
+        .buttonStyle(BouncyButtonStyle())
         .padding(.horizontal, 10)
         .offset(y: min(drag, 0))
-        .gesture(DragGesture().onChanged { v in if v.translation.height < 0 { drag = v.translation.height } }
+        .simultaneousGesture(DragGesture(minimumDistance: 12).onChanged { v in if v.translation.height < 0 { drag = v.translation.height } }
             .onEnded { v in if v.translation.height < -20 { model.banner = nil } else { withAnimation(Motion.snappy) { drag = 0 } } })
-        .onTapGesture {
-            let chatId = banner.chatId
-            model.banner = nil
-            model.open(chatId)
-        }
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
