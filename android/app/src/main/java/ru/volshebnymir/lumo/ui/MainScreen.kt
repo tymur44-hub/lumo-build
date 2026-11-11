@@ -11,6 +11,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.SideEffect
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MarkChatRead
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import ru.volshebnymir.lumo.core.Message
 import ru.volshebnymir.lumo.core.PhoneStore
@@ -554,16 +556,25 @@ fun ChatRow(c: ChatItem, modifier: Modifier = Modifier) {
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val t = AppModel.typingText(c.id)
+                    val ur = AppModel.unseenReact[c.id]
                     val dr = if (AppModel.openChatId != c.id) AppModel.draft(c.id) else null
                     if (t != null) Text(t, color = p.a2, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, maxLines = 1, modifier = Modifier.weight(1f))
                     else if (dr != null) Text(androidx.compose.ui.text.buildAnnotatedString {
                         pushStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFFE5484D), fontWeight = FontWeight.SemiBold)); append("Черновик: "); pop()
                         append(dr.replace('\n', ' '))
                     }, color = p.muted, fontSize = 14.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    else if (ur != null && (c.lastAt == null || !ur.at.before(c.lastAt))) {
+                        // свежая реакция на моё сообщение, которую ещё не смотрели
+                        Icon(Icons.AutoMirrored.Filled.Reply, null, tint = p.muted, modifier = Modifier.size(16.dp).padding(end = 4.dp).graphicsLayer { scaleX = -1f })
+                        Text(ur.shown?.let { "Реакция $it на Ваше сообщение" } ?: "Реакция на Ваше сообщение", color = p.muted, fontSize = 14.5.sp,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    }
                     else {
                         kindIcon(c.lastKind)?.takeIf { c.lastId != null && !c.lastDeleted }?.let { Icon(it, null, tint = p.muted, modifier = Modifier.size(16.dp).padding(end = 4.dp)) }
                         Text(c.preview(AppModel.myId), color = p.muted, fontSize = 14.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     }
+                    if (ur != null) Icon(Icons.Filled.Favorite, null, tint = if (c.muted) p.muted else Color(0xFFF0384F),
+                        modifier = Modifier.padding(start = 4.dp, end = if (c.unread > 0) 4.dp else 0.dp).size(22.dp))
                     if (c.unread > 0) Box(Modifier.clip(CircleShape).background(if (c.muted) SolidColor(p.muted) else p.accent).padding(horizontal = 7.dp, vertical = 2.dp)) {
                         Text(if (c.unread > 99) "99+" else "${c.unread}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Black)
                     } else if (c.pinned) Icon(Icons.Filled.PushPin, null, tint = p.muted, modifier = Modifier.size(16.dp))

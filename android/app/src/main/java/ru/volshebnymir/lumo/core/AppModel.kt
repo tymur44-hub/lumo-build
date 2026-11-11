@@ -113,6 +113,32 @@ object AppModel {
     var netStatus by mutableStateOf<String?>(null)
     var botName by mutableStateOf<String?>(null)
     var openChatId: String? = null
+    /** непросмотренные реакции на мои сообщения по чатам: «Реакция ... на Ваше сообщение» и сердечко в списке */
+    val unseenReact = mutableStateMapOf<String, UnseenReaction>()
+    private var unseenJob: Job? = null
+
+    suspend fun loadUnseenReactions() {
+        if (!loggedIn) return
+        val rows = runCatching { (Api.rpc("lm_unseen_reactions") as? JSONArray).objects() }.getOrNull() ?: return
+        val m = HashMap<String, UnseenReaction>()
+        for (r in rows) {
+            val c = r.str("chat_id") ?: continue; val e = r.str("emoji") ?: continue
+            if (c == openChatId) { scope.launch { seenReactions(c) }; continue }
+            m[c] = UnseenReaction(e, r.int("cnt") ?: 1, Dates.parse(r.str("at")) ?: java.util.Date())
+        }
+        unseenReact.keys.filter { it !in m }.forEach { unseenReact.remove(it) }; unseenReact.putAll(m)
+    }
+
+    suspend fun seenReactions(chatId: String) {
+        unseenReact.remove(chatId)
+        runCatching { Api.rpc("lm_seen_reactions", jsonOf("p_chat" to chatId)) }
+    }
+
+    private fun reactionArrived(chatId: String) {
+        if (chatId == openChatId) { scope.launch { seenReactions(chatId) }; return }
+        unseenJob?.cancel()
+        unseenJob = scope.launch { delay(600); loadUnseenReactions() }
+    }
         set(v) { if (field != v) { field = v; syncTyping() } }
     var isActive = true
     var unreadTotal by mutableIntStateOf(0)
@@ -587,6 +613,7 @@ object AppModel {
             val rows = (Api.rpc("lm_chats_v2") as? JSONArray).objects()
             LocalCache.saveChats(ctx, rows)
             applyChats(rows)
+            scope.launch { loadUnseenReactions() }
         } catch (e: ApiError) {
             if (e.status == 401) Api.forget()
             if (chats.isEmpty()) LocalCache.loadChats(ctx)?.let { applyChats(it) }
@@ -704,6 +731,7 @@ object AppModel {
     fun findMessage(id: Int, chatId: String): Message? = messages[chatId]?.firstOrNull { it.id == id } ?: replyCache[id]
 
     fun markRead(chatId: String) {
+        if (unseenReact.containsKey(chatId)) scope.launch { seenReactions(chatId) }
         val me = myId ?: return
         if (!isActive) return
         val last = messages[chatId]?.lastOrNull { it.id > 0 } ?: return
@@ -1015,9 +1043,11 @@ object AppModel {
                 if (type == "DELETE") {
                     val old = d.obj("old_record"); val mid = old.int("message_id"); val uid = old.str("user_id"); val e = old.str("emoji")
                     if (mid != null && uid != null && uid != myId) reactions[mid] = (reactions[mid] ?: emptyList()).filterNot { it.userId == uid && it.extra == isExtra && (e == null || it.emoji == e) }
+                    old.str("chat_id")?.let { if (unseenReact.containsKey(it)) reactionArrived(it) }
                 } else {
                     val r = Reaction.from(rec, isExtra)
                     if (r.messageId <= 0 || r.userId == myId) return
+                    rec.str("chat_id")?.let { reactionArrived(it) }
                     var l = reactions[r.messageId] ?: emptyList()
                     if (!isExtra) l = l.filterNot { it.userId == r.userId && !it.extra }
                     reactions[r.messageId] = l.filterNot { it.userId == r.userId && it.emoji == r.emoji } + r
@@ -1450,4 +1480,10 @@ object AppModel {
     suspend fun sharedMedia(chatId: String, kinds: List<String>): List<Message> =
         (runCatching { Api.select("lm_messages", mapOf("select" to "*", "chat_id" to "eq.$chatId", "deleted" to "eq.false",
             "kind" to "in.(" + kinds.joinToString(",") + ")", "order" to "id.desc", "limit" to "60")) }.getOrNull() ?: emptyList()).map { dec(Message.from(it)) }
+}
+
+
+data class UnseenReaction(val emoji: String, val count: Int, val at: java.util.Date) {
+    /** эмодзи для текста превью (свои картинки-реакции текстом не показать) */
+    val shown: String? get() = if (emoji.length <= 8 && !emoji.contains(":")) emoji else null
 }

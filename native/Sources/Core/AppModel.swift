@@ -18,6 +18,8 @@ final class AppModel: ObservableObject {
     @Published var myBan: BanInfo?
     private var banLoop: Task<Void, Never>?
     @Published var chats: [ChatItem] = []
+    /// непросмотренные реакции на мои сообщения, по чатам (как в Telegram: «Реакция ... на Ваше сообщение» и сердечко в списке)
+    @Published var unseenReact: [String: UnseenReaction] = [:]
     @Published var chatsLoaded = false
     @Published var messages: [String: [Message]] = [:]
     @Published var hasMore: [String: Bool] = [:]
@@ -818,6 +820,7 @@ final class AppModel: ObservableObject {
             let rows = try await API.shared.rpc("lm_chats_v2") as? [JSON] ?? []
             LocalCache.saveChats(rows)
             await applyChats(rows)
+            Task { await self.loadUnseenReactions() }
         } catch {
             if (error as? APIError)?.status == 401 { API.shared.forgetSession() }
             // нет сети и список чатов ещё не загружен — показываем последний сохранённый
@@ -1369,7 +1372,32 @@ final class AppModel: ObservableObject {
         Notifier.setBadge(0)
     }
 
+    func loadUnseenReactions() async {
+        guard loggedIn, let rows = (try? await API.shared.rpc("lm_unseen_reactions")) as? [JSON] else { return }
+        var m: [String: UnseenReaction] = [:]
+        for r in rows {
+            guard let c = r.str("chat_id"), let e = r.str("emoji") else { continue }
+            if c == openChatId { Task { await self.seenReactions(c) }; continue }
+            m[c] = UnseenReaction(emoji: e, count: r.int("cnt") ?? 1, at: DateParser.parse(r.str("at")) ?? Date())
+        }
+        unseenReact = m
+    }
+
+    /// открыл чат — реакции просмотрены
+    func seenReactions(_ chatId: String) async {
+        unseenReact[chatId] = nil
+        _ = try? await API.shared.rpc("lm_seen_reactions", ["p_chat": chatId])
+    }
+
+    private var unseenReloadTask: Task<Void, Never>?
+    private func reactionArrived(chatId: String) {
+        if chatId == openChatId { Task { await seenReactions(chatId) }; return }
+        unseenReloadTask?.cancel()
+        unseenReloadTask = Task { try? await Task.sleep(nanoseconds: 600_000_000); if !Task.isCancelled { await self.loadUnseenReactions() } }
+    }
+
     func markRead(_ chatId: String) {
+        if unseenReact[chatId] != nil { Task { await seenReactions(chatId) } }
         UnreadMarks.shared.set(chatId, false)   // ручная отметка «не прочитан» снимается, как только чат открыт
         guard let me = myId, isActive, let list = messages[chatId], let last = list.last(where: { $0.id > 0 }) else { return }
         if let c = chat(chatId), c.unread == 0, let lr = c.lastReadAt, lr >= last.createdAt { return }
@@ -1714,11 +1742,13 @@ final class AppModel: ObservableObject {
                 if let mid = old.int("message_id"), let uid = old.str("user_id"), uid != myId {
                     let e = old.str("emoji")
                     reactions[mid]?.removeAll { $0.userId == uid && $0.extra == isExtra && (e == nil || $0.emoji == e) }
+                    if let c = old.str("chat_id"), unseenReact[c] != nil { reactionArrived(chatId: c) }
                 }
             } else {
                 var r = Reaction(json: rec)
                 r.extra = isExtra
                 guard r.messageId > 0, r.userId != myId else { return }
+                if let c = rec.str("chat_id") { reactionArrived(chatId: c) }
                 var list = reactions[r.messageId] ?? []
                 if !isExtra { list.removeAll { $0.userId == r.userId && !$0.extra } }
                 list.removeAll { $0.userId == r.userId && $0.emoji == r.emoji }
@@ -1870,4 +1900,13 @@ extension AppModel {
         if mode == "me" { tab = .settings; settingsPath = [.profile]; profiles[me]?.bio = "Lumo — бета-версия"; self.me = profiles[me] }
         if mode == "incoming" { CallManager.shared.demoIncoming(name: "Анна Смирнова") }
     }
+}
+
+
+struct UnseenReaction: Equatable {
+    let emoji: String
+    let count: Int
+    let at: Date
+    /// эмодзи для текста превью (свои картинки-реакции текстом не показать)
+    var shown: String? { emoji.count <= 4 && !emoji.contains(":") ? emoji : nil }
 }

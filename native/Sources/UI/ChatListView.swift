@@ -449,6 +449,14 @@ struct ChatRow: View {
                         (Text("Черновик: ").foregroundColor(Theme.danger).fontWeight(.semibold)
                          + Text(d.replacingOccurrences(of: "\n", with: " ")).foregroundColor(Theme.muted))
                             .font(.system(size: 14.5)).lineLimit(2)
+                    } else if let ur = model.unseenReact[chat.id], ur.at >= (chat.lastAt ?? .distantPast) {
+                        // свежая реакция на моё сообщение, которую ещё не смотрели
+                        HStack(alignment: .firstTextBaseline, spacing: 5) {
+                            Image(systemName: "arrowshape.turn.up.right.fill").font(.system(size: 13, weight: .semibold))
+                            Text(ur.shown.map { "Реакция \($0) на Ваше сообщение" } ?? "Реакция на Ваше сообщение")
+                                .font(.system(size: 14.5)).lineLimit(2)
+                        }
+                        .foregroundColor(Theme.muted)
                     } else {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             if chat.lastId != nil, !chat.lastDeleted, let ic = Message.previewIcon(kind: chat.lastKind ?? "") {
@@ -459,6 +467,12 @@ struct ChatRow: View {
                         .foregroundColor(Theme.muted)
                     }
                     Spacer(minLength: 4)
+                    if model.unseenReact[chat.id] != nil {
+                        Image(systemName: "heart.fill").font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(chat.muted ? Color(hex: 0xa3a6c2) : Color(hex: 0xF0384F))
+                            .frame(minHeight: 22)
+                            .transition(.scale.combined(with: .opacity))
+                    }
                     if chat.unread > 0 {
                         Text(chat.unread > 99 ? "99+" : "\(chat.unread)")
                             .font(.system(size: 12, weight: .heavy))
