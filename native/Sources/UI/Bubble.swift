@@ -215,7 +215,18 @@ struct MessageRow: View {
                             withAnimation(.easeOut(duration: 0.12)) { pressing = false }
                             onMenu(m)
                         })
+                        // настоящие реакции — поверх места, оставленного в пузыре, и вне его жестов
+                        .overlayPreferenceValue(ReactAnchorKey.self) { a in
+                            GeometryReader { g in
+                                if let a = a {
+                                    let r = g[a]
+                                    reactionsRow.fixedSize().frame(width: r.width, height: r.height, alignment: .leading)
+                                        .position(x: r.midX, y: r.midY)
+                                }
+                            }
+                        }
                     if !reactionsInBubble { reactionsRow }
+
                     if chat?.isChannel == true, m.id > 0, !m.deleted {
                         LumenReactChip(count: lumens.tips[m.id] ?? 0) { lumenSheet = true }
                     } else {
@@ -359,7 +370,11 @@ struct MessageRow: View {
           || (m.kind == "text" && isOnlyEmoji(m.body) && m.replyTo == nil && m.forwardedFrom == nil))
     }
 
-    @ViewBuilder private var reactionsRow: some View {
+    @ViewBuilder private var reactionsRow: some View { reactions(ghost: false) }
+
+    /// ghost — невидимая копия внутри пузыря (держит место); настоящие плашки рисуются поверх,
+    /// вне жестов пузыря (двойное нажатие / удержание), иначе нажатие на реакцию не доходило
+    @ViewBuilder private func reactions(ghost: Bool) -> some View {
         let list = model.reactions[m.id] ?? []
         if !list.isEmpty {
             // порядок стабильный: по числу, при равенстве — в порядке появления
@@ -370,7 +385,7 @@ struct MessageRow: View {
             }
             HStack(spacing: 4) {
                 ForEach(groups, id: \.key) { e, rs in
-                    ReactionChip(mid: m.id, emoji: e, count: rs.count, mine: rs.contains { $0.userId == model.myId }, onAccent: mine && reactionsInBubble) {
+                    ReactionChip(mid: m.id, emoji: e, count: rs.count, mine: rs.contains { $0.userId == model.myId }, onAccent: mine && reactionsInBubble, ghost: ghost) {
                         Task { await model.react(m, e) }
                     }
                     .transition(.scale(scale: 0.2).combined(with: .opacity))
@@ -507,7 +522,8 @@ struct MessageRow: View {
                 // реакции — внутри пузыря, как в Telegram
                 if hasReacts && reactionsInBubble {
                     HStack(alignment: .bottom, spacing: 10) {
-                        reactionsRow
+                        reactions(ghost: true).opacity(0).allowsHitTesting(false)
+                            .anchorPreference(key: ReactAnchorKey.self, value: .bounds) { $0 }
                         if timeInReacts { timeLine(onMedia: false).hidden() }   // место под время
                     }
                     .padding(.horizontal, mediaOnly ? 6 : 9).padding(.top, mediaOnly ? 4 : 0).padding(.bottom, 7)
@@ -650,4 +666,11 @@ struct MessageRow: View {
 func viewsText(_ n: Int) -> String {
     if n >= 1000 { return String(format: "%.1fK", Double(n) / 1000).replacingOccurrences(of: ".0K", with: "K") }
     return "\(n)"
+}
+
+
+/// где внутри пузыря лежат реакции
+struct ReactAnchorKey: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
 }

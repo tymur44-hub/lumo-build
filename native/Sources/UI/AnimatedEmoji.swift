@@ -36,6 +36,8 @@ struct AnimatedEmoji: View {
             ForEach(burst, id: \.self) { i in BurstParticle(emoji: emoji, size: size * 0.4, seed: i) }
         }
         .contentShape(Rectangle())
+        // не нажимаемое (в реакциях) — не перехватывает касания у кнопки вокруг
+        .allowsHitTesting(tappable)
         .simultaneousGesture(TapGesture().onEnded {
             guard tappable else { return }
             tapAt = Date()

@@ -53,6 +53,8 @@ struct ReactionChip: View {
     let mine: Bool
     /// плашка внутри своего (цветного) пузыря — другие цвета, чтобы читалась
     var onAccent = false
+    /// невидимая копия (держит место) — без эффектов
+    var ghost = false
     let action: () -> Void
     @State private var burst = 0
     @State private var pop = false
@@ -76,14 +78,12 @@ struct ReactionChip: View {
                 : (mine ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.a1.opacity(0.13)))))
         }
         .buttonStyle(BouncyButtonStyle())
-        // реакция внутри пузыря: у пузыря свои жесты (двойное нажатие, долгое) — нажатие на реакцию важнее
-        .highPriorityGesture(TapGesture().onEnded { action() })
         .overlay { if burst > 0 { EmojiBurst(emoji: emoji).id(burst).allowsHitTesting(false) } }
         .animation(.spring(response: 0.32, dampingFraction: 0.62), value: count)
         .animation(.spring(response: 0.28, dampingFraction: 0.4), value: pop)
-        .onAppear { if ReactionFX.shared.take(mid, emoji) { play() } }
+        .onAppear { if !ghost, ReactionFX.shared.take(mid, emoji) { play() } }
         .onChange(of: count) { [count] new in
-            if new > count, ReactionFX.shared.take(mid, emoji) { play() }
+            if !ghost, new > count, ReactionFX.shared.take(mid, emoji) { play() }
         }
     }
 
