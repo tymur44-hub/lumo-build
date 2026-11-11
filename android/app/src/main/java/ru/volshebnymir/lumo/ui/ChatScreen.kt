@@ -989,10 +989,23 @@ private fun Reactions(m: Message, mine: Boolean) {
     Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         rs.groupBy { it.emoji }.forEach { (e, l) ->
             val my = l.any { it.userId == AppModel.myId }
-            Row(Modifier.popIn().clip(RoundedCornerShape(14.dp)).background(if (my) p.accent else SolidColor(p.panel)).bouncy { scope.launch { AppModel.react(m, e) } }
-                .padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(e, fontSize = 15.sp)
-                if (l.size > 1 || true) Text(" ${l.size}", color = if (my) Color.White else p.text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            // новая реакция: плашка упруго «пыжится», из неё разлетаются такие же эмодзи
+            var burst by remember(m.id, e) { mutableIntStateOf(if (ReactionFX.take(m.id.toLong(), e)) 1 else 0) }
+            val cnt = l.size
+            var last by remember(m.id, e) { mutableIntStateOf(cnt) }
+            LaunchedEffect(cnt) { if (cnt > last && ReactionFX.take(m.id.toLong(), e)) burst++; last = cnt }
+            val pop = remember(m.id, e) { androidx.compose.animation.core.Animatable(1f) }
+            LaunchedEffect(burst) { if (burst > 0) { pop.snapTo(1.3f); pop.animateTo(1f, androidx.compose.animation.core.spring(0.4f, androidx.compose.animation.core.Spring.StiffnessMedium)) } }
+            Box(contentAlignment = Alignment.Center) {
+                Row(Modifier.popIn().graphicsLayer { scaleX = pop.value; scaleY = pop.value }.clip(RoundedCornerShape(14.dp)).background(if (my) p.accent else SolidColor(p.panel)).bouncy { scope.launch { AppModel.react(m, e) } }
+                    .padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(e, fontSize = 15.sp)
+                    androidx.compose.animation.AnimatedContent(cnt, transitionSpec = {
+                        (androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn()) togetherWith
+                            (androidx.compose.animation.slideOutVertically { -it } + androidx.compose.animation.fadeOut())
+                    }, label = "rc") { n -> Text(" $n", color = if (my) Color.White else p.text, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                }
+                if (burst > 0) EmojiBurst(e, burst)
             }
         }
     }

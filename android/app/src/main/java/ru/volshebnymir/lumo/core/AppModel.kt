@@ -926,6 +926,7 @@ object AppModel {
             return
         }
         val row = jsonOf("message_id" to m.id, "user_id" to me, "chat_id" to m.chatId, "emoji" to emoji)
+        ru.volshebnymir.lumo.ui.ReactionFX.mark(m.id.toLong(), emoji)
         val merge = mapOf("Prefer" to "resolution=merge-duplicates,return=minimal")
         try {
             if (!isPremium) {
@@ -1048,6 +1049,7 @@ object AppModel {
                     val r = Reaction.from(rec, isExtra)
                     if (r.messageId <= 0 || r.userId == myId) return
                     rec.str("chat_id")?.let { reactionArrived(it) }
+                    ru.volshebnymir.lumo.ui.ReactionFX.mark(r.messageId.toLong(), r.emoji)
                     var l = reactions[r.messageId] ?: emptyList()
                     if (!isExtra) l = l.filterNot { it.userId == r.userId && !it.extra }
                     reactions[r.messageId] = l.filterNot { it.userId == r.userId && it.emoji == r.emoji } + r

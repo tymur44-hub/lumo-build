@@ -65,10 +65,7 @@ fun Avatar(name: String, url: String?, color: Int, size: Dp, online: Boolean = f
             Text(Fmt.initials(name), color = Color.White, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.36f).sp)
             if (!url.isNullOrEmpty()) AsyncImage(url, null, Modifier.size(size).clip(CircleShape), contentScale = ContentScale.Crop)
         }
-        if (online) Box(
-            Modifier.align(Alignment.BottomEnd).size(size * 0.28f).clip(CircleShape).background(p.bg).padding(2.dp)
-                .clip(CircleShape).background(p.ok)
-        )
+        OnlineDot(online, size * 0.28f, p.bg, p.ok, Modifier.align(Alignment.BottomEnd))
     }
 }
 
