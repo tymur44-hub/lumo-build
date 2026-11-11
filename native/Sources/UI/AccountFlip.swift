@@ -19,6 +19,24 @@ final class AccountFlip: ObservableObject {
         page = im
     }
 
+    @Published var fade: Double = 1
+    @Published var fading = false
+
+    /// Плавный переход (смена темы): снимок экрана поверх, под ним меняем, снимок растворяется
+    func crossfade(_ change: @escaping () -> Void) {
+        capture()
+        guard page != nil else { change(); return }
+        fading = true
+        fade = 1
+        DispatchQueue.main.async {
+            change()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                withAnimation(.easeInOut(duration: 0.55)) { self.fade = 0 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.page = nil; self.fading = false; self.fade = 1 }
+            }
+        }
+    }
+
     /// перевернуть страницу
     func turn() {
         guard page != nil else { return }
@@ -35,7 +53,9 @@ struct AccountFlipOverlay: View {
     @ObservedObject var flip = AccountFlip.shared
 
     var body: some View {
-        if let im = flip.page {
+        if let im = flip.page, flip.fading {
+            Image(uiImage: im).resizable().ignoresSafeArea().opacity(flip.fade).allowsHitTesting(false).zIndex(1000)
+        } else if let im = flip.page {
             let p = min(1, abs(flip.angle) / 90)
             ZStack {
                 // тень, которую «страница» отбрасывает на новый экран

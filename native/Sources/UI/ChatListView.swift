@@ -292,6 +292,20 @@ struct ChatListView: View {
             .padding(.horizontal, 8)
         }
         .coordinateSpace(name: "clist")
+        // свайп из середины экрана — соседняя папка (от края — кнопки строки)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24, coordinateSpace: .global)
+                .onEnded { g in
+                    guard !SwipeEdge.isEdge(g.startLocation.x), swipeOpen == nil,
+                          abs(g.translation.width) > 70, abs(g.translation.width) > abs(g.translation.height) * 1.6 else { return }
+                    let all = ChatFolder.allCases
+                    guard let i = all.firstIndex(of: folder) else { return }
+                    let j = g.translation.width < 0 ? i + 1 : i - 1
+                    guard all.indices.contains(j) else { return }
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { folder = all[j] }
+                }
+        )
         .onPull { y in
             // как в Telegram: потянуть вниз — раскрыть ленту историй, прокрутить вверх — свернуть
             if y < 10 { pulled = false }

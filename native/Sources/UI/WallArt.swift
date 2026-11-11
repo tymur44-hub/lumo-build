@@ -3,9 +3,9 @@ import SwiftUI
 /// Номера обоев те же, что на Android: 0 — без обоев, 1–5 и 10–17 — для всех, 6–9 и 20–27 — Premium
 let wallFree = [0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17]
 let wallPremium = [6, 7, 8, 9, 20, 21, 22, 23, 24, 25, 26, 27]
-var wallAll: [Int] { wallFree + wallPremium + RemoteConfig.shared.walls.map(\.id) }
+var wallAll: [Int] { wallLive + wallFree + wallPremium + RemoteConfig.shared.walls.map(\.id) }
 /// 1000+n — обои с сервера
-func wallIsPremium(_ i: Int) -> Bool { i >= 1000 ? (RemoteConfig.shared.wall(i)?.premium ?? false) : ((6...9).contains(i) || i >= 20) }
+func wallIsPremium(_ i: Int) -> Bool { i >= 1000 ? (RemoteConfig.shared.wall(i)?.premium ?? false) : ((6...9).contains(i) || (20...27).contains(i) || (33...35).contains(i)) }
 
 private struct SeededRNG {
     var s: UInt64
@@ -165,6 +165,79 @@ struct WallArtView: View {
             g.stroke(p, with: .color(.white.opacity(0.09)), style: lineStyle(5))
             blob(&g, CGPoint(x: w * 0.7, y: h * 0.2), w * 0.7, Color.white.opacity(0.22))
         default: break
+        }
+    }
+}
+
+// MARK: - Живые обои (30–35): переливающийся градиент из четырёх цветов и узор из значков, который медленно плывёт, — как в Telegram
+
+let wallLive = [30, 31, 32, 33, 34, 35]
+
+struct LiveWallView: View {
+    let index: Int
+    @Environment(\.colorScheme) private var scheme
+
+    private struct Set_ { let colors: [UInt32]; let dark: [UInt32]; let icons: [String] }
+    private static let sets: [Int: Set_] = [
+        30: Set_(colors: [0xC9D6FF, 0xE2C6FF, 0xB5E3FF, 0xF3D1F4], dark: [0x0E1A3D, 0x2A1450, 0x0B3350, 0x3A1240],
+                 icons: ["star.fill", "moon.fill", "sparkles", "globe.europe.africa.fill", "airplane", "moon.stars.fill"]),
+        31: Set_(colors: [0xFFD1DC, 0xFFE3C9, 0xF9C6E8, 0xFFF0D6], dark: [0x4A1430, 0x55251A, 0x3D1240, 0x4F2A12],
+                 icons: ["heart.fill", "gift.fill", "sparkles", "envelope.fill", "star.fill", "heart.circle.fill"]),
+        32: Set_(colors: [0xD6CCFF, 0xC7E6FF, 0xE9D2FF, 0xCFF5F0], dark: [0x231650, 0x0F2D55, 0x3A1658, 0x0D3D3A],
+                 icons: ["music.note", "headphones", "music.quarternote.3", "mic.fill", "guitars.fill", "radio.fill"]),
+        33: Set_(colors: [0xCFF5D5, 0xE8F7C4, 0xC2EEE6, 0xF4F1C8], dark: [0x0E3A22, 0x2C3A0E, 0x0B3A36, 0x3A350E],
+                 icons: ["leaf.fill", "tree.fill", "sun.max.fill", "cloud.fill", "drop.fill", "camera.macro"]),
+        34: Set_(colors: [0xFFE2C2, 0xFFD3C7, 0xFFF0C2, 0xF9DCC9], dark: [0x4A2A0E, 0x4A1A12, 0x4A3A0E, 0x3D2214],
+                 icons: ["cup.and.saucer.fill", "fork.knife", "birthday.cake.fill", "carrot.fill", "takeoutbag.and.cup.and.straw.fill", "wineglass.fill"]),
+        35: Set_(colors: [0xC9E8FF, 0xD9D2FF, 0xC6F6E4, 0xFFE0F0], dark: [0x0E2A4A, 0x26184A, 0x0E3A2E, 0x4A1A35],
+                 icons: ["gamecontroller.fill", "dice.fill", "trophy.fill", "puzzlepiece.fill", "flag.checkered", "bolt.fill"]),
+    ]
+
+    var body: some View {
+        let set = LiveWallView.sets[index] ?? LiveWallView.sets[30]!
+        let dark = scheme == .dark
+        let cols = (dark ? set.dark : set.colors).map { Color(hex: $0) }
+        TimelineView(.animation(minimumInterval: 1 / 30)) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, size in
+                let w = size.width, h = size.height
+                ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(cols[0]))
+                // четыре пятна цвета плавают по своим траекториям — градиент «переливается»
+                for i in 1..<4 {
+                    let a = t * (0.07 + Double(i) * 0.025) + Double(i) * 1.7
+                    let c = CGPoint(x: w * (0.5 + 0.42 * cos(a)), y: h * (0.5 + 0.38 * sin(a * 1.3 + Double(i))))
+                    let r = max(w, h) * 0.75
+                    ctx.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)),
+                             with: .radialGradient(Gradient(colors: [cols[i], cols[i].opacity(0)]), center: c, startRadius: 0, endRadius: r))
+                }
+                // узор из значков: сетка со смещением, каждый значок чуть покачивается
+                let step: CGFloat = 58
+                let drift = CGFloat(t * 6).truncatingRemainder(dividingBy: step)
+                var row = 0
+                var y: CGFloat = -step + drift
+                while y < h + step {
+                    var col = 0
+                    var x: CGFloat = (row % 2 == 0 ? 0 : step / 2) - step
+                    while x < w + step {
+                        let k = (row * 7 + col * 3) % set.icons.count
+                        if let sym = ctx.resolveSymbol(id: k) {
+                            var g = ctx
+                            let ph = Double(row * 13 + col * 5)
+                            g.translateBy(x: x + CGFloat(sin(t * 0.8 + ph) * 3), y: y + CGFloat(cos(t * 0.7 + ph) * 3))
+                            g.rotate(by: .degrees(Double((row * 31 + col * 17) % 50) - 25 + sin(t * 0.6 + ph) * 6))
+                            g.opacity = dark ? 0.16 : 0.2
+                            g.draw(sym, at: .zero)
+                        }
+                        x += step; col += 1
+                    }
+                    y += step * 0.86; row += 1
+                }
+            } symbols: {
+                ForEach(Array(set.icons.enumerated()), id: \.offset) { i, name in
+                    Image(systemName: name).font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(dark ? .white : Color(hex: 0x3A2E6E)).tag(i)
+                }
+            }
         }
     }
 }

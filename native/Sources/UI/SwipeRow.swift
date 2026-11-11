@@ -150,15 +150,18 @@ struct SwipeChatRow<Content: View>: View {
     /// не мешает прокрутке списка и отменяет нажатие по строке (чат после свайпа не открывается)
     @ViewBuilder private func attachSwipe<V: View>(_ v: V) -> some View {
         if #available(iOS 18.0, *) {
-            v.gesture(HorizontalPan(began: { tracking = true; began() },
+            // кнопки появляются только при свайпе от самого края экрана (или если строка уже открыта);
+            // свайп из середины переключает папки «Все / Частный / Группы / Каналы»
+            v.gesture(HorizontalPan(allow: { sx in x != 0 || SwipeEdge.isEdge(sx) },
+                                    began: { tracking = true; began() },
                                     changed: { changed($0) },
                                     ended: { vx in tracking = nil; ended(vx) }))
         } else {
             v.simultaneousGesture(
-                DragGesture(minimumDistance: 14, coordinateSpace: .local)
+                DragGesture(minimumDistance: 14, coordinateSpace: .global)
                     .onChanged { g in
                         if tracking == nil {
-                            tracking = abs(g.translation.width) > abs(g.translation.height) * 1.3
+                            tracking = abs(g.translation.width) > abs(g.translation.height) * 1.3 && (x != 0 || SwipeEdge.isEdge(g.startLocation.x))
                             if tracking == true { began() }
                         }
                         if tracking == true { changed(g.translation.width) }
@@ -177,15 +180,20 @@ struct SwipeChatRow<Content: View>: View {
 /// Горизонтальный свайп через UIKit (iOS 18+): начинается, только если движение явно горизонтальное
 @available(iOS 18.0, *)
 struct HorizontalPan: UIGestureRecognizerRepresentable {
+    /// можно ли начать свайп из этой точки (координата X в окне)
+    var allow: (CGFloat) -> Bool = { _ in true }
     var began: () -> Void
     var changed: (CGFloat) -> Void
     var ended: (CGFloat) -> Void
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var allow: (CGFloat) -> Bool = { _ in true }
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
             guard let p = g as? UIPanGestureRecognizer else { return false }
             let v = p.velocity(in: p.view)
-            return abs(v.x) > abs(v.y) * 1.2
+            // точка начала: текущее положение минус пройденный путь
+            let start = p.location(in: nil).x - p.translation(in: nil).x
+            return abs(v.x) > abs(v.y) * 1.2 && allow(start)
         }
     }
 
@@ -193,10 +201,13 @@ struct HorizontalPan: UIGestureRecognizerRepresentable {
 
     func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
         let g = UIPanGestureRecognizer()
+        context.coordinator.allow = allow
         g.delegate = context.coordinator
         g.cancelsTouchesInView = true
         return g
     }
+
+    func updateUIGestureRecognizer(_ g: UIPanGestureRecognizer, context: Context) { context.coordinator.allow = allow }
 
     func handleUIGestureRecognizerAction(_ g: UIPanGestureRecognizer, context: Context) {
         let tx = g.translation(in: g.view).x
@@ -207,4 +218,11 @@ struct HorizontalPan: UIGestureRecognizerRepresentable {
         default: break
         }
     }
+}
+
+
+/// Свайп по строке чата открывает кнопки, только если начат у самого края экрана
+enum SwipeEdge {
+    static let zone: CGFloat = 34
+    static func isEdge(_ x: CGFloat) -> Bool { x < zone || x > UIScreen.main.bounds.width - zone }
 }

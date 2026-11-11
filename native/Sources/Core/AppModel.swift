@@ -595,6 +595,7 @@ final class AppModel: ObservableObject {
         need.forEach { freshProfiles.insert($0) }
         guard !need.isEmpty else { return }
         for p in await fetchProfiles(need) { profiles[p.id] = p }
+        Task { await VideoAvatars.shared.load(need) }
     }
 
 
@@ -860,6 +861,7 @@ final class AppModel: ObservableObject {
             LocalCache.saveChats(rows)
             await applyChats(rows)
             Task { await self.loadUnseenReactions() }
+            Task { await VideoAvatars.shared.load(self.chats.compactMap { $0.isPrivate ? $0.peerId : nil } + [self.myId ?? ""]) }
         } catch {
             if (error as? APIError)?.status == 401 { API.shared.forgetSession() }
             // нет сети и список чатов ещё не загружен — показываем последний сохранённый

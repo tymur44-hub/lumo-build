@@ -6,6 +6,7 @@ struct DevicesView: View {
     @State private var items: [DeviceSession] = []
     @State private var loaded = false
     @State private var confirmAll = false
+    @State private var scan = false
 
     private func icon(_ p: String) -> String {
         switch p { case "ios": return "iphone"; case "android": return "smartphone"; case "windows": return "desktopcomputer"; default: return "globe" }
@@ -27,6 +28,19 @@ struct DevicesView: View {
         let others = items.filter { $0.deviceId != me }
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                // вход на компьютере: открыть lumomess.ru и отсканировать QR-код с экрана
+                Button { scan = true } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "qrcode.viewfinder").font(.system(size: 20, weight: .semibold))
+                        Text("Сканировать QR-код").font(.system(size: 17, weight: .semibold))
+                    }
+                    .foregroundColor(.white).frame(maxWidth: .infinity).padding(.vertical, 14)
+                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(BouncyButtonStyle())
+                .padding(.horizontal, 10)
+                Text("Откройте lumomess.ru на компьютере и наведите камеру на QR-код — вы войдёте без пароля.")
+                    .font(.footnote).foregroundColor(Theme.muted).padding(.horizontal, 16)
                 SectionTitle(text: "Это устройство")
                 SettingsGroup {
                     if let c = current { row(c, current: true) }
@@ -55,6 +69,7 @@ struct DevicesView: View {
         }
         .background(Theme.bg.ignoresSafeArea())
         .navigationTitle("Устройства").navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: $scan) { QRScanScreen().environmentObject(model) }
         .task { await model.touchSession(); items = await model.loadSessions(); loaded = true }
         .refreshable { items = await model.loadSessions() }
         .confirmationDialog("Завершить все другие сеансы?", isPresented: $confirmAll, titleVisibility: .visible) {

@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.VideoCameraFront
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Celebration
@@ -168,6 +169,7 @@ val FEATURES = listOf(
     Feat(Icons.Filled.Palette, Color(0xFFE05BFF), "Свои цвета и фоны чатов", "Цвет сообщений, обои и акценты оформления"),
     Feat(Icons.Filled.Shield, Color(0xFF2B8CFF), "Запрет пересылки и скриншотов", "Защищённый чат: на Android скриншоты блокируются, на iPhone экран скрывается при записи"),
     Feat(Icons.Filled.Groups, Color(0xFF34C759), "Групповые голосовые и видеозвонки", "Звонок с несколькими участниками"),
+    Feat(Icons.Filled.VideoCameraFront, Color(0xFFFF5E8A), "Видео-аватарка", "Видео до 10 секунд вместо фото — играет по кругу у всех в списке чатов (установка — в приложении для iPhone)"),
     Feat(Icons.Filled.BlurOn, Color(0xFF64D2FF), "Размытие и замена фона в звонке", "Скройте комнату за спиной", soon = true),
     Feat(Icons.Filled.FiberManualRecord, Color(0xFFFF453A), "Запись звонка с согласия собеседника", "Собеседник должен подтвердить запись", soon = true),
     Feat(Icons.Filled.Star, Color(0xFFFFB020), "Значок Premium", "Звезда рядом с именем в чатах и профиле"),

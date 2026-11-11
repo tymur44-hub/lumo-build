@@ -20,6 +20,7 @@ targets:
         product: WebRTC
       - framework: Frameworks/LibXray.xcframework
         embed: false
+      - target: LumoShare
     info:
       path: Sources/Info.plist
       properties:
@@ -74,3 +75,23 @@ targets:
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""
         OTHER_LDFLAGS: "-lresolv"
+  LumoShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExt
+        excludes: ["Info.plist"]
+    settings:
+      base:
+        PRODUCT_NAME: LumoShare
+        PRODUCT_BUNDLE_IDENTIFIER: ru.volshebnymir.lumo.native.share
+        MARKETING_VERSION: "4.29"
+        CURRENT_PROJECT_VERSION: "54"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ShareExt/Info.plist
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
+        APPLICATION_EXTENSION_API_ONLY: YES

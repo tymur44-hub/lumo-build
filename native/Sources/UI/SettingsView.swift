@@ -13,6 +13,9 @@ struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @Binding var path: [SettingsPage]
     @State private var avatarPick: PhotosPickerItem?
+    @State private var videoPick: PhotosPickerItem?
+    @State private var showVideoPick = false
+    @State private var trimVideo: IdentifiedURL?
     @State private var confirmLogout = false
     @State private var showQR = false
     @State private var showScan = false
@@ -212,6 +215,16 @@ struct SettingsView: View {
                     do { try await model.setAvatar(img) } catch { model.say(error.localizedDescription) }
                 }
             }
+            .photosPicker(isPresented: $showVideoPick, selection: $videoPick, matching: .videos)
+            .onChange(of: videoPick) { item in
+                guard let item = item else { return }
+                videoPick = nil
+                Task {
+                    if let m = try? await item.loadTransferable(type: PickedMovie.self) { trimVideo = IdentifiedURL(url: m.url) }
+                    else { model.say("Не удалось открыть видео") }
+                }
+            }
+            .sheet(item: $trimVideo) { v in VideoAvatarTrimSheet(source: v.url) { trimVideo = nil }.environmentObject(model) }
             .confirmationDialog("Выйти из аккаунта на этом iPhone?", isPresented: $confirmLogout, titleVisibility: .visible) {
                 Button("Выйти", role: .destructive) { Task { await model.logout() } }
             }
@@ -259,6 +272,10 @@ struct SettingsView: View {
                     .buttonStyle(BouncyButtonStyle())
                 Divider().overlay(Theme.line).padding(.leading, 48)
                 PhotosPicker(selection: $avatarPick, matching: .images) { heroAction("camera", "Изменить фотографию") }
+                Divider().overlay(Theme.line).padding(.leading, 48)
+                // видео-аватарка — только Premium
+                Button { model.premium { showVideoPick = true } } label: { heroAction("video.circle", "Видео-аватарка") }
+                    .buttonStyle(BouncyButtonStyle())
             }
         }
     }

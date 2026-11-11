@@ -1135,9 +1135,11 @@ struct ComposerView: View {
                         recordingBar
                     } else {
                         Button { focused = false; showAttach = true } label: {
-                            Image(systemName: "paperclip").font(.system(size: 21, weight: .semibold))
-                                .foregroundColor(Theme.muted).frame(width: 40, height: 44)
+                            Image(systemName: "paperclip").font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(Theme.text).frame(width: 44, height: 44)
+                                .lumoGlass(Circle(), interactive: true)
                         }
+                        .buttonStyle(BouncyButtonStyle())
                         .sheet(item: $sendLumensTo) { t in SendLumensSheet(userId: t.id).environmentObject(model) }
                         .sheet(isPresented: $showAttach) {
                             AttachSheet(canLumens: lumensPeer != nil,
@@ -1195,7 +1197,7 @@ struct ComposerView: View {
                                     .frame(width: 40, height: 44)
                             }
                         }
-                        .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 22))
+                        .lumoGlass(RoundedRectangle(cornerRadius: 22, style: .continuous))
                     }
                     if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !rec.recording {
                         Image(systemName: editing != nil ? "checkmark" : (urgentOn && canUrgent ? "bolt.fill" : "arrow.up"))
@@ -1324,7 +1326,7 @@ struct ComposerView: View {
             .font(.system(size: 18, weight: .bold))
             .foregroundColor(.white)
             .frame(width: rec.recording ? 54 : 44, height: rec.recording ? 54 : 44)
-            .background(Circle().fill(rec.recording ? AnyShapeStyle(Theme.danger) : AnyShapeStyle(Theme.accent)))
+            .lumoGlass(Circle(), interactive: true, tint: rec.recording ? Theme.danger : Theme.a1)
             .scaleEffect(rec.recording ? 1 + CGFloat(rec.level) * 0.25 : 1)
             .animation(.easeOut(duration: 0.1), value: rec.level)
             .gesture(

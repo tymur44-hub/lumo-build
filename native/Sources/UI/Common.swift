@@ -11,6 +11,7 @@ struct AvatarView: View {
     var online = false
     var icon: String?
     var storyUid: String? = nil
+    @ObservedObject private var videos = VideoAvatars.shared
 
     var body: some View {
         if let u = storyUid { StoryRingAvatar(uid: u, size: size) { base } } else { base }
@@ -31,6 +32,10 @@ struct AvatarView: View {
                     img.resizable().scaledToFill()
                 } placeholder: { Color.clear }
                 .clipShape(Circle())
+                // видео-аватарка (Premium): зациклено и без звука поверх фото
+                if size >= 28, let v = videos.video(for: u) {
+                    LoopingVideo(url: v).frame(width: size, height: size).clipShape(Circle())
+                }
             }
         }
         .frame(width: size, height: size)
@@ -531,7 +536,11 @@ extension View {
     func lumoBarBackground() -> some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            self.background { Color.clear.glassEffect(.regular, in: Rectangle()).ignoresSafeArea(edges: .bottom) }
+            self.background {
+                // мягкое затемнение снизу вместо сплошной панели: кнопки и поле ввода — отдельное «жидкое стекло»
+                LinearGradient(colors: [Theme.bg.opacity(0), Theme.bg.opacity(0.55)], startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea(edges: .bottom).allowsHitTesting(false)
+            }
         } else {
             self.background(Theme.panel.opacity(0.97).ignoresSafeArea(edges: .bottom))
         }

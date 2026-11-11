@@ -127,6 +127,7 @@ struct PremiumPageView: View {
         Feat(icon: "person.3.fill", color: 0x34c759, title: "Групповые голосовые и видеозвонки", desc: "Звонок с несколькими участниками"),
         Feat(icon: "person.crop.rectangle.fill", color: 0x64d2ff, title: "Размытие фона в видеозвонке", desc: "Кнопка «Фон» в звонке открывает системные эффекты камеры"),
         Feat(icon: "record.circle.fill", color: 0xff453a, title: "Запись звонка с согласия собеседника", desc: "Собеседник должен подтвердить запись", soon: true),
+        Feat(icon: "video.circle.fill", color: 0xff5e8a, title: "Видео-аватарка", desc: "Видео до 10 секунд вместо фото — играет по кругу у всех в списке чатов"),
         Feat(icon: "star.fill", color: 0xffb020, title: "Значок Premium", desc: "Звезда рядом с именем в чатах и профиле"),
     ]
     private let about: [(String, String)] = [

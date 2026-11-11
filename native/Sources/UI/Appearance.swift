@@ -24,6 +24,8 @@ struct ChatWallpaper: View {
             switch custom?.url != nil ? -1 : ((wallIsPremium(idx) && custom == nil && !AppModel.shared.isPremium) ? 0 : idx) {
             case 10...17, 20...27:
                 WallArtView(index: idx)
+            case 30...35:
+                LiveWallView(index: idx)
             case 1000...:
                 if let w = RemoteConfig.shared.wall(idx) {
                     GeometryReader { g in
@@ -154,6 +156,7 @@ struct AppearanceView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                             .overlay(RoundedRectangle(cornerRadius: 16).stroke(look.wall == i ? Theme.a1 : Theme.line, lineWidth: look.wall == i ? 3 : 1))
                             .overlay { if i == 0 { Text("Без фона").font(.caption.weight(.bold)).foregroundColor(Theme.muted) } }
+                            .overlay(alignment: .bottomLeading) { if wallLive.contains(i) { Text("Живые").font(.system(size: 11, weight: .bold)).foregroundColor(.white).padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.black.opacity(0.35))).padding(7) } }
                             .overlay(alignment: .topTrailing) { if wallIsPremium(i) { Image(systemName: "star.fill").font(.system(size: 13)).foregroundColor(Color(hex: 0xffc247)).padding(8) } }
                             .onTapGesture { if wallIsPremium(i) && !model.isPremium { model.say(premiumSoon) } else { look.wall = i } }
                     }
@@ -169,7 +172,11 @@ struct AppearanceView: View {
     }
 
     private func themeButton(_ v: String, _ title: String, _ icon: String) -> some View {
-        Button { look.theme = v } label: {
+        Button {
+            guard look.theme != v else { return }
+            // плавная смена темы: снимок старого экрана растворяется поверх новой темы
+            AccountFlip.shared.crossfade { look.theme = v }
+        } label: {
             VStack(spacing: 4) {
                 Image(systemName: icon).font(.system(size: 18, weight: .semibold))
                 Text(title).font(.system(size: 12.5, weight: .bold)).lineLimit(1).minimumScaleFactor(0.8)

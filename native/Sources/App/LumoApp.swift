@@ -9,6 +9,7 @@ struct LumoApp: App {
     @StateObject private var model = AppModel.shared
     @StateObject private var calls = CallManager.shared
     @StateObject private var look = Appearance.shared
+    @StateObject private var share = ShareInbox.shared
     @Environment(\.scenePhase) private var phase
     @AppStorage("lm_lang") private var lang = "ru"
 
@@ -23,6 +24,8 @@ struct LumoApp: App {
                 .tint(Theme.a1)
                 .id("\(look.version)-\(lang)")
                 .fullScreenCover(item: $model.miniApp) { MiniAppView(req: $0).environmentObject(model).environmentObject(look) }
+                // «Поделиться → Lumo» из другого приложения
+                .sheet(item: $share.pending) { b in ShareTargetSheet(bundle: b).environmentObject(model) }
                 .onOpenURL { url in handle(url) }
                 .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { KeyboardDismiss.shared.install() } }
                 .overlay { LockOverlayView() }
@@ -44,12 +47,14 @@ struct LumoApp: App {
         .onChange(of: phase) { p in
             if p == .active { model.scenePhase(true); ExtraStore.shared.scene(active: true); Task { await RemoteConfig.shared.refresh() } }
             if p == .active { _ = NetType.shared; _ = NetStats.shared; DispatchQueue.global(qos: .background).async { DeviceStorage.trim() } }
+            if p == .active, model.loggedIn { ShareInbox.shared.load() }
             else if p == .background { model.scenePhase(false); ExtraStore.shared.scene(active: false) }
         }
     }
 
     private func handle(_ url: URL) {
         let s = url.absoluteString
+        if url.scheme == "lumo" && url.host == "share" { ShareInbox.shared.load(); return }
         if let r = s.range(of: #"#@([a-zA-Z0-9_]{3,32})"#, options: .regularExpression) {
             let u = String(s[r].dropFirst(2))
             Task { await model.openByUsername(u) }

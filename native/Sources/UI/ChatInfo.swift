@@ -17,6 +17,8 @@ struct ChatInfoView: View {
     var onSearch: () -> Void = {}
 
     @State private var members: [Member] = []
+    /// жест «потянуть ещё» уже сработал (сброс — когда отпустили)
+    @State private var pullFullDone = false
     @State private var peerPhone: String?
     @State private var aliasEdit = false
     @State private var lumenTarget: LumenTarget?
@@ -66,7 +68,14 @@ struct ChatInfoView: View {
         .onPull { y in
             guard chat?.isPrivate == true, !saved, chat?.displayAvatar != nil else { return }
             if y > 90, !heroExpanded { UIImpactFeedbackGenerator(style: .light).impactOccurred(); heroExpanded = true }
-            else if y < -40, heroExpanded { heroExpanded = false }
+            // тянем дальше (уже раскрыто) — аватар на весь экран
+            else if y > 200, heroExpanded, !pullFullDone, let u = chat?.displayAvatar.flatMap(URL.init(string:)) {
+                pullFullDone = true
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                avatarFull = IdentifiedURL(url: u)
+            }
+            else if y < 12 { pullFullDone = false }
+            if y < -40, heroExpanded { heroExpanded = false }
         }
         .background(Theme.bg.ignoresSafeArea())
         .toolbarBackground(.hidden, for: .navigationBar)
