@@ -648,7 +648,8 @@ object Calls {
             if (l.startsWith("a=fmtp:$pt ")) {
                 var q = l
                 if (!q.contains("useinbandfec")) q += ";useinbandfec=1"
-                if (!q.contains("maxaveragebitrate")) q += ";maxaveragebitrate=48000"
+                if (!q.contains("maxaveragebitrate")) q += ";maxaveragebitrate=64000"
+                if (!q.contains("maxplaybackrate")) q += ";maxplaybackrate=48000"
                 q
             } else l
         }
@@ -660,6 +661,7 @@ object Calls {
         when (s) {
             PeerConnection.PeerConnectionState.CONNECTED -> {
                 restarts = 0; statusText = ""
+                tuneSenders()
                 runCatching {
                     val l = pc?.localDescription?.description; val r = pc?.remoteDescription?.description
                     if (l != null && r != null) ru.volshebnymir.lumo.ui.CallCode.make(l, r)?.let { if (it != callCode) callCode = it }
@@ -680,7 +682,20 @@ object Calls {
         }
     }
 
-    /// Восстановление связи: перезапуск ICE сразу и затем каждые 3 секунды, пока не соединимся (до 45 секунд)
+    /** Качество личного звонка: видео до 2,5 Мбит/с и 30 кадров, звук Opus до 96 кбит/с с высоким приоритетом */
+    private fun tuneSenders() {
+        val p = pc ?: return
+        for (snd in runCatching { p.senders }.getOrNull() ?: emptyList()) runCatching {
+            val t = snd.track() ?: return@runCatching
+            val params = snd.parameters
+            val e = params.encodings.firstOrNull() ?: return@runCatching
+            if (t.kind() == "video") { e.maxBitrateBps = 2_500_000; e.minBitrateBps = 150_000; e.maxFramerate = 30; e.networkPriority = 3 }
+            else { e.maxBitrateBps = 96_000; e.networkPriority = 3; e.bitratePriority = 4.0 }
+            snd.parameters = params
+        }
+    }
+
+    /** Восстановление связи: перезапуск ICE сразу и затем каждые 3 секунды, пока не соединимся (до 45 секунд) */
     private fun startReconnect(fast: Boolean) {
         if (state != State.Active && state != State.Connecting) return
         if (state == State.Active) {

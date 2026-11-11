@@ -165,15 +165,20 @@ object E2E {
             if (local != null && (srv == null || srv == b64(local.second))) {
                 if (!(me == uid && myPriv != null)) install(uid, local.first, local.second)
                 if (srv == null) publish(uid, local.second)
-                backedUp = Api.select("lm_key_backup", mapOf("select" to "user_id", "user_id" to "eq.$uid")).isNotEmpty()
-                promptBackup = !backedUp   // копия ключей обязательна — пропустить нельзя
+                val b = Api.select("lm_key_backup", mapOf("select" to "iters", "user_id" to "eq.$uid")).firstOrNull()
                 status = Status.Ready
+                promptBackup = false
+                // копии нет или она под паролем — тихо сохраняем копию без пароля
+                backedUp = if (b?.int("iters") != 0) autoBackup() || b != null else true
                 return
             }
             if (local != null) { clearLocal(uid); chatKeys.clear() } // на сервере другой ключ: это устройство отстало
-            if (srv != null) { me = uid; myPriv = null; status = Status.NeedRestore; return }
+            if (srv != null) {
+                if (autoRestore(uid, srv)) return@runCatching
+                me = uid; myPriv = null; status = Status.NeedRestore; return@runCatching
+            }
             generateAndPublish(uid)
-            promptBackup = true
+            autoBackup()
         }
     }
 
@@ -196,7 +201,46 @@ object E2E {
         status = Status.Loading; promptBackup = false; backedUp = true
     }
 
-    // ---------- резервная копия под паролем ----------
+    // ---------- резервная копия без пароля ----------
+    // Закрытый ключ хранится на сервере зашифрованным ключом обёртки (lm_wrap_key), который сервер выдаёт
+    // только самому владельцу после входа: на новом устройстве переписка открывается сама, без пароля.
+    // Формат: iters = 0, blob = iv12 ‖ AES-256-GCM(ключ обёртки, d32 ‖ pub65) ‖ тег (как на iOS и в веб-версии).
+
+    private suspend fun serverWrap(): SecretKeySpec? {
+        val s = runCatching { Api.rpc("lm_wrap_key") as? String }.getOrNull() ?: return null
+        val d = runCatching { unb64(s) }.getOrNull() ?: return null
+        return if (d.size == 32) SecretKeySpec(d, "AES") else null
+    }
+
+    /** тихо сохранить ключ на сервер (без пароля) */
+    suspend fun autoBackup(): Boolean {
+        val uid = me ?: return false; val pr = myPriv ?: return false; val pub = myPub ?: return false
+        val wk = serverWrap() ?: return false
+        return runCatching {
+            val blob = seal(wk, fixed(pr.s, 32) + pub)
+            Api.raw("POST", "/rest/v1/lm_key_backup", mapOf("on_conflict" to "user_id"),
+                jsonOf("user_id" to uid, "salt" to "", "iters" to 0, "blob" to b64(blob), "updated_at" to Dates.string(java.util.Date())),
+                mapOf("Prefer" to "resolution=merge-duplicates,return=minimal"))
+            backedUp = true; promptBackup = false; true
+        }.getOrDefault(false)
+    }
+
+    /** новое устройство: ключ восстанавливается сам, без пароля */
+    private suspend fun autoRestore(uid: String, srvPub: String): Boolean {
+        val row = runCatching { Api.select("lm_key_backup", mapOf("select" to "iters,blob", "user_id" to "eq.$uid")).firstOrNull() }.getOrNull() ?: return false
+        if (row.int("iters") != 0) return false
+        val blob = runCatching { unb64(row.str("blob") ?: return false) }.getOrNull() ?: return false
+        val wk = serverWrap() ?: return false
+        val plain = open(wk, blob) ?: return false
+        if (plain.size != 97) return false
+        val d = plain.copyOfRange(0, 32); val pub = plain.copyOfRange(32, 97)
+        if (b64(pub) != srvPub) return false
+        saveLocal(uid, d, pub); install(uid, d, pub)
+        backedUp = true; promptBackup = false; status = Status.Ready
+        return true
+    }
+
+    // ---------- старая резервная копия под паролем (только чтобы открыть копии, сделанные раньше) ----------
 
     private fun pbkdf(password: String, salt: ByteArray, iters: Int): SecretKeySpec {
         val f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
@@ -234,6 +278,7 @@ object E2E {
             if (srv != null && srv != b64(pub)) return false
             saveLocal(uid, d, pub); install(uid, d, pub)
             backedUp = true; promptBackup = false; status = Status.Ready
+            autoBackup()   // дальше — без пароля
             true
         } catch (e: Exception) { false } finally { busy = false }
     }
@@ -245,7 +290,7 @@ object E2E {
         return try {
             runCatching { Api.delete("lm_key_backup", mapOf("user_id" to uid)) }
             generateAndPublish(uid)
-            promptBackup = true
+            autoBackup()
             true
         } catch (e: Exception) { false } finally { busy = false }
     }

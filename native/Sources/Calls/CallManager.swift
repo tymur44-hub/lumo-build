@@ -918,7 +918,8 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
             if l.hasPrefix("a=fmtp:\(pt) ") {
                 var q = l
                 if !q.contains("useinbandfec") { q += ";useinbandfec=1" }
-                if !q.contains("maxaveragebitrate") { q += ";maxaveragebitrate=48000" }
+                if !q.contains("maxaveragebitrate") { q += ";maxaveragebitrate=64000" }
+                if !q.contains("maxplaybackrate") { q += ";maxplaybackrate=48000" }
                 // без пропусков тишины (иначе «заикание» на плохой сети) и моно — меньше трафика
                 if !q.contains("usedtx") { q += ";usedtx=0" }
                 if !q.contains("stereo") { q += ";stereo=0;sprop-stereo=0" }
@@ -926,6 +927,27 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
             } else { out.append(l) }
         }
         return out.joined(separator: "\r\n")
+    }
+
+    /// Качество личного звонка: видео до 2,5 Мбит/с и 30 кадров, звук Opus до 96 кбит/с с высоким приоритетом
+    private func tuneSenders() {
+        guard let p = pc else { return }
+        for snd in p.senders {
+            guard let t = snd.track else { continue }
+            let params = snd.parameters
+            guard let e = params.encodings.first else { continue }
+            if t.kind == "video" {
+                e.maxBitrateBps = NSNumber(value: 2_500_000)
+                e.minBitrateBps = NSNumber(value: 150_000)
+                e.maxFramerate = NSNumber(value: 30)
+                e.networkPriority = .high
+            } else {
+                e.maxBitrateBps = NSNumber(value: 96_000)
+                e.networkPriority = .high
+                e.bitratePriority = 4
+            }
+            snd.parameters = params
+        }
     }
 
     private func connectionChanged(_ p: RTCPeerConnection, _ s: RTCPeerConnectionState) {
@@ -936,6 +958,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
             restarts = 0
             statusText = ""
             finishReconnect()
+            tuneSenders()
             if let l = pc?.localDescription?.sdp, let r = pc?.remoteDescription?.sdp, let c = CallCode.make(localSDP: l, remoteSDP: r), c != callCode {
                 callCode = c
             }

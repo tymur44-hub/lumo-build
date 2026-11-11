@@ -5,7 +5,7 @@ import Security
 
 /// Сквозное шифрование личных чатов (тот же формат, что в Android и веб-версии).
 /// Ключевая пара P-256 живёт на устройстве; открытая часть — на сервере (lm_keys), закрытая — в связке ключей iPhone
-/// и в резервной копии под паролем (lm_key_backup). Ключ чата = HKDF-SHA256(ECDH, соль = id чата, info = "lumo-e2e-v1"),
+/// и в резервной копии на сервере, зашифрованной ключом обёртки владельца (lm_key_backup, без пароля). Ключ чата = HKDF-SHA256(ECDH, соль = id чата, info = "lumo-e2e-v1"),
 /// сообщение = "e2e1:" + base64(nonce12 ‖ шифртекст ‖ тег), AES-256-GCM.
 @MainActor
 final class E2E: ObservableObject {
@@ -93,16 +93,20 @@ final class E2E: ObservableObject {
             if let l = local, srv == nil || srv == l.pub.base64EncodedString() {
                 if !(me == uid && priv != nil) { try install(uid, l.d, l.pub) }
                 if srv == nil { try await publish(uid, l.pub) }
-                let b = try await API.shared.select("lm_key_backup", ["select": "user_id", "user_id": "eq." + uid])
-                backedUp = !b.isEmpty
-                promptBackup = !backedUp   // копия ключей обязательна — пропустить нельзя
+                let b = try await API.shared.select("lm_key_backup", ["select": "iters", "user_id": "eq." + uid])
                 status = .ready
+                promptBackup = false
+                // копии нет или она под паролем — тихо сохраняем копию без пароля
+                if b.first?.int("iters") != 0 { backedUp = await autoBackup() || !b.isEmpty } else { backedUp = true }
                 return
             }
             if local != nil { kcClear("key_" + uid); chatKeys = [:] } // на сервере другой ключ — это устройство отстало
-            if srv != nil { me = uid; priv = nil; status = .needRestore; return }
+            if let s = srv {
+                if await autoRestore(uid, srvPub: s) { return }
+                me = uid; priv = nil; status = .needRestore; return
+            }
             try await generateAndPublish(uid)
-            promptBackup = true
+            await autoBackup()
         } catch {}
     }
 
@@ -128,7 +132,46 @@ final class E2E: ObservableObject {
         status = .loading; promptBackup = false; backedUp = true
     }
 
-    // MARK: - резервная копия под паролем
+    // MARK: - резервная копия без пароля
+    // Закрытый ключ хранится на сервере зашифрованным ключом обёртки (lm_wrap_key), который сервер выдаёт
+    // только самому владельцу после входа. Поэтому на новом устройстве переписка открывается сама, без пароля.
+    // Формат: iters = 0, blob = nonce12 ‖ AES-256-GCM(ключ обёртки, d32 ‖ pub65) ‖ тег.
+
+    private func wrapKey() async -> SymmetricKey? {
+        guard let s = (try? await API.shared.rpc("lm_wrap_key")) as? String, let d = Data(base64Encoded: s), d.count == 32 else { return nil }
+        return SymmetricKey(data: d)
+    }
+
+    /// Тихо сохранить ключ на сервер (без пароля). true — копия есть
+    @discardableResult
+    func autoBackup() async -> Bool {
+        guard let uid = me, let pr = priv, let pb = pub, let wk = await wrapKey(),
+              let blob = try? AES.GCM.seal(pr.rawRepresentation + pb, using: wk).combined else { return false }
+        do {
+            try await API.shared.raw("POST", "/rest/v1/lm_key_backup", query: [URLQueryItem(name: "on_conflict", value: "user_id")],
+                                     body: ["user_id": uid, "salt": "", "iters": 0, "blob": blob.base64EncodedString(),
+                                            "updated_at": DateParser.string(Date())],
+                                     headers: ["Prefer": "resolution=merge-duplicates,return=minimal"])
+            backedUp = true; promptBackup = false
+            return true
+        } catch { return false }
+    }
+
+    /// Новое устройство: ключ восстанавливается сам, без пароля (если копия сохранена без пароля)
+    private func autoRestore(_ uid: String, srvPub: String) async -> Bool {
+        guard let row = try? await API.shared.select("lm_key_backup", ["select": "iters,blob", "user_id": "eq." + uid]).first,
+              (row.int("iters") ?? -1) == 0, let blob = row.str("blob").flatMap({ Data(base64Encoded: $0) }),
+              let wk = await wrapKey(), let box = try? AES.GCM.SealedBox(combined: blob),
+              let p = try? AES.GCM.open(box, using: wk), p.count == 97 else { return false }
+        let d = p.prefix(32), pb = p.suffix(65)
+        guard Data(pb).base64EncodedString() == srvPub else { return false }
+        kcSave("key_" + uid, Data(p))
+        guard (try? install(uid, Data(d), Data(pb))) != nil else { return false }
+        backedUp = true; promptBackup = false; status = .ready
+        return true
+    }
+
+    // MARK: - старая резервная копия под паролем (только чтобы открыть копии, сделанные раньше)
 
     nonisolated private static func pbkdf(_ pw: String, _ salt: Data, _ iters: Int) -> SymmetricKey {
         var out = [UInt8](repeating: 0, count: 32)
@@ -195,6 +238,7 @@ final class E2E: ObservableObject {
             kcSave("key_" + uid, Data(p))
             try install(uid, Data(d), Data(pb))
             backedUp = true; promptBackup = false; status = .ready
+            await autoBackup()   // дальше — без пароля
             return true
         } catch { return false }
     }
@@ -208,7 +252,7 @@ final class E2E: ObservableObject {
             _ = try? await API.shared.raw("DELETE", "/rest/v1/lm_key_backup", query: [URLQueryItem(name: "user_id", value: "eq." + uid)],
                                           headers: ["Prefer": "return=minimal"])
             try await generateAndPublish(uid)
-            promptBackup = true
+            await autoBackup()
             return true
         } catch { return false }
     }
