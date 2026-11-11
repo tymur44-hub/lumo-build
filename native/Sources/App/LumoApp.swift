@@ -47,7 +47,7 @@ struct LumoApp: App {
         .onChange(of: phase) { p in
             if p == .active { model.scenePhase(true); ExtraStore.shared.scene(active: true); Task { await RemoteConfig.shared.refresh() } }
             if p == .active { _ = NetType.shared; _ = NetStats.shared; DispatchQueue.global(qos: .background).async { DeviceStorage.trim() } }
-            if p == .active, model.loggedIn { ShareInbox.shared.load() }
+            if p == .active, model.loggedIn { ShareInbox.shared.load(); Task { await PhoneStore.shared.syncIfAllowed(minGap: 600) } }
             else if p == .background { model.scenePhase(false); ExtraStore.shared.scene(active: false) }
         }
     }

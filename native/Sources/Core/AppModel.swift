@@ -751,16 +751,42 @@ final class AppModel: ObservableObject {
         do {
             _ = try await API.shared.insert("lm_contacts", ["contact_id": id])
             contacts.insert(id, at: 0)
+            if let me = myId {
+                let k = "lm_contact_removed_" + me
+                UserDefaults.standard.set((UserDefaults.standard.stringArray(forKey: k) ?? []).filter { $0 != id }, forKey: k)
+            }
             _ = await profile(id)
             let saved = await savePhonebook(id)
             say(saved ? "Добавлено в контакты и в телефон" : "Добавлено в контакты")
         } catch { say(error.localizedDescription) }
     }
 
+    /// Люди из записной книжки телефона, которые есть в Lumo, добавляются в контакты сами,
+    /// с именем как в телефоне. Кого удалили из контактов вручную — обратно не добавляем.
+    func autoAddPhoneContacts(_ list: [(id: String, name: String)]) async {
+        guard !list.isEmpty, let me = myId else { return }
+        if contacts.isEmpty { await loadContacts() }
+        let removed = Set(UserDefaults.standard.stringArray(forKey: "lm_contact_removed_" + me) ?? [])
+        var added: [String] = []
+        for c in list where c.id != me && !isContact(c.id) && !removed.contains(c.id) && !isBotUser(c.id) && !added.contains(c.id) {
+            do { _ = try await API.shared.insert("lm_contacts", ["contact_id": c.id]) } catch { continue }
+            contacts.insert(c.id, at: 0)
+            added.append(c.id)
+            let n = c.name.trimmingCharacters(in: .whitespaces)
+            if !n.isEmpty, !n.hasPrefix("+"), aliases[c.id] == nil { await setAlias(c.id, n) }
+        }
+        if !added.isEmpty { for p in await fetchProfiles(added) { profiles[p.id] = p } }
+    }
+
     func removeContact(_ id: String) async {
         do {
             try await API.shared.raw("DELETE", "/rest/v1/lm_contacts", query: [URLQueryItem(name: "contact_id", value: "eq." + id)])
             contacts.removeAll { $0 == id }
+            if let me = myId {
+                let k = "lm_contact_removed_" + me
+                var r = UserDefaults.standard.stringArray(forKey: k) ?? []
+                if !r.contains(id) { r.append(id); UserDefaults.standard.set(r, forKey: k) }
+            }
             say("Удалено из контактов")
         } catch { say(error.localizedDescription) }
     }

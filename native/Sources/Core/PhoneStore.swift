@@ -111,7 +111,9 @@ final class PhoneStore: ObservableObject {
     }
 
     /// Тихая сверка, если доступ к контактам уже разрешён
-    func syncIfAllowed() async {
+    private var lastSync = Date.distantPast
+    func syncIfAllowed(minGap: TimeInterval = 0) async {
+        guard Date().timeIntervalSince(lastSync) >= minGap else { return }
         if CNContactStore.authorizationStatus(for: .contacts) == .authorized { await syncContacts() }
         else if CNContactStore.authorizationStatus(for: .contacts) == .denied { contactsState = "denied" }
     }
@@ -121,6 +123,7 @@ final class PhoneStore: ObservableObject {
         guard !syncing else { return }
         guard await requestContacts() else { return }
         syncing = true
+        lastSync = Date()
         defer { syncing = false }
         let book: [(String, String)] = await Task.detached(priority: .utility) { () -> [(String, String)] in
             let store = CNContactStore()
@@ -155,5 +158,7 @@ final class PhoneStore: ObservableObject {
         matched = found.sorted { $0.bookName.localizedCompare($1.bookName) == .orderedAscending }
         invites = phones.filter { !foundPhones.contains($0) }.map { InviteContact(id: $0, name: names[$0] ?? "", phone: $0) }
             .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+        // кто есть в записной книжке и уже в Lumo — сразу в контакты (как в Telegram)
+        await AppModel.shared.autoAddPhoneContacts(found.map { ($0.id, $0.bookName) })
     }
 }
