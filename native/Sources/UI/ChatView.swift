@@ -901,7 +901,6 @@ struct ChatView: View {
                     if chat?.isPrivate == true { NameBadges(bot: chat?.peerBot == true || (chat?.peerId.flatMap { model.profiles[$0]?.isBot } ?? false), premium: chat?.peerPremium == true || (chat?.peerId.flatMap { model.profiles[$0]?.premium } ?? false), emoji: chat?.peerId.flatMap { model.profiles[$0]?.emojiStatus }, verified: chat?.peerVerified == true || (chat?.peerId.flatMap { model.profiles[$0]?.verified } ?? false)) }
                     else if chat?.isPrivate == false, chat?.peerVerified == true { NameBadges(bot: false, premium: false, verified: true, kind: chat?.isChannel == true ? "канал" : "группа") }
                     if chat?.isPrivate == true && !saved && chat?.peerBot != true { StreakHeaderButton(chatId: chatId) { streakOpen = true } }
-                    if chat?.isPrivate == true && e2e.active(chatId) { Image(systemName: "lock.fill").font(.system(size: 11)).foregroundColor(Theme.a2) }
                 }
                 if let n = model.netStatus {
                     HStack(spacing: 5) {
@@ -910,6 +909,7 @@ struct ChatView: View {
                     }
                 } else if let t = model.typingText(chatId) {
                     Text(t).font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.a2).lineLimit(1)
+                        .id(t).transition(.statusSwap)
                 } else if chat?.isPrivate == true, let pd = dnd.peer(chat?.peerId) {
                     // собеседник в режиме «Не беспокоить»
                     HStack(spacing: 4) {
@@ -918,8 +918,10 @@ struct ChatView: View {
                     }.foregroundColor(Color(hex: 0x8c6cff))
                 } else {
                     Text(status).font(.system(size: 12.5)).foregroundColor(model.isOnline(chat?.peerId) && chat?.isPrivate == true ? Theme.a2 : Theme.muted).lineLimit(1)
+                        .transition(.statusSwap)
                 }
             }
+            .animation(.easeInOut(duration: 0.28), value: model.typingText(chatId))
     }
 
     private var header: some View {
@@ -935,7 +937,6 @@ struct ChatView: View {
                     if chat?.isPrivate == true { NameBadges(bot: chat?.peerBot == true || (chat?.peerId.flatMap { model.profiles[$0]?.isBot } ?? false), premium: chat?.peerPremium == true || (chat?.peerId.flatMap { model.profiles[$0]?.premium } ?? false), emoji: chat?.peerId.flatMap { model.profiles[$0]?.emojiStatus }, verified: chat?.peerVerified == true || (chat?.peerId.flatMap { model.profiles[$0]?.verified } ?? false)) }
                     else if chat?.isPrivate == false, chat?.peerVerified == true { NameBadges(bot: false, premium: false, verified: true, kind: chat?.isChannel == true ? "канал" : "группа") }
                     if chat?.isPrivate == true && !saved && chat?.peerBot != true { StreakHeaderButton(chatId: chatId) { streakOpen = true } }
-                    if chat?.isPrivate == true && e2e.active(chatId) { Image(systemName: "lock.fill").font(.system(size: 11)).foregroundColor(Theme.a2) }
                 }
                 if let n = model.netStatus {
                     HStack(spacing: 5) {
@@ -944,6 +945,7 @@ struct ChatView: View {
                     }
                 } else if let t = model.typingText(chatId) {
                     Text(t).font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.a2).lineLimit(1)
+                        .id(t).transition(.statusSwap)
                 } else if chat?.isPrivate == true, let pd = dnd.peer(chat?.peerId) {
                     // собеседник в режиме «Не беспокоить»
                     HStack(spacing: 4) {
@@ -952,8 +954,10 @@ struct ChatView: View {
                     }.foregroundColor(Color(hex: 0x8c6cff))
                 } else {
                     Text(status).font(.system(size: 12.5)).foregroundColor(model.isOnline(chat?.peerId) && chat?.isPrivate == true ? Theme.a2 : Theme.muted).lineLimit(1)
+                        .transition(.statusSwap)
                 }
             }
+            .animation(.easeInOut(duration: 0.28), value: model.typingText(chatId))
             Spacer(minLength: 0)
         }
         .frame(maxWidth: 230, alignment: .leading)

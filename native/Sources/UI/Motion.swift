@@ -45,6 +45,13 @@ final class FullSwipeBack: NSObject, UIGestureRecognizerDelegate {
 
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool { false }
 
+    /// жесты содержимого (нажатие и удержание на кружке, фото и т. п.) не мешают свайпу назад;
+    /// с прокруткой списка — не одновременно, чтобы чат не ехал вбок и вниз сразу
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        guard g is UIPanGestureRecognizer, !(g is UIScreenEdgePanGestureRecognizer) else { return false }
+        return !(other.view is UIScrollView)
+    }
+
     private func blocksSwipe(_ v: UIView) -> Bool {
         var cur: UIView? = v
         while let c = cur {

@@ -1542,6 +1542,8 @@ struct ProfileTopHero<Top: View, Bottom: View>: View {
     let status: String?          // эмодзи-статус (если Premium)
     let premiumStar: Bool
     let verified: Bool
+    /// для плашки по нажатию на галочку
+    var verifiedKind = "профиль"
     let subtitle: String
     var subtitleAccent = false
     let bg: Int?
@@ -1607,7 +1609,11 @@ struct ProfileTopHero<Top: View, Bottom: View>: View {
         HStack(spacing: 6) {
             Text(name).font(.system(size: size, weight: .bold)).foregroundColor(white ? .white : Theme.text)
                 .lineLimit(1).minimumScaleFactor(0.7)
-            if verified { Image(systemName: "checkmark.seal.fill").font(.system(size: size * 0.7)).foregroundColor(white ? .white : Theme.a2) }
+            if verified {
+                Image(systemName: "checkmark.seal.fill").font(.system(size: size * 0.7)).foregroundColor(white ? .white : Theme.a2)
+                    .contentShape(Rectangle().inset(by: -8))
+                    .onTapGesture { Plaque.shared.verified(verifiedKind) }
+            }
             if let e = status, !e.isEmpty {
                 Button { onStatus?() } label: { StatusEmojiView(s: e, size: size * 0.85) }.buttonStyle(.plain).disabled(onStatus == nil)
             } else if premiumStar {

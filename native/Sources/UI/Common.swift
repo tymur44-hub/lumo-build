@@ -580,8 +580,6 @@ struct NameBadges: View {
         HStack(spacing: 4) {
             if verified {
                 Image(systemName: "checkmark.seal.fill").font(.system(size: 14)).foregroundColor(Theme.a2)
-                    .contentShape(Rectangle().inset(by: -6))
-                    .onTapGesture { Plaque.shared.verified(bot ? "бот" : kind) }
             }
             badge
         }
@@ -649,5 +647,13 @@ struct PlaqueOverlay: View {
             Spacer()
         }
         .allowsHitTesting(p.item != nil)
+    }
+}
+
+
+extension AnyTransition {
+    /// смена строки статуса («печатает…», «записывает голосовое…», «в сети») — мягко, с лёгким сдвигом
+    static var statusSwap: AnyTransition {
+        .asymmetric(insertion: .opacity.combined(with: .offset(y: 5)), removal: .opacity.combined(with: .offset(y: -5)))
     }
 }

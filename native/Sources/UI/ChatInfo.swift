@@ -161,7 +161,11 @@ struct ChatInfoView: View {
                 Text(saved ? "Избранное" : (c?.displayName ?? ""))
                     .font(.system(size: 28, weight: .bold)).foregroundColor(styled ? .white : Theme.text)
                     .multilineTextAlignment(.center)
-                if peer?.verified == true { Image(systemName: "checkmark.seal.fill").foregroundColor(Theme.a2) }
+                if peer?.verified == true || c?.peerVerified == true {
+                    Image(systemName: "checkmark.seal.fill").font(.system(size: 22)).foregroundColor(Theme.a2)
+                        .contentShape(Rectangle().inset(by: -8))
+                        .onTapGesture { Plaque.shared.verified(c?.isChannel == true ? "канал" : c?.isPrivate == false ? "группа" : (c?.peerBot == true ? "бот" : "профиль")) }
+                }
                 // эмодзи-статус / значок Premium рядом с именем
                 if c?.isPrivate == true, !saved, let p = peer, p.premium || c?.peerPremium == true, !(c?.peerBot ?? false) {
                     if let e = p.emojiStatus, !e.isEmpty { StatusEmojiView(s: e, size: 26) }
@@ -206,7 +210,8 @@ struct ChatInfoView: View {
         var sub = c?.peerBot == true ? "бот" : model.lastSeenText(c?.peerId, fallback: c?.peerLastSeen)
         if let id = c?.id, let t = model.typingText(id) { sub = t }
         return ProfileTopHero(name: c?.displayName ?? "", avatarURL: c?.displayAvatar, color: c?.displayColor ?? 0,
-                              status: prem ? p?.emojiStatus : nil, premiumStar: prem, verified: p?.verified == true,
+                              status: prem ? p?.emojiStatus : nil, premiumStar: prem, verified: p?.verified == true || c?.peerVerified == true,
+                              verifiedKind: c?.peerBot == true ? "бот" : "профиль",
                               subtitle: sub, subtitleAccent: model.isOnline(c?.peerId),
                               bg: p?.profileBg, pattern: p?.profilePattern, storyUid: c?.peerId,
                               expanded: $heroExpanded,

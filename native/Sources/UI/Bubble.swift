@@ -447,17 +447,17 @@ struct MessageRow: View {
                         media
                         // время — в одной строке с концом текста (как на сайте), без лишней строки снизу
                         (Text(richText(b, cmds: !mine && (m.senderId.flatMap { model.profiles[$0]?.isBot } ?? false))).foregroundColor(mine ? .white : Theme.text)
-                         + timeReserveText)
+                         + (timeInReacts ? Text("") : timeReserveText))
                             .font(.system(size: look.fontSize))
                             .tint(mine ? .white : Theme.a2)
                             .fixedSize(horizontal: false, vertical: true)
                     } else if m.kind == "image" || m.kind == "video" {
                         media.overlay(alignment: .bottomTrailing) {
-                            timeLine(onMedia: false)
+                            if !timeInReacts { timeLine(onMedia: false)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 7).padding(.vertical, 3)
                                 .background(Capsule().fill(Color.black.opacity(0.45)))
-                                .padding(6)
+                                .padding(6) }
                         }
                     } else if m.kind == "voice" {
                         // у голосового время на отдельной строке справа, чтобы не налезало на кнопку расшифровки
@@ -476,7 +476,7 @@ struct MessageRow: View {
                 .frame(maxWidth: showComments && m.kind != "image" && m.kind != "video" ? .infinity : nil, alignment: .leading)
                 // время и галочка — у правого нижнего угла всего пузыря (а не у конца короткого текста под цитатой)
                 .overlay(alignment: .bottomTrailing) {
-                    if timeOnBubble { timeLine(onMedia: false).offset(y: 2) }
+                    if timeOnBubble && !timeInReacts { timeLine(onMedia: false).offset(y: 2) }
                 }
             }
         }
@@ -485,6 +485,12 @@ struct MessageRow: View {
     private var timeOnBubble: Bool {
         guard m.kind != "call", let b = m.body, !b.isEmpty else { return false }
         return !(m.kind == "text" && SpecialMsg.parse(b) != nil)
+    }
+
+    /// есть реакции внутри пузыря — время уезжает в строку реакций, в правый нижний угол (как в Telegram)
+    private var timeInReacts: Bool {
+        guard reactionsInBubble, !showComments, !(model.reactions[m.id] ?? []).isEmpty else { return false }
+        return timeOnBubble || m.kind == "image" || m.kind == "video"
     }
 
     private func bubble<C: View>(@ViewBuilder _ c: () -> C) -> some View {
@@ -500,10 +506,18 @@ struct MessageRow: View {
                 c().padding(.horizontal, mediaOnly ? 2.5 : 11).padding(.top, mediaOnly ? 2.5 : 6).padding(.bottom, mediaOnly ? 2.5 : 6)
                 // реакции — внутри пузыря, как в Telegram
                 if hasReacts && reactionsInBubble {
-                    reactionsRow.padding(.horizontal, mediaOnly ? 6 : 9).padding(.top, mediaOnly ? 4 : 0).padding(.bottom, 7)
-                        .transition(.scale(scale: 0.6, anchor: .topLeading).combined(with: .opacity))
+                    HStack(alignment: .bottom, spacing: 10) {
+                        reactionsRow
+                        if timeInReacts { timeLine(onMedia: false).hidden() }   // место под время
+                    }
+                    .padding(.horizontal, mediaOnly ? 6 : 9).padding(.top, mediaOnly ? 4 : 0).padding(.bottom, 7)
+                    .transition(.opacity)
                 }
                 if showComments { commentsFooter.frame(minWidth: 240).frame(maxWidth: m.kind == "image" || m.kind == "video" ? 250 : nil) }
+            }
+            // время всегда в самом низу пузыря справа
+            .overlay(alignment: .bottomTrailing) {
+                if timeInReacts { timeLine(onMedia: false).padding(.trailing, 10).padding(.bottom, 8) }
             }
             .background(
                 Group {

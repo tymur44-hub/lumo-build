@@ -7,10 +7,26 @@ import UniformTypeIdentifiers
 final class ShareViewController: UIViewController {
     static let marker = "ru.volshebnymir.lumo.share"
 
+    private var appeared = false
+    private var ready: URL?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .clear
         Task { await collect() }
+    }
+
+    // открывать Lumo можно только когда окно расширения уже на экране (иначе цепочка до приложения пустая)
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        appeared = true
+        if let u = ready { finish(u) }
+    }
+
+    private func finish(_ url: URL) {
+        ready = nil
+        openApp(url)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.extensionContext?.completeRequest(returningItems: nil) }
     }
 
     private func collect() async {
@@ -36,9 +52,8 @@ final class ShareViewController: UIViewController {
         if let j = try? JSONSerialization.data(withJSONObject: info) {
             UIPasteboard.general.setItems([[Self.marker: j]] + out, options: [.expirationDate: Date().addingTimeInterval(600)])
         }
-        openApp(URL(string: "lumo://share")!)
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        extensionContext?.completeRequest(returningItems: nil)
+        let u = URL(string: "lumo://share")!
+        await MainActor.run { if appeared { finish(u) } else { ready = u } }
     }
 
     private struct Loaded { let type: String; let data: Data; let name: String }
@@ -66,6 +81,15 @@ final class ShareViewController: UIViewController {
     private func openApp(_ url: URL) {
         typealias Open3 = @convention(c) (AnyObject, Selector, NSURL, NSDictionary, AnyObject?) -> Void
         let sel3 = NSSelectorFromString("openURL:options:completionHandler:")
+        // 1) общий объект приложения напрямую (в расширении он есть, просто скрыт от компилятора)
+        if let cls = NSClassFromString("UIApplication") as? NSObject.Type,
+           let app = (cls as AnyObject).perform(NSSelectorFromString("sharedApplication"))?.takeUnretainedValue(),
+           app.responds(to: sel3), let m = class_getInstanceMethod(type(of: app), sel3) {
+            let f = unsafeBitCast(method_getImplementation(m), to: Open3.self)
+            f(app, sel3, url as NSURL, NSDictionary(), nil)
+            return
+        }
+        // 2) по цепочке ответчиков
         var r: UIResponder? = self
         while let cur = r {
             if cur.responds(to: sel3), let m = class_getInstanceMethod(type(of: cur), sel3) {

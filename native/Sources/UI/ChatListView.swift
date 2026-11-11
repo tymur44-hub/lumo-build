@@ -21,6 +21,8 @@ struct ChatListView: View {
     @State private var showNew = false
     @State private var deleting: ChatItem?
     @State private var swipeOpen: String?
+    /// идёт свайп между папками — нажатие на строку не открывает чат
+    @State private var folderSwiping = false
     @ObservedObject private var marks = UnreadMarks.shared
     @State private var storyStart: String?
     @State private var addStory = false
@@ -74,7 +76,7 @@ struct ChatListView: View {
             Button { model.path = [c.id] } label: { ChatRow(chat: c) }
                 .background(model.path.last == c.id ? Theme.a1.opacity(0.22) : Color.clear, in: RoundedRectangle(cornerRadius: 16))
         } else {
-            NavigationLink(value: c.id) { ChatRow(chat: c) }
+            Button { guard !folderSwiping, swipeOpen == nil else { return }; model.path.append(c.id) } label: { ChatRow(chat: c) }
         }
     }
 
@@ -294,8 +296,13 @@ struct ChatListView: View {
         .coordinateSpace(name: "clist")
         // свайп из середины экрана — соседняя папка (от края — кнопки строки)
         .simultaneousGesture(
-            DragGesture(minimumDistance: 24, coordinateSpace: .global)
+            DragGesture(minimumDistance: 12, coordinateSpace: .global)
+                .onChanged { g in
+                    if !folderSwiping, !SwipeEdge.isEdge(g.startLocation.x),
+                       abs(g.translation.width) > 12, abs(g.translation.width) > abs(g.translation.height) * 1.2 { folderSwiping = true }
+                }
                 .onEnded { g in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { folderSwiping = false }
                     guard !SwipeEdge.isEdge(g.startLocation.x), swipeOpen == nil,
                           abs(g.translation.width) > 70, abs(g.translation.width) > abs(g.translation.height) * 1.6 else { return }
                     let all = ChatFolder.allCases
@@ -460,6 +467,7 @@ struct ChatRow: View {
                 HStack(alignment: .top) {
                     if let t = model.typingText(chat.id) {
                         Text(t).font(.system(size: 14.5, weight: .semibold)).foregroundColor(Theme.a2).lineLimit(1)
+                            .id(t).transition(.statusSwap)
                     } else if model.openChatId != chat.id, let d = model.draft(chat.id) {
                         (Text("Черновик: ").foregroundColor(Theme.danger).fontWeight(.semibold)
                          + Text(d.replacingOccurrences(of: "\n", with: " ")).foregroundColor(Theme.muted))
@@ -503,6 +511,7 @@ struct ChatRow: View {
                         Image(systemName: "pin.fill").font(.caption).foregroundColor(Theme.muted)
                     }
                 }
+                .animation(.easeInOut(duration: 0.28), value: model.typingText(chat.id))
                 .animation(.spring(response: 0.34, dampingFraction: 0.6), value: chat.unread)
                 .animation(.spring(response: 0.34, dampingFraction: 0.6), value: model.unseenReact[chat.id] != nil)
             }

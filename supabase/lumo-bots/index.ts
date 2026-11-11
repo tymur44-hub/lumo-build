@@ -1,6 +1,7 @@
 // Lumo bots: обработчик ботов, Bot API, мини-приложения и крон-задачи
 import { handleBotMsg, handleBotCb, handleBotApi, setupBuiltin, botJson } from "./bots.ts";
 import { handleWebApp } from "./webapp.ts";
+import { AVATARS } from "./avatars.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
@@ -18,6 +19,11 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const path = new URL(req.url).pathname.replace(/\/+$/, "");
   try {
+    // аватарки встроенных ботов: /avatar/verify.png
+    const av = path.match(/\/avatar\/([a-z]+)\.png$/);
+    if (av && req.method === "GET" && AVATARS[av[1]]) {
+      return new Response(AVATARS[av[1]], { headers: { ...CORS, "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" } });
+    }
     if (path.includes("/botapi/")) return await handleBotApi(req, path);
     if (path.includes("/webapp/")) return await handleWebApp(req, path);
     if (path.endsWith("/cb") && req.method === "POST") return await handleBotCb(req);
