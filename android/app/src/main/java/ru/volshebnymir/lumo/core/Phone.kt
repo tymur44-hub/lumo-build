@@ -167,6 +167,8 @@ object PhoneStore {
             val fp = found.map { it.phone }.toSet()
             matched.clear(); matched.addAll(found.sortedBy { it.bookName.lowercase() })
             invites.clear(); invites.addAll(phones.filter { it !in fp }.map { InviteContact(it, names[it] ?: "") }.sortedBy { it.name.lowercase() })
+            // кто есть в записной книжке и уже в Lumo — сразу в контакты (как в Telegram)
+            AppModel.autoAddPhoneContacts(found.map { it.id to it.bookName })
         } finally { syncing = false }
     }
 }

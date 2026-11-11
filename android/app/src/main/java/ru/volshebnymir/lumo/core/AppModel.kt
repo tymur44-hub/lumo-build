@@ -622,13 +622,41 @@ object AppModel {
 
     suspend fun addContact(id: String) {
         if (isBotUser(id)) { say("Ботов нельзя добавить в контакты"); return }
+        saveRemoved(removedSet() - id)
         runCatching { Api.insertQuiet("lm_contacts", jsonOf("contact_id" to id)) }.onFailure { say(it.message ?: "Ошибка") }
         loadContacts()
         val saved = PhoneStore.saveToPhonebook(id, displayName(id))
         say(if (saved) "Добавлено в контакты и в телефон" else "Добавлено в контакты")
     }
 
+    private fun removedKey() = "lm_contact_removed_" + (myId ?: "")
+    private fun removedSet(): MutableSet<String> =
+        ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE).getStringSet(removedKey(), emptySet())!!.toMutableSet()
+    private fun saveRemoved(s: Set<String>) = ctx.getSharedPreferences("lumo_prefs", Context.MODE_PRIVATE).edit().putStringSet(removedKey(), s).apply()
+
+    /** Люди из записной книжки, которые есть в Lumo, — сами в контакты, с именем как в телефоне.
+     *  Кого удалили из контактов вручную — обратно не добавляем. */
+    suspend fun autoAddPhoneContacts(list: List<Pair<String, String>>) {
+        val me = myId ?: return
+        if (list.isEmpty()) return
+        if (contacts.isEmpty()) loadContacts()
+        val removed = removedSet()
+        val added = ArrayList<String>()
+        for ((id, name) in list) {
+            if (id == me || isContact(id) || id in removed || isBotUser(id) || id in added) continue
+            if (runCatching { Api.insertQuiet("lm_contacts", jsonOf("contact_id" to id)) }.isFailure) continue
+            added += id
+            val n = name.trim()
+            if (n.isNotEmpty() && !n.startsWith("+") && aliases[id] == null) {
+                aliases[id] = n; saveAliases()
+                runCatching { Api.rpc("lm_set_alias", jsonOf("p_user" to id, "p_alias" to n)) }
+            }
+        }
+        if (added.isNotEmpty()) { loadContacts(); loadChats() }
+    }
+
     suspend fun removeContact(id: String) {
+        saveRemoved(removedSet() + id)
         runCatching { Api.delete("lm_contacts", mapOf("contact_id" to id)) }
         loadContacts(); say("Удалено из контактов")
     }
