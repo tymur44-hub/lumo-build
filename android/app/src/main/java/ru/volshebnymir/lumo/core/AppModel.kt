@@ -121,6 +121,11 @@ object AppModel {
     suspend fun loadUnseenReactions() {
         if (!loggedIn) return
         val rows = runCatching { (Api.rpc("lm_unseen_reactions") as? JSONArray).objects() }.getOrNull() ?: return
+        LocalCache.saveRows(ctx, "unseen_react", rows)
+        applyUnseen(rows)
+    }
+
+    private fun applyUnseen(rows: List<JSONObject>) {
         val m = HashMap<String, UnseenReaction>()
         for (r in rows) {
             val c = r.str("chat_id") ?: continue; val e = r.str("emoji") ?: continue
@@ -245,7 +250,11 @@ object AppModel {
         myId?.let { E2E.installLocal(it) }   // ключ с устройства — до сети
         // свои имена для контактов — с устройства, до сети (иначе мелькают имена, которые люди дали себе сами)
         if (aliases.isEmpty()) aliases.putAll(localAliases())
+        // всё, что сохранено на устройстве для этого аккаунта, — сразу, до сети; сервер потом присылает изменения
+        LocalCache.uid = myId ?: ""
+        restoreFromDevice()
         scope.launch {
+            if (chats.isEmpty()) LocalCache.loadChats(ctx)?.let { applyChats(it) }
             netStatus = "Соединение…"
             Realtime.onState = { ok -> netChanged(ok) }
             loadMe()
@@ -440,6 +449,7 @@ object AppModel {
         chatsLoaded = false
         netStatus = null
         stories.clear(); calls.clear(); blockedByMe.clear(); blockedMe.clear(); staffRole = null; tgLinked = false
+        chatWalls.clear(); unseenReact.clear(); cachedProfiles.clear(); freshProfiles.clear(); profilesSaveJob?.cancel(); LocalCache.uid = ""
     }
 
     private fun netChanged(ok: Boolean) {
@@ -474,8 +484,33 @@ object AppModel {
     // ---------- профиль ----------
 
     /** Профили с учётом настроек конфиденциальности (сервер скрывает то, что видеть нельзя) */
-    private suspend fun fetchProfiles(ids: Collection<String>): List<Profile> =
-        (runCatching { Api.rpc("lm_profiles_get", jsonOf("p_ids" to JSONArray(ids.distinct()))) }.getOrNull() as? JSONArray).objects().map { Profile.from(it) }
+    private val cachedProfiles = HashMap<String, JSONObject>()
+    private var profilesSaveJob: Job? = null
+    private val freshProfiles = HashSet<String>()
+
+    private fun restoreFromDevice() {
+        if (contacts.isEmpty()) LocalCache.loadRows(ctx, "contacts")?.let { r -> contacts.addAll(r.mapNotNull { it.str("contact_id") }) }
+        if (chatWalls.isEmpty()) LocalCache.loadRows(ctx, "walls")?.let { applyWalls(it) }
+        if (stories.isEmpty()) LocalCache.loadRows(ctx, "stories")?.let { applyStories(it) }
+        if (unseenReact.isEmpty()) LocalCache.loadRows(ctx, "unseen_react")?.let { applyUnseen(it) }
+        LocalCache.loadRows(ctx, "profiles")?.forEach { r ->
+            val id = r.str("id") ?: return@forEach
+            cachedProfiles[id] = r
+            if (!profiles.containsKey(id)) profiles[id] = Profile.from(r)
+        }
+    }
+
+    private fun rememberProfiles(rows: List<JSONObject>) {
+        rows.forEach { r -> r.str("id")?.let { cachedProfiles[it] = r } }
+        profilesSaveJob?.cancel()
+        profilesSaveJob = scope.launch { delay(2000); LocalCache.saveRows(ctx, "profiles", cachedProfiles.values.take(800)) }
+    }
+
+    private suspend fun fetchProfiles(ids: Collection<String>): List<Profile> {
+        val rows = (runCatching { Api.rpc("lm_profiles_get", jsonOf("p_ids" to JSONArray(ids.distinct()))) }.getOrNull() as? JSONArray).objects()
+        if (rows.isNotEmpty()) rememberProfiles(rows)
+        return rows.map { Profile.from(it) }
+    }
 
     val msgViews = mutableStateMapOf<Int, Int>()
 
@@ -495,7 +530,9 @@ object AppModel {
     }
 
     suspend fun loadProfiles(ids: Collection<String>) {
-        val need = ids.filter { !profiles.containsKey(it) }.distinct()
+        // профили с устройства показываются сразу, но один раз за запуск сверяются с сервером
+        val need = ids.filter { (!profiles.containsKey(it) || it !in freshProfiles) && it.isNotEmpty() }.distinct()
+        freshProfiles.addAll(need)
         if (need.isEmpty()) return
         fetchProfiles(need).forEach { profiles[it.id] = it }
     }
@@ -566,6 +603,7 @@ object AppModel {
         val rows = runCatching { Api.select("lm_contacts", mapOf("select" to "contact_id,alias,created_at", "order" to "created_at.desc")) }.getOrNull()
         if (rows == null) { if (aliases.isEmpty()) aliases.putAll(localAliases()); return }
         contacts.clear(); contacts.addAll(rows.mapNotNull { it.str("contact_id") })
+        LocalCache.saveRows(ctx, "contacts", rows.map { JSONObject().put("contact_id", it.str("contact_id") ?: "") })
         val fresh = HashMap<String, String>()
         rows.forEach { r -> val id = r.str("contact_id"); val a = r.str("alias"); if (id != null && !a.isNullOrEmpty()) fresh[id] = a }
         // главное — то, что записано на этом устройстве: оно важнее сервера, а сервер догоняем
@@ -684,6 +722,15 @@ object AppModel {
 
     suspend fun loadMessages(chatId: String, older: Boolean = false) {
         val me = myId ?: return
+        // сразу показываем переписку с устройства (с реакциями), потом обновляем с сервера
+        if (!older && messages[chatId].isNullOrEmpty()) {
+            chat(chatId)?.let { if (it.isPrivate) E2E.prepare(chatId, it.peerId) }
+            LocalCache.loadMessages(ctx, chatId)?.let { cached ->
+                messages[chatId] = cached.map { dec(Message.from(it)) }.reversed().filter { it.id !in hidden }
+                LocalCache.loadRows(ctx, "react_$chatId")?.map { Reaction.from(it, it.optBoolean("extra")) }?.groupBy { it.messageId }
+                    ?.forEach { (k, v) -> if (reactions[k].isNullOrEmpty()) reactions[k] = v }
+            }
+        }
         prep(chatId)
         if (!cleared.containsKey(chatId)) {
             val r = runCatching { Api.select("lm_members", mapOf("select" to "cleared_at", "chat_id" to "eq.$chatId", "user_id" to "eq.$me")).firstOrNull() }.getOrNull()
@@ -718,6 +765,7 @@ object AppModel {
             ids.forEach { reactions[it] = emptyList() }
             val rx = runCatching { Api.select("lm_reactions_extra", mapOf("select" to "message_id,user_id,emoji", "message_id" to "in.(" + ids.joinToString(",") + ")")) }.getOrNull() ?: emptyList()
             (rr.map { Reaction.from(it) } + rx.map { Reaction.from(it, true) }).groupBy { it.messageId }.forEach { (k, v) -> reactions[k] = v }
+            if (!older) LocalCache.saveRows(ctx, "react_$chatId", rr + rx.map { JSONObject(it.toString()).put("extra", true) })
         }
         val need = arr.mapNotNull { it.replyTo }.toMutableList()
         chat(chatId)?.pinnedMessageId?.let { need.add(it) }
@@ -956,6 +1004,11 @@ object AppModel {
     suspend fun loadChatWalls() {
         val me = myId ?: return
         val rows = runCatching { Api.select("lm_chat_wall", mapOf("select" to "chat_id,preset,url,blur,dim,set_by", "user_id" to "eq.$me")) }.getOrNull() ?: return
+        LocalCache.saveRows(ctx, "walls", rows)
+        applyWalls(rows)
+    }
+
+    private fun applyWalls(rows: List<JSONObject>) {
         val map = rows.mapNotNull { r -> r.str("chat_id")?.let { it to ChatWall(r.int("preset"), r.str("url"), r.bool("blur"), r.int("dim") ?: 0, r.str("set_by")) } }.toMap()
         chatWalls.clear(); chatWalls.putAll(map)
     }
@@ -1287,7 +1340,14 @@ object AppModel {
 
     private var storyJob: Job? = null
     suspend fun loadStories() {
-        val rows = (runCatching { Api.rpc("lm_stories_feed") }.getOrNull() as? JSONArray).objects().map { StoryItem.from(it) }
+        val raw = runCatching { Api.rpc("lm_stories_feed") }.getOrNull() as? JSONArray ?: return
+        val list = raw.objects()
+        LocalCache.saveRows(ctx, "stories", list)
+        applyStories(list)
+    }
+
+    private fun applyStories(raw: List<JSONObject>) {
+        val rows = raw.map { StoryItem.from(it) }
         val groups = rows.groupBy { it.userId }.map { (uid, l) ->
             val items = l.sortedBy { it.createdAt }
             val f = items.first()
