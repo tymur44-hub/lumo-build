@@ -474,17 +474,22 @@ struct ChatRow: View {
                             .transition(.scale.combined(with: .opacity))
                     }
                     if chat.unread > 0 {
-                        Text(chat.unread > 99 ? "99+" : "\(chat.unread)")
-                            .font(.system(size: 12, weight: .heavy))
-                            .padding(.horizontal, 7).frame(minWidth: 22, minHeight: 22)
-                            .background(Capsule().fill(chat.muted ? Color(hex: 0xa3a6c2) : Theme.a1))
-                            .foregroundColor(.white)
+                        PopBadge(value: chat.unread) {
+                            Text(chat.unread > 99 ? "99+" : "\(chat.unread)")
+                                .font(.system(size: 12, weight: .heavy)).monospacedDigit()
+                                .padding(.horizontal, 7).frame(minWidth: 22, minHeight: 22)
+                                .background(Capsule().fill(chat.muted ? Color(hex: 0xa3a6c2) : Theme.a1))
+                                .foregroundColor(.white)
+                        }
+                        .transition(.scale(scale: 0.3).combined(with: .opacity))
                     } else if marks.has(chat.id) {
                         Circle().fill(chat.muted ? Color(hex: 0xa3a6c2) : Theme.a1).frame(width: 22, height: 22)
                     } else if chat.pinned {
                         Image(systemName: "pin.fill").font(.caption).foregroundColor(Theme.muted)
                     }
                 }
+                .animation(.spring(response: 0.34, dampingFraction: 0.6), value: chat.unread)
+                .animation(.spring(response: 0.34, dampingFraction: 0.6), value: model.unseenReact[chat.id] != nil)
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)

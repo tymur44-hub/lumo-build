@@ -1569,6 +1569,7 @@ final class AppModel: ObservableObject {
             return
         }
         let row: JSON = ["message_id": m.id, "user_id": me, "chat_id": m.chatId, "emoji": emoji]
+        ReactionFX.shared.mark(m.id, emoji)
         do {
             if !isPremium {
                 // бесплатно: одна реакция, новая заменяет прежнюю
@@ -1749,6 +1750,7 @@ final class AppModel: ObservableObject {
                 r.extra = isExtra
                 guard r.messageId > 0, r.userId != myId else { return }
                 if let c = rec.str("chat_id") { reactionArrived(chatId: c) }
+                ReactionFX.shared.mark(r.messageId, r.emoji)
                 var list = reactions[r.messageId] ?? []
                 if !isExtra { list.removeAll { $0.userId == r.userId && !$0.extra } }
                 list.removeAll { $0.userId == r.userId && $0.emoji == r.emoji }

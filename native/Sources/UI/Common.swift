@@ -34,14 +34,7 @@ struct AvatarView: View {
             }
         }
         .frame(width: size, height: size)
-        .overlay(alignment: .bottomTrailing) {
-            if online {
-                Circle().fill(Theme.ok)
-                    .frame(width: size * 0.26, height: size * 0.26)
-                    .overlay(Circle().stroke(Theme.bg, lineWidth: max(2, size * 0.05)))
-                    .offset(x: -size * 0.01, y: -size * 0.01)
-            }
-        }
+        .overlay(alignment: .bottomTrailing) { OnlineDot(online: online, size: size) }
     }
 }
 

@@ -348,19 +348,13 @@ struct MessageRow: View {
             }
             HStack(spacing: 4) {
                 ForEach(groups, id: \.key) { e, rs in
-                    let meIn = rs.contains { $0.userId == model.myId }
-                    Button { Task { await model.react(m, e) } } label: {
-                        HStack(spacing: 3) {
-                            Text(e).font(.system(size: 14))
-                            Text("\(rs.count)").font(.system(size: 12.5, weight: .bold)).foregroundColor(meIn ? .white : Theme.text)
-                        }
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Capsule().fill(meIn ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.panel2)))
-                        .overlay(Capsule().stroke(Theme.line))
+                    ReactionChip(mid: m.id, emoji: e, count: rs.count, mine: rs.contains { $0.userId == model.myId }) {
+                        Task { await model.react(m, e) }
                     }
-                    .buttonStyle(BouncyButtonStyle())
+                    .transition(.scale(scale: 0.2).combined(with: .opacity))
                 }
             }
+            .animation(.spring(response: 0.36, dampingFraction: 0.58), value: groups.map { "\($0.key)\($0.value.count)" })
         }
     }
 
