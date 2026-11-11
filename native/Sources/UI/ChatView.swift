@@ -20,6 +20,8 @@ struct ChatView: View {
     @EnvironmentObject var look: Appearance
     @ObservedObject private var note = NoteRec.shared
     let chatId: String
+    @Environment(\.dismiss) private var dismissChat
+    @Environment(\.isPresented) private var pushed
 
     @State private var text = ""
     @State private var reply: Message?
@@ -229,8 +231,9 @@ struct ChatView: View {
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
             }
         }
-        .navigationBarBackButtonHidden(selecting)
-        .lumoNavBar()
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .top, spacing: 0) { glassHeader }
         .task(id: chat?.peerId) { if isBotChat, let pid = chat?.peerId { await model.loadBotMenu(pid) } }
         .onAppear {
             model.openChatId = chatId
@@ -810,6 +813,113 @@ struct ChatView: View {
     }
 
     // MARK: - шапка и меню
+
+    // MARK: верхняя панель «жидкое стекло», как в Telegram: «назад» с числом непрочитанных, имя по центру, аватар справа
+    private var otherUnread: Int { model.chats.filter { !$0.muted && $0.id != chatId }.reduce(0) { $0 + $1.unread } }
+
+    private var glassHeader: some View {
+        let saved = chat?.isPrivate == true && chat?.peerId == model.myId
+        return ZStack {
+            HStack(spacing: 10) {
+                if selecting {
+                    Button("Отмена") { endSelecting() }
+                        .font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text)
+                        .padding(.horizontal, 18).frame(height: 46)
+                        .lumoGlass(Capsule(), interactive: true)
+                } else if pushed {
+                    Button { dismissChat() } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left").font(.system(size: 21, weight: .semibold))
+                            let n = otherUnread
+                            if n > 0 {
+                                Text(n > 99999 ? "99999+" : "\(n)").font(.system(size: 15, weight: .semibold)).monospacedDigit()
+                                    .foregroundColor(Theme.bg)
+                                    .padding(.horizontal, 8).frame(minWidth: 26, minHeight: 26)
+                                    .background(Capsule().fill(Theme.text))
+                                    .transition(.scale.combined(with: .opacity))
+                            }
+                        }
+                        .foregroundColor(Theme.text)
+                        .padding(.leading, 13).padding(.trailing, otherUnread > 0 ? 10 : 14).frame(height: 46)
+                        .contentShape(Capsule())
+                        .lumoGlass(Capsule(), interactive: true)
+                    }
+                    .buttonStyle(BouncyButtonStyle())
+                }
+                Spacer(minLength: 0)
+                if !selecting {
+                    if let c = chat, c.type == "group" {
+                        Menu {
+                            Button { joinGroupCall(video: false) } label: { Label("Групповой звонок", systemImage: "phone") }
+                            Button { joinGroupCall(video: true) } label: { Label("Групповой видеозвонок", systemImage: "video") }
+                        } label: {
+                            Image(systemName: gcBusy ? "hourglass" : "phone.fill").font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(Theme.text).frame(width: 46, height: 46)
+                                .lumoGlass(Circle(), interactive: true)
+                        }
+                    }
+                    Button { showInfo = true } label: {
+                        AvatarView(name: chat?.displayName ?? "", url: chat?.displayAvatar, color: chat?.displayColor ?? 0, size: 42,
+                                   online: chat?.isPrivate == true && !saved && model.isOnline(chat?.peerId),
+                                   icon: saved ? "bookmark.fill" : nil,
+                                   storyUid: chat?.isPrivate == true && !saved ? chat?.peerId : nil)
+                            .padding(3)
+                            .lumoGlass(Circle(), interactive: true)
+                    }
+                    .buttonStyle(BouncyButtonStyle())
+                }
+            }
+            // имя и статус — отдельная стеклянная «пилюля» по центру
+            Group {
+                if selecting {
+                    Text(selected.isEmpty ? "Выберите сообщения" : "Выбрано: \(selected.count)")
+                        .font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
+                        .padding(.horizontal, 22).frame(height: 46)
+                        .lumoGlass(Capsule())
+                } else {
+                    Button { showInfo = true } label: {
+                        titleLines
+                            .padding(.horizontal, 24).frame(minHeight: 46)
+                            .contentShape(Capsule())
+                            .lumoGlass(Capsule(), interactive: true)
+                    }
+                    .buttonStyle(BouncyButtonStyle())
+                }
+            }
+            .padding(.horizontal, selecting ? 110 : 104)
+        }
+        .padding(.horizontal, 12).padding(.top, 2).padding(.bottom, 6)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: otherUnread)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selecting)
+    }
+
+    private var titleLines: some View {
+        let saved = chat?.isPrivate == true && chat?.peerId == model.myId
+        return VStack(alignment: .center, spacing: 0) {
+                HStack(spacing: 4) {
+                    Text(saved ? "Избранное" : (chat?.displayName ?? "")).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
+                    if chat?.isPrivate == true { NameBadges(bot: chat?.peerBot == true || (chat?.peerId.flatMap { model.profiles[$0]?.isBot } ?? false), premium: chat?.peerPremium == true || (chat?.peerId.flatMap { model.profiles[$0]?.premium } ?? false), emoji: chat?.peerId.flatMap { model.profiles[$0]?.emojiStatus }, verified: chat?.peerVerified == true || (chat?.peerId.flatMap { model.profiles[$0]?.verified } ?? false)) }
+                    if chat?.isPrivate == true && !saved && chat?.peerBot != true { StreakHeaderButton(chatId: chatId) { streakOpen = true } }
+                    if chat?.isPrivate == true && e2e.active(chatId) { Image(systemName: "lock.fill").font(.system(size: 11)).foregroundColor(Theme.a2) }
+                }
+                if let n = model.netStatus {
+                    HStack(spacing: 5) {
+                        ProgressView().scaleEffect(0.6).frame(width: 12, height: 12)
+                        Text(n).font(.system(size: 12.5)).foregroundColor(Theme.muted).lineLimit(1)
+                    }
+                } else if let t = model.typingText(chatId) {
+                    Text(t).font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.a2).lineLimit(1)
+                } else if chat?.isPrivate == true, let pd = dnd.peer(chat?.peerId) {
+                    // собеседник в режиме «Не беспокоить»
+                    HStack(spacing: 4) {
+                        Image(systemName: DNDStore.icon(pd.text)).font(.system(size: 11, weight: .semibold))
+                        Text(DNDStore.peerLine(pd)).font(.system(size: 12.5, weight: .semibold)).lineLimit(1)
+                    }.foregroundColor(Color(hex: 0x8c6cff))
+                } else {
+                    Text(status).font(.system(size: 12.5)).foregroundColor(model.isOnline(chat?.peerId) && chat?.isPrivate == true ? Theme.a2 : Theme.muted).lineLimit(1)
+                }
+            }
+    }
 
     private var header: some View {
         HStack(spacing: 9) {
