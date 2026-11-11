@@ -33,6 +33,8 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
     @Published var p2p = false
     /// связь прервалась во время разговора — показываем «Повторное подключение…» и восстанавливаем WebRTC
     @Published var reconnecting = false
+    /// код проверки: 4 значка из ключей шифрования обоих телефонов (одинаковые у обоих — посередине никого нет)
+    @Published var callCode: [Int]?
     private var downSince: Date?
     private var reconnTimer: Timer?
     /// Звук и видео идут только напрямую через WebRTC (свой TURN), через сервер Supabase — только сигналы
@@ -690,6 +692,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         reconnTimer = nil
         reconnecting = false
         downSince = nil
+        callCode = nil
         audioActive = false
         remoteVideo = nil
         videoSource = nil
@@ -933,6 +936,9 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
             restarts = 0
             statusText = ""
             finishReconnect()
+            if let l = pc?.localDescription?.sdp, let r = pc?.remoteDescription?.sdp, let c = CallCode.make(localSDP: l, remoteSDP: r), c != callCode {
+                callCode = c
+            }
             becomeActive()
             p2p = true
             relayImage = nil

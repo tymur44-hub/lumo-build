@@ -99,7 +99,12 @@ struct CallView: View {
             }
             VStack(spacing: 14) {
                 if !showRemote && !showRelay {
-                    Spacer().frame(height: 60)
+                    ZStack {
+                        if let code = calls.callCode, calls.state == .active {
+                            CallCodeBadge(code: code).transition(.scale(scale: 0.6).combined(with: .opacity))
+                        }
+                    }
+                    .frame(height: 60)
                     ZStack {
                         if calls.state != .active { PulseRings(size: 130) }
                         AvatarView(name: calls.peerName, url: calls.peerAvatar, color: calls.peerColor, size: 130)
@@ -114,6 +119,9 @@ struct CallView: View {
                         Text(calls.peerName + " · " + statusLine)
                             .font(.headline).foregroundColor(.white).shadow(radius: 6)
                         Spacer()
+                        if let code = calls.callCode, calls.state == .active {
+                            CallCodeBadge(code: code)
+                        }
                     }
                     .padding(.horizontal, 20).padding(.top, 10)
                     .opacity(hideUI ? 0 : 1)
@@ -160,6 +168,7 @@ struct CallView: View {
         .onChange(of: calls.relayImage) { if let im = $0 { CallPiP.shared.push(im) } }
         .onAppear { CallPiP.shared.setTrack(calls.video ? calls.remoteVideo : nil) }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: calls.reconnecting)
+        .animation(.spring(response: 0.45, dampingFraction: 0.7), value: calls.callCode)
         .statusBarHidden(showRemote || showRelay)
     }
 

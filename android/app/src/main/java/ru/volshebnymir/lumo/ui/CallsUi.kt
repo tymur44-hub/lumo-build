@@ -165,7 +165,10 @@ object CallsUi {
             if (!(pip && videoOn)) Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().graphicsLayer { alpha = if (videoOn) uiAlpha else 1f },
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 if (!showRemote && !showRelay) {
-                    Spacer(Modifier.height(50.dp))
+                    Box(Modifier.height(50.dp), contentAlignment = Alignment.Center) {
+                        val cc = Calls.callCode
+                        if (cc != null && active) CallCodeBadge(cc)
+                    }
                     Box(Modifier.height(220.dp), contentAlignment = Alignment.Center) {
                         if (!active) PulseRings(130)
                         Box(Modifier.border(2.dp, Color.White.copy(alpha = 0.35f), CircleShape)) { Avatar(Calls.peerName, Calls.peerAvatar, Calls.peerColor, 130.dp) }
@@ -174,8 +177,11 @@ object CallsUi {
                     Spacer(Modifier.height(6.dp))
                     Text(status, color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
                 } else {
-                    Text("${Calls.peerName} · $status", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp))
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${Calls.peerName} · $status", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.weight(1f))
+                        val cc = Calls.callCode
+                        if (cc != null && active) CallCodeBadge(cc)
+                    }
                 }
                 Spacer(Modifier.weight(1f))
                 if (!(videoOn && hide)) Controls() else Spacer(Modifier.height(150.dp))

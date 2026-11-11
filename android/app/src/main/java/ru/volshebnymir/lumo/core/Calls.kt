@@ -85,6 +85,8 @@ object Calls {
     var p2p by mutableStateOf(false)
     /// связь прервалась во время разговора — «Повторное подключение…», WebRTC восстанавливается
     var reconnecting by mutableStateOf(false)
+    /** код проверки: 4 значка из ключей шифрования обоих телефонов (одинаковые у обоих — посередине никого нет) */
+    var callCode by mutableStateOf<List<Int>?>(null)
     private var downSince = 0L
     private var reconnJob: Job? = null
     /// Звук и видео — только напрямую через WebRTC (свой TURN); через сервер Supabase идут лишь сигналы
@@ -473,7 +475,7 @@ object Calls {
         remoteVideo = null
         Relay.stop()
         relayImage = null; pendingJPEG = null; p2p = false
-        reconnJob?.cancel(); reconnJob = null; reconnecting = false; downSince = 0L
+        reconnJob?.cancel(); reconnJob = null; reconnecting = false; downSince = 0L; callCode = null
         pendingOffer = null; iceQueue.clear()
         secJob?.cancel(); secChat = null
         state = State.Idle; startedAt = null; callId = null; peerId = null; role = ""
@@ -658,6 +660,10 @@ object Calls {
         when (s) {
             PeerConnection.PeerConnectionState.CONNECTED -> {
                 restarts = 0; statusText = ""
+                runCatching {
+                    val l = pc?.localDescription?.description; val r = pc?.remoteDescription?.description
+                    if (l != null && r != null) ru.volshebnymir.lumo.ui.CallCode.make(l, r)?.let { if (it != callCode) callCode = it }
+                }
                 reconnJob?.cancel(); reconnJob = null
                 if (reconnecting) log("reconnect_ok", jsonOf("sec" to ((now() - downSince) / 1000)))
                 reconnecting = false; downSince = 0L
