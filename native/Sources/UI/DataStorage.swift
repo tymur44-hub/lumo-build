@@ -6,12 +6,13 @@ import QuickLook
 struct AutoPhoto: View {
     let url: URL
     let size: Int?
+    var onOpen: (() -> Void)? = nil
     @State private var image: UIImage?
     @State private var loading = false
     @State private var asked = false
 
-    init(url: URL, size: Int?) {
-        self.url = url; self.size = size
+    init(url: URL, size: Int?, onOpen: (() -> Void)? = nil) {
+        self.url = url; self.size = size; self.onOpen = onOpen
         _image = State(initialValue: ImageCache.shared.get(url))
     }
 
@@ -33,7 +34,11 @@ struct AutoPhoto: View {
             }
         }
         .contentShape(Rectangle())
-        .simultaneousGesture(TapGesture().onEnded { if image == nil && !loading { Task { await load() } } })
+        // одно касание: фото уже есть — открыть во весь экран, нет — загрузить
+        .onTapGesture {
+            if image != nil { onOpen?() }
+            else if !loading { Task { await load() } }
+        }
         .task(id: url) {
             if image != nil { return }
             if ImageCache.shared.has(url) || AutoDownloadSettings.shared.allow(.photo, bytes: size) { await load() }

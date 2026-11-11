@@ -561,10 +561,9 @@ struct MessageRow: View {
                 let w: CGFloat = 250
                 let ratio = (m.width ?? 1) > 0 ? CGFloat((m.height ?? 1) / (m.width ?? 1)) : 1
                 let h = min(340, max(120, w * ratio))
-                AutoPhoto(url: u, size: m.fileSize)
+                AutoPhoto(url: u, size: m.fileSize) { onImage(u) }
                 .frame(width: w, height: h)
                 .clipShape(RoundedRectangle(cornerRadius: 13))
-                .onTapGesture { onImage(u) }
             } else {
                 ZStack { Color.white.opacity(0.06); ProgressView() }.frame(width: 250, height: 180)
                     .clipShape(RoundedRectangle(cornerRadius: 13))
