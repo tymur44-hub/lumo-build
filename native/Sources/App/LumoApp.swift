@@ -24,6 +24,7 @@ struct LumoApp: App {
                 .id("\(look.version)-\(lang)")
                 .fullScreenCover(item: $model.miniApp) { MiniAppView(req: $0).environmentObject(model).environmentObject(look) }
                 .onOpenURL { url in handle(url) }
+                .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { KeyboardDismiss.shared.install() } }
                 .overlay { LockOverlayView() }
                 .overlay(alignment: .top) {
                     if let b = model.banner {
