@@ -113,6 +113,7 @@ object AppModel {
     var netStatus by mutableStateOf<String?>(null)
     var botName by mutableStateOf<String?>(null)
     var openChatId: String? = null
+        set(v) { if (field != v) { field = v; syncTyping() } }
     /** непросмотренные реакции на мои сообщения по чатам: «Реакция ... на Ваше сообщение» и сердечко в списке */
     val unseenReact = mutableStateMapOf<String, UnseenReaction>()
     private var unseenJob: Job? = null
@@ -139,7 +140,6 @@ object AppModel {
         unseenJob?.cancel()
         unseenJob = scope.launch { delay(600); loadUnseenReactions() }
     }
-        set(v) { if (field != v) { field = v; syncTyping() } }
     var isActive = true
     var unreadTotal by mutableIntStateOf(0)
 
