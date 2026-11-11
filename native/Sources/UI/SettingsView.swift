@@ -1340,8 +1340,8 @@ struct MyProfileTabs: View {
                                         if kind == "text" || url.isEmpty {
                                             Text(st.str("caption") ?? "").font(.system(size: 12)).foregroundColor(.white).multilineTextAlignment(.center).lineLimit(5).padding(6)
                                         } else {
-                                            AsyncImage(url: URL(string: url)) { ph in
-                                                if let i = ph.image { i.resizable().scaledToFill() } else { Color.clear }
+                                            if let u = URL(string: url) {
+                                                CachedImage(url: u) { $0.resizable().scaledToFill() } placeholder: { Color.clear }
                                             }
                                         }
                                         if kind == "video" { Image(systemName: "play.circle.fill").font(.system(size: 28)).foregroundColor(.white.opacity(0.9)) }

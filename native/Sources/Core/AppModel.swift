@@ -175,6 +175,9 @@ final class AppModel: ObservableObject {
         if let id = myId { E2E.shared.installLocal(id) }
         // свои имена для контактов — с устройства, ещё до сети (иначе мелькают имена, которые люди дали себе сами)
         if aliases.isEmpty { aliases = localAliases() }
+        // всё остальное, что было сохранено на устройстве для этого аккаунта, — сразу, до сети
+        LocalCache.uid = myId ?? ""
+        restoreFromDevice()
         // список чатов из кэша — сразу, до сети (потом обновится с сервера)
         if chats.isEmpty, let cached = LocalCache.loadChats() { await applyChats(cached, prefetch: false) }
         netStatus = "Соединение…"
@@ -409,6 +412,7 @@ final class AppModel: ObservableObject {
 
     func resetAfterLogout() {
         banLoop?.cancel(); banLoop = nil; myBan = nil
+        cachedProfiles = [:]; freshProfiles = []; profilesSaveTask?.cancel(); LocalCache.uid = ""
         UserDefaults.standard.set(false, forKey: "lm_sess_active")
         PhoneStore.shared.reset()
         Lumens.shared.reset()
@@ -433,7 +437,7 @@ final class AppModel: ObservableObject {
         aliases = [:]
         contactNotes = [:]
         contactPhotos = [:]
-        stories = []
+        stories = []; chatWalls = [:]; unseenReact = [:]
         calls = []
         tab = .chats
         Notifier.setBadge(0)
@@ -471,10 +475,41 @@ final class AppModel: ObservableObject {
     // MARK: - профиль
 
     /// Профили с учётом конфиденциальности (сервер скрывает то, что мне видеть нельзя)
+    // MARK: - данные с устройства (показываются сразу, сервер присылает только изменения)
+
+    private var cachedProfiles: [String: JSON] = [:]
+    private var profilesSaveTask: Task<Void, Never>?
+
+    func restoreFromDevice() {
+        if contacts.isEmpty, let r = LocalCache.loadRows("contacts") { contacts = r.compactMap { $0.str("contact_id") } }
+        if chatWalls.isEmpty, let r = LocalCache.loadRows("walls") { applyWalls(r) }
+        if stories.isEmpty, let r = LocalCache.loadRows("stories") { applyStories(r) }
+        if unseenReact.isEmpty, let r = LocalCache.loadRows("unseen_react") { applyUnseen(r) }
+        if let r = LocalCache.loadRows("profiles") {
+            for row in r {
+                guard let id = row.str("id") else { continue }
+                cachedProfiles[id] = row
+                if profiles[id] == nil { var p = Profile(json: row); if let ph = contactPhotos[id] { p.avatarURL = ph }; profiles[id] = p }
+            }
+        }
+    }
+
+    /// запомнить профили собеседников на устройстве (не чаще раза в 2 секунды)
+    private func rememberProfiles(_ rows: [JSON]) {
+        for r in rows { if let id = r.str("id") { cachedProfiles[id] = r } }
+        profilesSaveTask?.cancel()
+        profilesSaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard let self = self, !Task.isCancelled else { return }
+            LocalCache.saveRows("profiles", Array(self.cachedProfiles.values.prefix(800)))
+        }
+    }
+
     func fetchProfiles(_ ids: [String]) async -> [Profile] {
         let list = Array(Set(ids.filter { !$0.isEmpty }))
         guard !list.isEmpty else { return [] }
         let rows = (try? await API.shared.rpc("lm_profiles_get", ["p_ids": list])) as? [JSON] ?? []
+        if !rows.isEmpty { rememberProfiles(rows) }
         return rows.map { row in
             var prof = Profile(json: row)
             if let ph = contactPhotos[prof.id] { prof.avatarURL = ph }   // личное фото контакта видите только вы
@@ -553,8 +588,11 @@ final class AppModel: ObservableObject {
         catch { say(error.localizedDescription) }
     }
 
+    private var freshProfiles = Set<String>()
     func loadProfiles(_ ids: [String]) async {
-        let need = Array(Set(ids.filter { profiles[$0] == nil && !$0.isEmpty }))
+        // профили с устройства показываются сразу, но один раз за запуск сверяются с сервером
+        let need = Array(Set(ids.filter { (profiles[$0] == nil || !freshProfiles.contains($0)) && !$0.isEmpty }))
+        need.forEach { freshProfiles.insert($0) }
         guard !need.isEmpty else { return }
         for p in await fetchProfiles(need) { profiles[p.id] = p }
     }
@@ -659,6 +697,7 @@ final class AppModel: ObservableObject {
             return
         }
         contacts = rows.compactMap { $0.str("contact_id") }
+        LocalCache.saveRows("contacts", rows.map { ["contact_id": $0.str("contact_id") ?? ""] })
         var a: [String: String] = [:]
         for r in rows { if let id = r.str("contact_id"), let al = r.str("alias"), !al.isEmpty { a[id] = al } }
         // главное — то, что записано на этом устройстве: оно важнее сервера, а сервер догоняем
@@ -1087,6 +1126,11 @@ final class AppModel: ObservableObject {
 
     func loadStories() async {
         guard let rows = (try? await API.shared.rpc("lm_stories_feed")) as? [JSON] else { return }
+        LocalCache.saveRows("stories", rows)
+        applyStories(rows)
+    }
+
+    private func applyStories(_ rows: [JSON]) {
         var by: [String: StoryGroup] = [:]
         for r in rows {
             let s = StoryItem(json: r)
@@ -1272,6 +1316,11 @@ final class AppModel: ObservableObject {
             if let c = chat(chatId), c.isPrivate { await E2E.shared.prepare(chatId, peer: c.peerId) }
             if (messages[chatId] ?? []).isEmpty {
                 messages[chatId] = Array(cached.map { dec(Message(json: $0)) }.reversed()).filter { !hidden.contains($0.id) }
+                if let rr = LocalCache.loadRows("react_" + chatId) {
+                    var map = reactions
+                    for r in rr { var x = Reaction(json: r); x.extra = r.bool("extra"); if map[x.messageId]?.contains(x) != true { map[x.messageId, default: []].append(x) } }
+                    reactions = map
+                }
             }
         }
         await prep(chatId)
@@ -1323,6 +1372,7 @@ final class AppModel: ObservableObject {
             for r in rr { let x = Reaction(json: r); map[x.messageId, default: []].append(x) }
             for r in rx { var x = Reaction(json: r); x.extra = true; map[x.messageId, default: []].append(x) }
             reactions = map
+            if !older { LocalCache.saveRows("react_" + chatId, rr + rx.map { var j = $0; j["extra"] = true; return j }) }
         }
         var need = arr.compactMap { $0.replyTo }
         if let pm = chat(chatId)?.pinnedMessageId { need.append(pm) }
@@ -1374,6 +1424,11 @@ final class AppModel: ObservableObject {
 
     func loadUnseenReactions() async {
         guard loggedIn, let rows = (try? await API.shared.rpc("lm_unseen_reactions")) as? [JSON] else { return }
+        LocalCache.saveRows("unseen_react", rows)
+        applyUnseen(rows)
+    }
+
+    private func applyUnseen(_ rows: [JSON]) {
         var m: [String: UnseenReaction] = [:]
         for r in rows {
             guard let c = r.str("chat_id"), let e = r.str("emoji") else { continue }
@@ -1599,7 +1654,12 @@ final class AppModel: ObservableObject {
 
     func loadChatWalls() async {
         guard let me = myId else { return }
-        let rows = (try? await API.shared.select("lm_chat_wall", ["select": "chat_id,preset,url,blur,dim,set_by", "user_id": "eq." + me])) ?? []
+        guard let rows = try? await API.shared.select("lm_chat_wall", ["select": "chat_id,preset,url,blur,dim,set_by", "user_id": "eq." + me]) else { return }
+        LocalCache.saveRows("walls", rows)
+        applyWalls(rows)
+    }
+
+    private func applyWalls(_ rows: [JSON]) {
         var map: [String: ChatWall] = [:]
         for r in rows {
             guard let cid = r.str("chat_id") else { continue }

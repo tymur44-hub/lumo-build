@@ -1,15 +1,21 @@
 import Foundation
 
-/// Локальный кэш списка чатов и переписки на диске устройства.
+/// Локальный кэш списка чатов, переписки и данных аккаунта на диске устройства.
 /// Хранит последний успешно загруженный ответ сервера как есть (сырой JSON),
 /// чтобы при открытии без интернета чаты и сообщения показывались сразу,
 /// а не пустым экраном.
 enum LocalCache {
     private static var dir: URL {
-        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        // постоянная папка (iOS не чистит её сама, в отличие от «Caches»); очистить можно в «Данные и память»
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let url = base.appendingPathComponent("lumo-cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: url.path) {
             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            // перенос старого кэша из «Caches»
+            let old = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("lumo-cache")
+            if let files = try? FileManager.default.contentsOfDirectory(at: old, includingPropertiesForKeys: nil) {
+                for f in files { try? FileManager.default.moveItem(at: f, to: url.appendingPathComponent(f.lastPathComponent)) }
+            }
         }
         return url
     }
@@ -32,15 +38,30 @@ enum LocalCache {
         return obj
     }
 
-    static func saveChats(_ rows: [JSON]) { save("chats", rows) }
+    /// чей это кэш: у каждого аккаунта на устройстве свой список чатов, контакты и т.д.
+    static var uid = ""
+    private static var u: String { uid.isEmpty ? "" : "u_" + safe(uid) + "_" }
+
+    static func saveChats(_ rows: [JSON]) { save(u + "chats", rows) }
     /// Свой профиль: фото, имя, юзернейм, Premium видны и без интернета
     static func saveMe(_ uid: String, _ row: JSON) { save("me_" + safe(uid), [row]) }
     static func loadMe(_ uid: String) -> JSON? { load("me_" + safe(uid))?.first }
-    static func loadChats() -> [JSON]? { load("chats") }
+    static func loadChats() -> [JSON]? { load(u + "chats") }
+
+    /// Любые другие данные аккаунта (контакты, обои чатов, истории, реакции, профили…):
+    /// показываются сразу с устройства, потом обновляются с сервера
+    static func saveRows(_ name: String, _ rows: [JSON]) { save(u + name, rows) }
+    static func loadRows(_ name: String) -> [JSON]? { load(u + name) }
 
     static func saveMessages(_ chatId: String, _ rows: [JSON]) {
-        // храним не больше последних 80 сообщений на чат
-        save("msgs_" + safe(chatId), Array(rows.prefix(80)))
+        // свежие строки с сервера + более старые, что уже были на устройстве; храним последние 300
+        let newest = rows.compactMap { $0["id"] as? Int }
+        var merged = rows
+        if let lo = newest.min(), let old = load("msgs_" + safe(chatId)) {
+            merged += old.filter { (($0["id"] as? Int) ?? Int.max) < lo }
+        }
+        merged.sort { (($0["id"] as? Int) ?? 0) > (($1["id"] as? Int) ?? 0) }
+        save("msgs_" + safe(chatId), Array(merged.prefix(300)))
     }
     static func loadMessages(_ chatId: String) -> [JSON]? { load("msgs_" + safe(chatId)) }
 }

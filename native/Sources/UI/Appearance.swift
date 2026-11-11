@@ -13,9 +13,9 @@ struct ChatWallpaper: View {
             Theme.chatBg
             if let c = custom, let u = c.url.flatMap(URL.init(string:)) {
                 GeometryReader { g in
-                    AsyncImage(url: u) { ph in
-                        if let im = ph.image { im.resizable().scaledToFill().frame(width: g.size.width, height: g.size.height).clipped() }
-                    }
+                    CachedImage(url: u) { im in
+                        im.resizable().scaledToFill().frame(width: g.size.width, height: g.size.height).clipped()
+                    } placeholder: { Color.clear }
                     .blur(radius: c.blur ? 14 : 0)
                     .clipped()
                 }
