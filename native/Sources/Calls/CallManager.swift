@@ -1247,6 +1247,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
             self.audioActive = true
             self.updateAudio()
             self.applySpeaker()
+            CallTones.shared.resume()
         }
     }
 

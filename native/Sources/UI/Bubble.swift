@@ -88,6 +88,8 @@ struct MessageRow: View {
     @ObservedObject private var lumens = Lumens.shared
     @State private var lumenSheet = false
     @State private var swipe: CGFloat = 0
+    /// ширина пузыря — кнопки бота ровно по ней, как в Telegram
+    @State private var bubbleW: CGFloat = 0
     @State private var pressing = false
     @State private var swipeHit = false
     @State private var swipeActive = false
@@ -132,7 +134,20 @@ struct MessageRow: View {
                 VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
                     if isGroup && !mine { Text(senderName).font(.system(size: 13, weight: .bold)).foregroundColor(senderColor).padding(.leading, 6) }
                     Group {
-                        if m.kind == "dice" { ThrowBubble(m: m, mine: mine) } else { GameBubble(m: m, mine: mine) }
+                        if m.kind == "dice" {
+                            // нажатие на брошенный кубик / мяч / монетку — бросить такой же от себя (как в Telegram)
+                            ThrowBubble(m: m, mine: mine)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    guard !selecting, chat?.isChannel != true else { return }
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    let k = m.meta.str("g") ?? "dice", cid = m.chatId
+                                    Task {
+                                        do { _ = try await API.shared.rpc("lm_throw", ["p_chat": cid, "p_kind": k]) }
+                                        catch { model.say(error.localizedDescription) }
+                                    }
+                                }
+                        } else { GameBubble(m: m, mine: mine) }
                     }
                     .onLongPressGesture(minimumDuration: 0.35) {
                         guard !selecting, m.id > 0 else { return }
@@ -186,6 +201,7 @@ struct MessageRow: View {
                 VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
                     if m.meta.bool("urgent") { UrgentTag() }
                     content
+                        .background(GeometryReader { g in Color.clear.onAppear { bubbleW = g.size.width }.onChange(of: g.size.width) { bubbleW = $0 } })
                         .task(id: m.id) { if m.id > 0 && !m.deleted { lumens.request(m.id, withComments: chat?.isChannel == true && lumens.linked(chat?.id) != nil) } }
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { Task { await model.react(m, "❤️") } }
@@ -199,7 +215,7 @@ struct MessageRow: View {
                             withAnimation(.easeOut(duration: 0.12)) { pressing = false }
                             onMenu(m)
                         })
-                    reactionsRow
+                    if !reactionsInBubble { reactionsRow }
                     if chat?.isChannel == true, m.id > 0, !m.deleted {
                         LumenReactChip(count: lumens.tips[m.id] ?? 0) { lumenSheet = true }
                     } else {
@@ -300,7 +316,7 @@ struct MessageRow: View {
                     }
                 }
             }
-            .frame(minWidth: 220)
+            .frame(width: bubbleW > 0 ? max(bubbleW, 160) : nil)
         }
     }
 
@@ -337,6 +353,12 @@ struct MessageRow: View {
         .buttonStyle(.plain)
     }
 
+    /// у обычных сообщений реакции внутри пузыря; у стикеров, крупных эмодзи и кружков — под ними
+    private var reactionsInBubble: Bool {
+        !(m.kind == "sticker" || m.kind == "video_note" || m.deleted
+          || (m.kind == "text" && isOnlyEmoji(m.body) && m.replyTo == nil && m.forwardedFrom == nil))
+    }
+
     @ViewBuilder private var reactionsRow: some View {
         let list = model.reactions[m.id] ?? []
         if !list.isEmpty {
@@ -348,7 +370,7 @@ struct MessageRow: View {
             }
             HStack(spacing: 4) {
                 ForEach(groups, id: \.key) { e, rs in
-                    ReactionChip(mid: m.id, emoji: e, count: rs.count, mine: rs.contains { $0.userId == model.myId }) {
+                    ReactionChip(mid: m.id, emoji: e, count: rs.count, mine: rs.contains { $0.userId == model.myId }, onAccent: mine && reactionsInBubble) {
                         Task { await model.react(m, e) }
                     }
                     .transition(.scale(scale: 0.2).combined(with: .opacity))
@@ -451,7 +473,7 @@ struct MessageRow: View {
                     }
                 }
                 // в посте с комментариями пузырь во всю ширину — время и просмотры прижимаем к правому краю
-                .frame(maxWidth: showComments ? .infinity : nil, alignment: .leading)
+                .frame(maxWidth: showComments && m.kind != "image" && m.kind != "video" ? .infinity : nil, alignment: .leading)
                 // время и галочка — у правого нижнего угла всего пузыря (а не у конца короткого текста под цитатой)
                 .overlay(alignment: .bottomTrailing) {
                     if timeOnBubble { timeLine(onMedia: false).offset(y: 2) }
@@ -470,9 +492,18 @@ struct MessageRow: View {
         let shape: BubbleShape = mine
             ? BubbleShape(tl: big, tr: first ? big : small, bl: big, br: last ? tail : small)
             : BubbleShape(tl: first ? big : small, tr: big, bl: last ? tail : small, br: big)
+        // фото и видео без подписи — тонкая рамка, как в Telegram
+        let mediaOnly = (m.kind == "image" || m.kind == "video") && (m.body ?? "").isEmpty && m.replyTo == nil
+            && (m.forwardedFrom ?? "").isEmpty && !(first && !mine && isGroup) && m.meta["story"] == nil
+        let hasReacts = !(model.reactions[m.id] ?? []).isEmpty
         return VStack(alignment: .leading, spacing: 0) {
-                c().padding(.horizontal, 11).padding(.top, 6).padding(.bottom, 6)
-                if showComments { commentsFooter.frame(minWidth: 240) }
+                c().padding(.horizontal, mediaOnly ? 2.5 : 11).padding(.top, mediaOnly ? 2.5 : 6).padding(.bottom, mediaOnly ? 2.5 : 6)
+                // реакции — внутри пузыря, как в Telegram
+                if hasReacts && reactionsInBubble {
+                    reactionsRow.padding(.horizontal, mediaOnly ? 6 : 9).padding(.top, mediaOnly ? 4 : 0).padding(.bottom, 7)
+                        .transition(.scale(scale: 0.6, anchor: .topLeading).combined(with: .opacity))
+                }
+                if showComments { commentsFooter.frame(minWidth: 240).frame(maxWidth: m.kind == "image" || m.kind == "video" ? 250 : nil) }
             }
             .background(
                 Group {
@@ -557,18 +588,18 @@ struct MessageRow: View {
                 let h = min(340, max(120, w * ratio))
                 AutoPhoto(url: u, size: m.fileSize) { onImage(u) }
                 .frame(width: w, height: h)
-                .clipShape(RoundedRectangle(cornerRadius: 13))
+                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
             } else {
                 ZStack { Color.white.opacity(0.06); ProgressView() }.frame(width: 250, height: 180)
-                    .clipShape(RoundedRectangle(cornerRadius: 13))
+                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
         case "video":
             if let u = m.mediaURL.flatMap(URL.init(string:)) {
-                VideoThumb(url: u).onTapGesture { onVideo(u) }
+                VideoThumb(url: u, dur: m.duration).onTapGesture { onVideo(u) }
                     .task { if MediaCache.shared.local(u) == nil, AutoDownloadSettings.shared.allow(.video, bytes: m.fileSize) { _ = await MediaCache.shared.fetch(u) } }
             } else {
                 ZStack { Color.white.opacity(0.06); ProgressView() }.frame(width: 250, height: 180)
-                    .clipShape(RoundedRectangle(cornerRadius: 13))
+                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
         case "voice":
             VoiceView(m: m, mine: mine)

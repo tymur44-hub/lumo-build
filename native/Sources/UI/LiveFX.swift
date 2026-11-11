@@ -51,6 +51,8 @@ struct ReactionChip: View {
     let emoji: String
     let count: Int
     let mine: Bool
+    /// плашка внутри своего (цветного) пузыря — другие цвета, чтобы читалась
+    var onAccent = false
     let action: () -> Void
     @State private var burst = 0
     @State private var pop = false
@@ -58,18 +60,20 @@ struct ReactionChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 3) {
-                Text(emoji).font(.system(size: 14))
+                AnimatedEmoji(emoji: emoji, size: 16, tappable: false, small: true)
+                    .frame(width: 18, height: 18)
                     .scaleEffect(pop ? 1.35 : 1)
                     .rotationEffect(.degrees(pop ? -12 : 0))
-                Text("\(count)").font(.system(size: 12.5, weight: .bold)).foregroundColor(mine ? .white : Theme.text)
+                Text("\(count)").font(.system(size: 12.5, weight: .bold)).foregroundColor(onAccent ? (mine ? Theme.a1 : .white) : (mine ? .white : Theme.text))
                     .monospacedDigit()
                     .id(count)
                     .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
                                             removal: .move(edge: .top).combined(with: .opacity)))
             }
             .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(Capsule().fill(mine ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.panel2)))
-            .overlay(Capsule().stroke(Theme.line))
+            .background(Capsule().fill(onAccent
+                ? (mine ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.white.opacity(0.22)))
+                : (mine ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.a1.opacity(0.13)))))
         }
         .buttonStyle(BouncyButtonStyle())
         .overlay { if burst > 0 { EmojiBurst(emoji: emoji).id(burst).allowsHitTesting(false) } }

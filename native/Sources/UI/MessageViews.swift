@@ -108,22 +108,83 @@ struct WaveBars: View {
     }
 }
 
+/// Видео в пузыре: пропорции как у самого видео; короткие (до 30 с) скачиваются и сами играют по кругу без звука.
+/// Нажатие открывает видео на весь экран — с начала и со звуком.
 struct VideoThumb: View {
     let url: URL
+    var dur: Double = 0
+    var autoplay = true
     @State private var thumb: UIImage?
+    @State private var player: AVQueuePlayer?
+    @State private var looper: AVPlayerLooper?
+    @State private var left: Double = 0
+    @State private var visible = false
+
+    private var size: CGSize {
+        let w: CGFloat = 250
+        guard let t = thumb, t.size.width > 0 else { return CGSize(width: w, height: 180) }
+        let r = t.size.height / t.size.width
+        return CGSize(width: w, height: min(360, max(140, w * r)))
+    }
 
     var body: some View {
         ZStack {
             if let t = thumb { Image(uiImage: t).resizable().scaledToFill() } else { Color.white.opacity(0.06) }
-            Image(systemName: "play.fill")
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 54, height: 54)
-                .background(Circle().fill(Color.black.opacity(0.45)))
+            if let p = player { PlayerLayerView(player: p).allowsHitTesting(false).transition(.opacity) }
+            if player == nil {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 54, height: 54)
+                    .background(Circle().fill(Color.black.opacity(0.45)))
+            }
         }
-        .frame(width: 240, height: 180)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .frame(width: size.width, height: size.height)
+        .overlay(alignment: .topLeading) {
+            if player != nil || dur > 0 {
+                HStack(spacing: 4) {
+                    Text(Fmt.duration(player != nil ? left : dur)).monospacedDigit()
+                    if player != nil { Image(systemName: "speaker.slash.fill").font(.system(size: 9, weight: .bold)) }
+                }
+                .font(.system(size: 11.5, weight: .semibold)).foregroundColor(.white)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(Capsule().fill(Color.black.opacity(0.45)))
+                .padding(7)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .task { thumb = await Media.thumbnail(url) }
+        .task(id: url) { await prepare() }
+        .onAppear { visible = true; player?.play() }
+        .onDisappear { visible = false; player?.pause() }
+        .onReceive(Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()) { _ in
+            guard let p = player, let item = p.currentItem else { return }
+            let d = item.duration.seconds, c = p.currentTime().seconds
+            if d.isFinite, c.isFinite { left = max(0, d - c) }
+        }
+        .animation(.easeOut(duration: 0.25), value: player != nil)
+    }
+
+    /// короткое видео: скачать (если разрешено автозагрузкой) и играть без звука по кругу
+    private func prepare() async {
+        guard autoplay, dur == 0 || dur <= 30 else { return }
+        var local = MediaCache.shared.local(url)
+        if local == nil, AutoDownloadSettings.shared.allow(.video, bytes: nil) { local = await MediaCache.shared.fetch(url) }
+        guard let f = local else { return }
+        let asset = AVURLAsset(url: f)
+        let d = (try? await asset.load(.duration))?.seconds ?? dur
+        guard d > 0, d <= 30.5 else { return }
+        let item = AVPlayerItem(asset: asset)
+        let q = AVQueuePlayer()
+        q.isMuted = true
+        q.preventsDisplaySleepDuringVideoPlayback = false
+        let l = AVPlayerLooper(player: q, templateItem: item)
+        await MainActor.run {
+            looper = l
+            player = q
+            left = d
+            if visible { q.play() }
+        }
     }
 }
 

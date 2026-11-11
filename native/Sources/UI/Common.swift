@@ -565,9 +565,15 @@ struct NameBadges: View {
     var premium: Bool
     var emoji: String? = nil
     var verified = false
+    /// для плашки по нажатию на галочку: «профиль», «канал», «группа», «бот»
+    var kind = "профиль"
     var body: some View {
         HStack(spacing: 4) {
-            if verified { Image(systemName: "checkmark.seal.fill").font(.system(size: 14)).foregroundColor(Theme.a2) }
+            if verified {
+                Image(systemName: "checkmark.seal.fill").font(.system(size: 14)).foregroundColor(Theme.a2)
+                    .contentShape(Rectangle().inset(by: -6))
+                    .onTapGesture { Plaque.shared.verified(bot ? "бот" : kind) }
+            }
             badge
         }
     }
@@ -581,5 +587,58 @@ struct NameBadges: View {
         } else if premium {
             Image(systemName: "star.fill").font(.system(size: 12)).foregroundColor(Color(hex: 0xffb020))
         }
+    }
+}
+
+
+/// Плашка сверху экрана (например, «Подтверждено администрацией Lumo» по нажатию на галочку)
+@MainActor
+final class Plaque: ObservableObject {
+    static let shared = Plaque()
+    @Published var item: (icon: String, title: String, text: String)?
+    private var hideTask: Task<Void, Never>?
+    func show(icon: String, title: String, text: String) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) { item = (icon, title, text) }
+        hideTask?.cancel()
+        hideTask = Task { try? await Task.sleep(nanoseconds: 3_200_000_000); if !Task.isCancelled { self.hide() } }
+    }
+    func hide() { withAnimation(.easeIn(duration: 0.22)) { item = nil } }
+    func verified(_ kind: String) {
+        let who: String
+        switch kind {
+        case "канал": who = "Этот канал"
+        case "группа": who = "Эта группа"
+        case "бот": who = "Этот бот"
+        default: who = "Этот профиль"
+        }
+        show(icon: "checkmark.seal.fill", title: "Подтверждено", text: who + " подтверждён администрацией Lumo.")
+    }
+}
+
+struct PlaqueOverlay: View {
+    @ObservedObject var p = Plaque.shared
+    var body: some View {
+        VStack {
+            if let it = p.item {
+                HStack(spacing: 12) {
+                    Image(systemName: it.icon).font(.system(size: 24, weight: .semibold)).foregroundColor(Theme.a2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(it.title).font(.system(size: 15, weight: .bold)).foregroundColor(Theme.text)
+                        Text(it.text).font(.system(size: 13.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .lumoGlass(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
+                .padding(.horizontal, 14).padding(.top, 6)
+                .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.9, anchor: .top)))
+                .onTapGesture { p.hide() }
+                .gesture(DragGesture().onEnded { if $0.translation.height < -10 { p.hide() } })
+            }
+            Spacer()
+        }
+        .allowsHitTesting(p.item != nil)
     }
 }

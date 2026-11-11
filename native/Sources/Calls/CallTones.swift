@@ -12,19 +12,55 @@ final class CallTones {
     private lazy var connectingData = CallTones.connectingWAV()
     private lazy var ringbackData = CallTones.ringbackWAV()
 
+    private var retry: Timer?
+    private var tries = 0
+
     func play(_ k: Kind) {
         guard kind != k else { return }
         stop()
         kind = k
         guard let p = try? AVAudioPlayer(data: k == .connecting ? connectingData : ringbackData) else { return }
         p.numberOfLoops = -1
-        p.volume = k == .connecting ? 0.55 : 0.7
+        p.volume = 1
         p.prepareToPlay()
-        p.play()
         player = p
+        tries = 0
+        start()
+    }
+
+    /// Звук включается, только когда система активировала звук звонка; до этого — повторяем попытку
+    private func start() {
+        guard let p = player else { return }
+        if !p.isPlaying { p.play() }
+        retry?.invalidate()
+        guard !p.isPlaying || tries == 0 else { return }
+        retry = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] t in
+            Task { @MainActor in
+                guard let self = self, let p = self.player else { t.invalidate(); return }
+                self.tries += 1
+                if p.isPlaying && self.tries > 2 { t.invalidate(); return }
+                if !p.isPlaying {
+                    // через 1,5 с без системного звука звонка (звонок без экрана iOS) — включаем звук сами
+                    if self.tries == 4 {
+                        let s = AVAudioSession.sharedInstance()
+                        try? s.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP])
+                        try? s.setActive(true)
+                    }
+                    p.play()
+                }
+                if self.tries > 25 { t.invalidate() }
+            }
+        }
+    }
+
+    /// система включила звук звонка (CallKit) — продолжаем гудки
+    func resume() {
+        guard let p = player, kind != nil else { return }
+        p.play()
     }
 
     func stop() {
+        retry?.invalidate(); retry = nil
         player?.stop()
         player = nil
         kind = nil

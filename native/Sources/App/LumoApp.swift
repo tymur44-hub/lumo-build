@@ -125,6 +125,7 @@ struct RootView: View {
                 PhoneAuthView(mode: .bind, required: true).transition(.opacity)
             }
             AccountFlipOverlay()
+            PlaqueOverlay()
             if !permsDone { PermissionsView { withAnimation(Motion.snappy) { permsDone = true } }.transition(.opacity) }
             MiniNoteOverlay()
             if rc.needsUpdate { UpdateRequiredScreen().transition(.opacity).zIndex(10) }

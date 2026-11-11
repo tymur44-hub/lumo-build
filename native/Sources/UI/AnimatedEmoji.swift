@@ -5,6 +5,8 @@ struct AnimatedEmoji: View {
     let emoji: String
     let size: CGFloat
     var tappable = true
+    /// маленький размер (реакции): реже перерисовываем, чтобы не грузить телефон
+    var small = false
     @State private var burst: [Int] = []
     @State private var tapAt: Date = .distantPast
 
@@ -22,16 +24,13 @@ struct AnimatedEmoji: View {
     }
 
     var body: some View {
-        TimelineView(.animation) { tl in
-            let t = tl.date.timeIntervalSinceReferenceDate
-            let k = max(0, 1 - tl.date.timeIntervalSince(tapAt) / 0.7) // затухающий всплеск после нажатия
-            let amp = 1 + k * 1.2
-            let f = frame(t, amp)
-            Text(emoji).font(.system(size: size))
-                .scaleEffect(f.scale, anchor: f.anchor)
-                .rotationEffect(.degrees(f.rot), anchor: f.anchor)
-                .offset(y: f.y)
-                .frame(width: size * 1.25, height: size * 1.25)
+        Group {
+            if LiveEmoji.supports(emoji) {
+                // живое эмодзи с мимикой (нарисовано в коде)
+                LiveEmojiView(emoji: emoji, size: size * 1.25, tapAt: tapAt, fps: small ? 24 : 60)
+            } else {
+                classic
+            }
         }
         .overlay {
             ForEach(burst, id: \.self) { i in BurstParticle(emoji: emoji, size: size * 0.4, seed: i) }
@@ -45,6 +44,20 @@ struct AnimatedEmoji: View {
             burst = (0..<7).map { base + $0 }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { burst = [] }
         })
+    }
+
+    private var classic: some View {
+        TimelineView(.animation(minimumInterval: small ? 1 / 24 : nil)) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            let k = max(0, 1 - tl.date.timeIntervalSince(tapAt) / 0.7) // затухающий всплеск после нажатия
+            let amp = 1 + k * 1.2
+            let f = frame(t, amp)
+            Text(emoji).font(.system(size: size))
+                .scaleEffect(f.scale, anchor: f.anchor)
+                .rotationEffect(.degrees(f.rot), anchor: f.anchor)
+                .offset(y: f.y)
+                .frame(width: size * 1.25, height: size * 1.25)
+        }
     }
 
     private func frame(_ t: TimeInterval, _ a: Double) -> (scale: CGFloat, rot: Double, y: CGFloat, anchor: UnitPoint) {

@@ -132,6 +132,8 @@ struct ChatView: View {
         chatBody
             .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) { glassHeader }
+            .onAppear { if model.openInfoFor == chatId { model.openInfoFor = nil; showInfo = true } }
+            .onChange(of: model.openInfoFor) { v in if v == chatId { model.openInfoFor = nil; showInfo = true } }
             // свайп вправо — назад (своя панель вместо системной, поэтому включаем его явно)
             .background(SwipeBackInstaller().frame(width: 0, height: 0))
     }
@@ -897,6 +899,7 @@ struct ChatView: View {
                 HStack(spacing: 4) {
                     Text(saved ? "Избранное" : (chat?.displayName ?? "")).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
                     if chat?.isPrivate == true { NameBadges(bot: chat?.peerBot == true || (chat?.peerId.flatMap { model.profiles[$0]?.isBot } ?? false), premium: chat?.peerPremium == true || (chat?.peerId.flatMap { model.profiles[$0]?.premium } ?? false), emoji: chat?.peerId.flatMap { model.profiles[$0]?.emojiStatus }, verified: chat?.peerVerified == true || (chat?.peerId.flatMap { model.profiles[$0]?.verified } ?? false)) }
+                    else if chat?.isPrivate == false, chat?.peerVerified == true { NameBadges(bot: false, premium: false, verified: true, kind: chat?.isChannel == true ? "канал" : "группа") }
                     if chat?.isPrivate == true && !saved && chat?.peerBot != true { StreakHeaderButton(chatId: chatId) { streakOpen = true } }
                     if chat?.isPrivate == true && e2e.active(chatId) { Image(systemName: "lock.fill").font(.system(size: 11)).foregroundColor(Theme.a2) }
                 }
@@ -930,6 +933,7 @@ struct ChatView: View {
                 HStack(spacing: 4) {
                     Text(saved ? "Избранное" : (chat?.displayName ?? "")).font(.system(size: 16, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
                     if chat?.isPrivate == true { NameBadges(bot: chat?.peerBot == true || (chat?.peerId.flatMap { model.profiles[$0]?.isBot } ?? false), premium: chat?.peerPremium == true || (chat?.peerId.flatMap { model.profiles[$0]?.premium } ?? false), emoji: chat?.peerId.flatMap { model.profiles[$0]?.emojiStatus }, verified: chat?.peerVerified == true || (chat?.peerId.flatMap { model.profiles[$0]?.verified } ?? false)) }
+                    else if chat?.isPrivate == false, chat?.peerVerified == true { NameBadges(bot: false, premium: false, verified: true, kind: chat?.isChannel == true ? "канал" : "группа") }
                     if chat?.isPrivate == true && !saved && chat?.peerBot != true { StreakHeaderButton(chatId: chatId) { streakOpen = true } }
                     if chat?.isPrivate == true && e2e.active(chatId) { Image(systemName: "lock.fill").font(.system(size: 11)).foregroundColor(Theme.a2) }
                 }

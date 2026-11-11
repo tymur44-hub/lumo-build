@@ -456,6 +456,12 @@ struct CommentsView: View {
                                 HStack(alignment: .top, spacing: 10) {
                                     AvatarView(name: model.displayName(c.senderId), url: c.senderId.flatMap { model.profiles[$0]?.avatarURL },
                                                color: c.senderId.flatMap { model.profiles[$0]?.color } ?? 0, size: 36)
+                                        // нажатие на аватар — профиль комментатора
+                                        .onTapGesture {
+                                            guard let u = c.senderId else { return }
+                                            dismiss()
+                                            Task { try? await Task.sleep(nanoseconds: 350_000_000); await model.openProfile(u) }
+                                        }
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(model.displayName(c.senderId)).font(.system(size: 14, weight: .bold))
                                             .foregroundColor(Theme.nameColor(c.senderId.flatMap { model.profiles[$0]?.color } ?? 0))

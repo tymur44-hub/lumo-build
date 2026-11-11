@@ -914,6 +914,17 @@ final class AppModel: ObservableObject {
         } catch { say(error.localizedDescription) }
     }
 
+    /// открыть профиль человека (его личный чат и сразу страницу «Информация»)
+    @Published var openInfoFor: String?
+    func openProfile(_ userId: String) async {
+        do {
+            guard let cid = try await API.shared.rpc("lm_open_dm", ["p_other": userId]) as? String else { return }
+            await loadChats()
+            openInfoFor = cid
+            open(cid)
+        } catch { say(error.localizedDescription) }
+    }
+
     func openSaved() async {
         if let id = myId { await openDM(id) }
     }
