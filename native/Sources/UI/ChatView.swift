@@ -828,8 +828,8 @@ struct ChatView: View {
                         .lumoGlass(Capsule(), interactive: true)
                 } else if pushed {
                     Button { dismissChat() } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "chevron.left").font(.system(size: 21, weight: .semibold))
+                        HStack(spacing: 5) {
+                            Image(systemName: "chevron.left").font(.system(size: 20, weight: .semibold))
                             let n = otherUnread
                             if n > 0 {
                                 Text(n > 99999 ? "99999+" : "\(n)").font(.system(size: 15, weight: .semibold)).monospacedDigit()
@@ -840,7 +840,7 @@ struct ChatView: View {
                             }
                         }
                         .foregroundColor(Theme.text)
-                        .padding(.leading, 13).padding(.trailing, otherUnread > 0 ? 10 : 14).frame(height: 46)
+                        .padding(.leading, 12).padding(.trailing, otherUnread > 0 ? 8 : 14).frame(height: 46)
                         .contentShape(Capsule())
                         .lumoGlass(Capsule(), interactive: true)
                     }
@@ -864,17 +864,17 @@ struct ChatView: View {
                     if !isBotChat, let c = chat, c.isPrivate, c.peerId != model.myId, model.peerBlockText(c.peerId) == nil {
                         HStack(spacing: 0) {
                             Button { calls.startCall(chat: c, video: false) } label: {
-                                Image(systemName: "phone.fill").font(.system(size: 18, weight: .semibold))
-                                    .frame(width: 46, height: 46).contentShape(Rectangle())
+                                Image(systemName: "phone.fill").font(.system(size: 17, weight: .semibold))
+                                    .frame(width: 38, height: 46).contentShape(Rectangle())
                             }
                             Button { calls.startCall(chat: c, video: true) } label: {
-                                Image(systemName: "video.fill").font(.system(size: 18, weight: .semibold))
-                                    .frame(width: 46, height: 46).contentShape(Rectangle())
+                                Image(systemName: "video.fill").font(.system(size: 17, weight: .semibold))
+                                    .frame(width: 38, height: 46).contentShape(Rectangle())
                             }
                         }
                         .buttonStyle(BouncyButtonStyle())
                         .foregroundColor(Theme.text)
-                        .padding(.horizontal, 3)
+                        .padding(.horizontal, 4)
                         .lumoGlass(Capsule(), interactive: true)
                     }
                 }
@@ -897,13 +897,13 @@ struct ChatView: View {
         } else {
             Button { showInfo = true } label: {
                 HStack(spacing: 9) {
-                    AvatarView(name: chat?.displayName ?? "", url: chat?.displayAvatar, color: chat?.displayColor ?? 0, size: 36,
+                    AvatarView(name: chat?.displayName ?? "", url: chat?.displayAvatar, color: chat?.displayColor ?? 0, size: 34,
                                online: chat?.isPrivate == true && !saved && model.isOnline(chat?.peerId),
                                icon: saved ? "bookmark.fill" : nil,
                                storyUid: chat?.isPrivate == true && !saved ? chat?.peerId : nil)
                     titleLines
                 }
-                    .padding(.leading, 5).padding(.trailing, 20).frame(minHeight: 46)
+                    .padding(.leading, 6).padding(.trailing, 14).frame(minHeight: 46)
                     .contentShape(Capsule())
                     .lumoGlass(Capsule(), interactive: true)
             }
