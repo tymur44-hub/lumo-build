@@ -1,0 +1,1 @@
+[["#chathead{position:relative}\\n", "#chathead{position:relative;padding-top:calc(8px + env(safe-area-inset-top));min-height:calc(62px + env(safe-area-inset-top))}\\n", 1]]
