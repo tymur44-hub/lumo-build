@@ -129,6 +129,13 @@ struct ChatView: View {
     }
 
     var body: some View {
+        chatBody
+            .navigationBarBackButtonHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) { glassHeader }
+    }
+
+    private var chatBody: some View {
         VStack(spacing: 0) {
             if chat?.type == "group", gcCount > 0 { GroupCallBanner(count: gcCount) { joinGroupCall(video: false) } }
             if let pid = chat?.pinnedMessageId { pinnedBar(pid) }
@@ -197,32 +204,6 @@ struct ChatView: View {
         .sheet(isPresented: $showBubSheet) { BubbleColorSheet(chatId: chatId) }
         .onChange(of: model.messages[chatId]?.last?.id) { _ in checkFx() }
         .animation(.easeOut(duration: 0.18), value: note.active)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                if selecting {
-                    Text(selected.isEmpty ? "Выберите сообщения" : "Выбрано: \(selected.count)")
-                        .font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text)
-                } else {
-                    Button { showInfo = true } label: { header }.buttonStyle(BouncyButtonStyle())
-                }
-            }
-            ToolbarItem(placement: .navigationBarLeading) {
-                if selecting { Button("Отмена") { endSelecting() } }
-            }
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                if !selecting, !isBotChat, let c = chat, c.isPrivate, c.peerId != model.myId, model.peerBlockText(c.peerId) == nil {
-                    Button { calls.startCall(chat: c, video: false) } label: { Image(systemName: "phone.fill") }
-                    Button { calls.startCall(chat: c, video: true) } label: { Image(systemName: "video.fill") }
-                }
-                if !selecting, let c = chat, c.type == "group" {
-                    Menu {
-                        Button { joinGroupCall(video: false) } label: { Label("Групповой звонок", systemImage: "phone") }
-                        Button { joinGroupCall(video: true) } label: { Label("Групповой видеозвонок", systemImage: "video") }
-                    } label: { Image(systemName: gcBusy ? "hourglass" : "phone.fill") }
-                }
-            }
-        }
         .task(id: chatId) {
             guard chat?.type == "group" else { return }
             while !Task.isCancelled {
@@ -231,9 +212,6 @@ struct ChatView: View {
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
             }
         }
-        .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
-        .safeAreaInset(edge: .top, spacing: 0) { glassHeader }
         .task(id: chat?.peerId) { if isBotChat, let pid = chat?.peerId { await model.loadBotMenu(pid) } }
         .onAppear {
             model.openChatId = chatId
