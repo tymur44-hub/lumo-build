@@ -196,48 +196,57 @@ struct LiveWallView: View {
     var body: some View {
         let set = LiveWallView.sets[index] ?? LiveWallView.sets[30]!
         let dark = scheme == .dark
-        let cols = (dark ? set.dark : set.colors).map { Color(hex: $0) }
-        TimelineView(.animation(minimumInterval: 1 / 30)) { tl in
-            let t = tl.date.timeIntervalSinceReferenceDate
+        let cols: [Color] = (dark ? set.dark : set.colors).map { Color(hex: $0) }
+        let tint: Color = dark ? .white : Color(hex: 0x3A2E6E)
+        return TimelineView(.animation(minimumInterval: 1 / 30)) { tl in
             Canvas { ctx, size in
-                let w = size.width, h = size.height
-                ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(cols[0]))
-                // четыре пятна цвета плавают по своим траекториям — градиент «переливается»
-                for i in 1..<4 {
-                    let a = t * (0.07 + Double(i) * 0.025) + Double(i) * 1.7
-                    let c = CGPoint(x: w * (0.5 + 0.42 * cos(a)), y: h * (0.5 + 0.38 * sin(a * 1.3 + Double(i))))
-                    let r = max(w, h) * 0.75
-                    ctx.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)),
-                             with: .radialGradient(Gradient(colors: [cols[i], cols[i].opacity(0)]), center: c, startRadius: 0, endRadius: r))
-                }
-                // узор из значков: сетка со смещением, каждый значок чуть покачивается
-                let step: CGFloat = 58
-                let drift = CGFloat(t * 6).truncatingRemainder(dividingBy: step)
-                var row = 0
-                var y: CGFloat = -step + drift
-                while y < h + step {
-                    var col = 0
-                    var x: CGFloat = (row % 2 == 0 ? 0 : step / 2) - step
-                    while x < w + step {
-                        let k = (row * 7 + col * 3) % set.icons.count
-                        if let sym = ctx.resolveSymbol(id: k) {
-                            var g = ctx
-                            let ph = Double(row * 13 + col * 5)
-                            g.translateBy(x: x + CGFloat(sin(t * 0.8 + ph) * 3), y: y + CGFloat(cos(t * 0.7 + ph) * 3))
-                            g.rotate(by: .degrees(Double((row * 31 + col * 17) % 50) - 25 + sin(t * 0.6 + ph) * 6))
-                            g.opacity = dark ? 0.16 : 0.2
-                            g.draw(sym, at: .zero)
-                        }
-                        x += step; col += 1
-                    }
-                    y += step * 0.86; row += 1
-                }
+                LiveWallView.paint(&ctx, size, tl.date.timeIntervalSinceReferenceDate, cols, set.icons.count, dark)
             } symbols: {
-                ForEach(Array(set.icons.enumerated()), id: \.offset) { i, name in
-                    Image(systemName: name).font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(dark ? .white : Color(hex: 0x3A2E6E)).tag(i)
+                ForEach(0..<set.icons.count, id: \.self) { i in
+                    Image(systemName: set.icons[i]).font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(tint).tag(i)
                 }
             }
+        }
+    }
+
+    private static func paint(_ ctx: inout GraphicsContext, _ size: CGSize, _ t: Double, _ cols: [Color], _ n: Int, _ dark: Bool) {
+        let w = size.width, h = size.height
+        ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(cols[0]))
+        // четыре пятна цвета плавают по своим траекториям — градиент «переливается»
+        for i in 1..<4 {
+            let a: Double = t * (0.07 + Double(i) * 0.025) + Double(i) * 1.7
+            let cx: CGFloat = w * CGFloat(0.5 + 0.42 * cos(a))
+            let cy: CGFloat = h * CGFloat(0.5 + 0.38 * sin(a * 1.3 + Double(i)))
+            let r: CGFloat = max(w, h) * 0.75
+            let g = Gradient(colors: [cols[i], cols[i].opacity(0)])
+            ctx.fill(Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: 2 * r, height: 2 * r)),
+                     with: .radialGradient(g, center: CGPoint(x: cx, y: cy), startRadius: 0, endRadius: r))
+        }
+        // узор из значков: сетка со смещением, каждый значок чуть покачивается
+        let step: CGFloat = 58
+        let drift: CGFloat = CGFloat(t * 6).truncatingRemainder(dividingBy: step)
+        var row = 0
+        var y: CGFloat = -step + drift
+        while y < h + step {
+            var col = 0
+            var x: CGFloat = (row % 2 == 0 ? 0 : step / 2) - step
+            while x < w + step {
+                let k = (row * 7 + col * 3) % n
+                if let sym = ctx.resolveSymbol(id: k) {
+                    var g = ctx
+                    let ph = Double(row * 13 + col * 5)
+                    let dx: CGFloat = CGFloat(sin(t * 0.8 + ph) * 3)
+                    let dy: CGFloat = CGFloat(cos(t * 0.7 + ph) * 3)
+                    g.translateBy(x: x + dx, y: y + dy)
+                    let deg: Double = Double((row * 31 + col * 17) % 50) - 25 + sin(t * 0.6 + ph) * 6
+                    g.rotate(by: .degrees(deg))
+                    g.opacity = dark ? 0.16 : 0.2
+                    g.draw(sym, at: .zero)
+                }
+                x += step; col += 1
+            }
+            y += step * 0.86; row += 1
         }
     }
 }
