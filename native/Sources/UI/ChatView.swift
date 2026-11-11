@@ -130,9 +130,10 @@ struct ChatView: View {
 
     var body: some View {
         chatBody
-            .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) { glassHeader }
+            // свайп вправо — назад (своя панель вместо системной, поэтому включаем его явно)
+            .background(SwipeBackInstaller().frame(width: 0, height: 0))
     }
 
     private var chatBody: some View {

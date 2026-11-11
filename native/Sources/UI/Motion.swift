@@ -17,10 +17,12 @@ final class FullSwipeBack: NSObject, UIGestureRecognizerDelegate {
 
     func install(on nav: UINavigationController) {
         let key = ObjectIdentifier(nav)
-        guard !installed.contains(key), let edge = nav.interactivePopGestureRecognizer,
-              let targets = edge.value(forKey: "targets") as? NSArray else { return }
-        installed.insert(key)
+        guard let edge = nav.interactivePopGestureRecognizer else { return }
+        // SwiftUI при скрытой верхней панели сам выключает свайп назад и меняет делегата — каждый раз возвращаем
+        edge.isEnabled = true
         edge.delegate = self
+        guard !installed.contains(key), let targets = edge.value(forKey: "targets") as? NSArray else { return }
+        installed.insert(key)
         let pan = UIPanGestureRecognizer()
         pan.setValue(targets, forKey: "targets")
         pan.delegate = self
@@ -65,8 +67,15 @@ struct SwipeBackInstaller: UIViewControllerRepresentable {
     final class VC: UIViewController {
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
-            if let n = navigationController { FullSwipeBack.shared.install(on: n) }
+            reinstall()
+            // SwiftUI может переставить делегата чуть позже появления экрана
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.reinstall() }
         }
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            reinstall()
+        }
+        private func reinstall() { if let n = navigationController { FullSwipeBack.shared.install(on: n) } }
     }
     func makeUIViewController(context: Context) -> VC { let v = VC(); v.view.isUserInteractionEnabled = false; return v }
     func updateUIViewController(_ v: VC, context: Context) {}
