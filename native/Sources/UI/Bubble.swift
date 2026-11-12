@@ -409,7 +409,7 @@ struct MessageRow: View {
             VStack(alignment: mine ? .trailing : .leading, spacing: 2) {
                 if m.kind == "sticker", m.meta["anim"] != nil { AnimatedEmoji(emoji: m.body ?? "", size: 96, tappable: true) }
                 else if m.kind == "sticker" { StickerBodyView(body_: m.body, size: 96) }
-                else { Text(m.body ?? "").font(.system(size: 52)) }
+                else { NotoEmojiRow(text: m.body ?? "") }
                 timeLine(onMedia: true)
             }
         } else if m.kind == "video_note" {

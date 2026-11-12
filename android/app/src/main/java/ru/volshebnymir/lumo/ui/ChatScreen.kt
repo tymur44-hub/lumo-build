@@ -826,7 +826,9 @@ private fun MessageRow(
 @Composable
 private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean, tail: Boolean, onReplyTap: (Int) -> Unit, album: List<Message> = emptyList(), onOpen: (Message) -> Unit = {}) {
     val p = P
-    val bare = (m.kind == "video_note" || m.kind == "sticker") && !m.deleted
+    // сообщение из одних эмодзи — без пузыря, крупные анимированные эмодзи
+    val bigEmo = m.kind == "text" && !m.deleted && m.replyTo == null && m.forwardedFrom.isNullOrEmpty() && album.size <= 1 && NotoEmoji.isOnly(m.body)
+    val bare = ((m.kind == "video_note" || m.kind == "sticker") && !m.deleted) || bigEmo
     val r = 18.dp; val small = 5.dp
     val shape = if (mine) RoundedCornerShape(r, r, if (tail) small else r, r) else RoundedCornerShape(r, r, r, if (tail) small else r)
     val fg = if (mine) Color.White else p.text
@@ -882,6 +884,7 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
                     Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(32.dp))
                 }
             }
+            "text" -> if (bigEmo) NotoEmojiRow(m.body ?: "")
             "voice" -> VoiceBubble(m, mine)
             "video_note" -> VideoNoteBubble(m)
             "sticker" -> if (m.meta.has("anim")) AnimatedEmoji(m.body ?: "", 96.dp) else if (!m.mediaUrl.isNullOrEmpty()) AsyncImage(m.mediaUrl, null, Modifier.size(150.dp)) else StickerBody(m.body, 96.dp)
@@ -916,7 +919,7 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
                 }
             }
         }
-        if (!m.deleted && !m.body.isNullOrEmpty() && m.kind != "sticker" && m.kind != "system") {
+        if (!m.deleted && !m.body.isNullOrEmpty() && m.kind != "sticker" && m.kind != "system" && !bigEmo) {
             val cmdChat = if (!mine && m.senderId?.let { AppModel.profiles[it] }?.isBot == true) m.chatId else null
             val special = if (m.kind == "text") SpecialMsg.parse(m.body) else null
             if (special != null) SpecialCard(special, fg, mine)
