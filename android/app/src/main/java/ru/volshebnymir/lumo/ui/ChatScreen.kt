@@ -51,6 +51,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.foundation.border
 import androidx.compose.ui.zIndex
@@ -489,22 +491,23 @@ private fun ChatHeader(chatId: String, chat: ChatItem?) {
     var streakOpen by remember { mutableStateOf(false) }
     if (streakOpen) StreakSheet(chatId) { streakOpen = false }
     LaunchedEffect(chatId) { if (chat?.isPrivate == true) Streaks.load(force = false) }
-    Row(Modifier.fillMaxWidth().background(p.panel.copy(alpha = 0.97f)).padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        RoundIcon(Icons.AutoMirrored.Filled.ArrowBack) { AppModel.pop() }
-        Row(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).bouncy {
+    // шапка «жидкое стекло», как на iPhone: круглая «назад», капсула с аватаркой и именем, капсула звонков
+    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(52.dp).glassChip(CircleShape).bouncy { AppModel.pop() }, contentAlignment = Alignment.Center) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = p.text, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.weight(1f).height(56.dp).glassChip(RoundedCornerShape(28.dp)).bouncy {
             if (chat != null && !saved) AppModel.push(if (chat.isPrivate && chat.peerId != null) Screen.Person(chat.peerId) else Screen.Info(chatId))
-        }.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (saved) Box(Modifier.size(42.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Bookmark, null, tint = Color.White) }
-            else Avatar(chat?.displayName ?: "", chat?.displayAvatar, chat?.displayColor ?: 0, 42.dp, online = chat?.isPrivate == true && AppModel.isOnline(chat.peerId), storyUid = if (chat?.isPrivate == true) chat.peerId else null)
-            Spacer(Modifier.width(10.dp))
-            Column {
+        }, contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.padding(start = 6.dp)) {
+                if (saved) Box(Modifier.size(44.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Bookmark, null, tint = Color.White) }
+                else Avatar(chat?.displayName ?: "", chat?.displayAvatar, chat?.displayColor ?: 0, 44.dp, online = chat?.isPrivate == true && AppModel.isOnline(chat.peerId), storyUid = if (chat?.isPrivate == true) chat.peerId else null)
+            }
+            Column(Modifier.fillMaxWidth().padding(start = 54.dp, end = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (saved) "Избранное" else chat?.displayName ?: "Чат", color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (chat?.isPrivate == true) { PeerBadges(chat); if (!saved && !chat.peerBot) StreakHeaderButton(chatId) { streakOpen = true } }
-                    if (chat?.isPrivate == true && ru.volshebnymir.lumo.core.E2E.active(chatId)) {
-                        Spacer(Modifier.width(5.dp))
-                        Icon(androidx.compose.material.icons.Icons.Filled.Lock, null, tint = p.a2, modifier = Modifier.size(14.dp))
-                    }
                 }
                 val t = AppModel.typingText(chatId)
                 val dnd = Dnd.peer(chat?.takeIf { it.isPrivate }?.peerId)
@@ -516,7 +519,7 @@ private fun ChatHeader(chatId: String, chat: ChatItem?) {
                     chat.isChannel -> plural(chat.membersCount, "подписчик", "подписчика", "подписчиков")
                     else -> plural(chat.membersCount, "участник", "участника", "участников")
                 }
-                androidx.compose.animation.AnimatedContent(status, transitionSpec = { (fadeIn(tween(200)) + androidx.compose.animation.slideInVertically { it / 2 }) togetherWith fadeOut(tween(150)) }, label = "st") { st ->
+                androidx.compose.animation.AnimatedContent(status, transitionSpec = { (fadeIn(tween(220)) + androidx.compose.animation.slideInVertically { it / 2 }) togetherWith (fadeOut(tween(160)) + androidx.compose.animation.slideOutVertically { -it / 2 }) }, label = "st") { st ->
                     if (st.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
                         if (t != null) { TypingDots(p.a2); Spacer(Modifier.width(4.dp)) }
                         else if (dnd != null) { Icon(dndIcon(dnd.text), null, tint = Color(0xFF8E7BFF), modifier = Modifier.size(13.dp)); Spacer(Modifier.width(4.dp)) }
@@ -525,17 +528,36 @@ private fun ChatHeader(chatId: String, chat: ChatItem?) {
                 }
             }
         }
-        if (chat?.isPrivate == true && !saved && !peerBadges(chat).first) {
-            val call = rememberCallStarter()
-            RoundIcon(Icons.Filled.Videocam) { call(chat, true) }
-            RoundIcon(Icons.Filled.Call) { call(chat, false) }
-        }
-        if (chat?.type == "group") {
-            val gstart = rememberGroupCallStarter(chat.id, chat.displayName)
-            RoundIcon(Icons.Filled.Videocam) { gstart(true) }
-            RoundIcon(Icons.Filled.Call) { gstart(false) }
+        val callP = chat?.isPrivate == true && !saved && !peerBadges(chat).first
+        val callG = chat?.type == "group"
+        if (callP || callG) {
+            Spacer(Modifier.width(8.dp))
+            Row(Modifier.height(52.dp).glassChip(RoundedCornerShape(26.dp)).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (callP) {
+                    val call = rememberCallStarter()
+                    RoundIcon(Icons.Filled.Call, size = 46.dp) { call(chat!!, false) }
+                    RoundIcon(Icons.Filled.Videocam, size = 46.dp) { call(chat!!, true) }
+                } else {
+                    val gstart = rememberGroupCallStarter(chat!!.id, chat.displayName)
+                    RoundIcon(Icons.Filled.Call, size = 46.dp) { gstart(false) }
+                    RoundIcon(Icons.Filled.Videocam, size = 46.dp) { gstart(true) }
+                }
+            }
         }
     }
+}
+
+/** «Стеклянная» плашка: полупрозрачная, со светлым бликом сверху, тонкой кромкой и мягкой тенью */
+@Composable
+fun Modifier.glassChip(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val p = P
+    val dark = p.bg.luminance() < 0.5f
+    return this
+        .shadow(10.dp, shape, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.18f))
+        .clip(shape)
+        .background(p.panel.copy(alpha = if (dark) 0.72f else 0.78f))
+        .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.10f else 0.45f), Color.Transparent, Color.White.copy(alpha = if (dark) 0.04f else 0.15f))))
+        .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.28f else 0.9f), Color.White.copy(alpha = if (dark) 0.06f else 0.35f))), shape)
 }
 
 @Composable
