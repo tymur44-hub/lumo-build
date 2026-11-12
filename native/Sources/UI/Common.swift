@@ -311,8 +311,8 @@ struct FloatingTabBar: View {
                 lens(x)
             }
         }
-        .frame(height: height)
-        .padding(.horizontal, 0)
+        // панель всегда на всю ширину (иначе ширина считалась нулевой и всё сжималось в точку)
+        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
         .background(GeometryReader { g in Color.clear.onAppear { width = g.size.width }.onChange(of: g.size.width) { width = $0 } })
         .lumoGlass(Capsule(), interactive: true)
         .shadow(color: .black.opacity(0.22), radius: 16, y: 10)
