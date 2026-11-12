@@ -224,15 +224,22 @@ struct LiveWallView: View {
                      with: .radialGradient(g, center: CGPoint(x: cx, y: cy), startRadius: 0, endRadius: r))
         }
         // узор из значков: сетка со смещением, каждый значок чуть покачивается
+        // узор медленно плывёт вниз бесконечно: каждый ряд привязан к своему номеру,
+        // поэтому, когда ряд уходит вниз и сверху появляется новый, ничего не «перескакивает»
         let step: CGFloat = 58
-        let drift: CGFloat = CGFloat(t * 6).truncatingRemainder(dividingBy: step)
-        var row = 0
-        var y: CGFloat = -step + drift
+        let rowH: CGFloat = step * 0.86
+        let travel = t * 6
+        let base = Int((travel / Double(rowH)).rounded(.down))
+        let drift = CGFloat(travel - Double(base) * Double(rowH))
+        var i = 0
+        var y: CGFloat = -rowH + drift
         while y < h + step {
+            let row = i - base
+            let odd = ((row % 2) + 2) % 2 == 1
             var col = 0
-            var x: CGFloat = (row % 2 == 0 ? 0 : step / 2) - step
+            var x: CGFloat = (odd ? step / 2 : 0) - step
             while x < w + step {
-                let k = (row * 7 + col * 3) % n
+                let k = (((row * 7 + col * 3) % n) + n) % n
                 if let sym = ctx.resolveSymbol(id: k) {
                     var g = ctx
                     let ph = Double(row * 13 + col * 5)
@@ -246,7 +253,7 @@ struct LiveWallView: View {
                 }
                 x += step; col += 1
             }
-            y += step * 0.86; row += 1
+            y += rowH; i += 1
         }
     }
 }
