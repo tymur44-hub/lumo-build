@@ -311,8 +311,68 @@ async function botDm(botId: string, uid: string): Promise<string | null> {
   await db.from("lm_members").insert([{ chat_id: c.id, user_id: botId, role: "member" }, { chat_id: c.id, user_id: uid, role: "member" }]);
   return c.id;
 }
+const VBUCKET = "lm-verify";
+const vcode = () => "LUMO-" + String(Math.floor(1000 + Math.random() * 9000));
+const STEP1 = (code: string) => "Подтверждение личности — шаг 1 из 2\n\n" +
+  "Пришлите сюда фото документа: паспорт РФ (разворот с фото), загранпаспорт, водительское удостоверение или ID-карта.\n\n" +
+  "Должны быть видны фото, фамилия, имя и дата рождения. Серию и номер можно закрыть пальцем или бумажкой — они нам не нужны.\n\n" +
+  `Ваш код проверки: ${code} — он понадобится на втором шаге.\n\n` +
+  "Фото сразу убирается из чата и хранится закрыто: его видит только администрация Lumo, а после решения оно удаляется.";
+const STEP2 = (code: string) => "Шаг 2 из 2\n\n" +
+  `Сделайте селфи: вы держите этот документ рядом с лицом и листок бумаги, на котором от руки написано ${code}. ` +
+  "Лицо, документ и надпись должны быть хорошо видны. Пришлите это фото сюда.";
+
+/** перенести присланное фото из общего хранилища в закрытое и убрать сообщение из чата */
+async function vStash(m: Row, rid: number, part: string): Promise<string | null> {
+  const url = String(m.media_url || "");
+  const mm = url.match(/\/object\/public\/([^/]+)\/(.+?)(\?|$)/);
+  if (!mm || m.meta?.enc) return null;
+  const [, bucket, path] = mm;
+  const { data: blob, error } = await db.storage.from(bucket).download(decodeURIComponent(path));
+  if (error || !blob) return null;
+  const dst = `${rid}/${part}-${Date.now()}.jpg`;
+  const up = await db.storage.from(VBUCKET).upload(dst, blob, { contentType: blob.type || "image/jpeg", upsert: true });
+  if (up.error) return null;
+  await db.storage.from(bucket).remove([decodeURIComponent(path)]);
+  await db.from("lm_messages").update({ deleted: true, media_url: null, body: null }).eq("id", m.id);
+  return dst;
+}
+async function vClean(r: Row) {
+  const paths = [r.doc_path, r.selfie_path].filter(Boolean);
+  if (paths.length) await db.storage.from(VBUCKET).remove(paths);
+  await db.from("lm_verify_requests").update({ doc_path: null, selfie_path: null }).eq("id", r.id);
+}
+async function vSigned(p: string | null): Promise<string> {
+  if (!p) return "—";
+  const { data } = await db.storage.from(VBUCKET).createSignedUrl(p, 60 * 60 * 24 * 3);
+  return data?.signedUrl || "—";
+}
+/** фото, присланное боту верификации, — документ или селфи */
+async function verifyPhoto(m: Row, bot: Row, sender: Row) {
+  const { data: r } = await db.from("lm_verify_requests").select("*").eq("user_id", sender.id).eq("kind", "user").eq("status", "collect").order("id", { ascending: false }).limit(1).maybeSingle();
+  if (!r) { await botSend(bot.id, m.chat_id, "Чтобы подтвердить личность, сначала нажмите «Галочка для моего профиля».", verifyMenu()); return; }
+  const part = r.doc_path ? "selfie" : "doc";
+  const path = await vStash(m, r.id, part);
+  if (!path) { await botSend(bot.id, m.chat_id, "Не получилось принять фото. Пришлите его ещё раз как обычную фотографию."); return; }
+  if (part === "doc") {
+    await db.from("lm_verify_requests").update({ doc_path: path }).eq("id", r.id);
+    await botSend(bot.id, m.chat_id, "Документ получен и убран из чата.\n\n" + STEP2(r.code));
+    return;
+  }
+  await db.from("lm_verify_requests").update({ selfie_path: path, status: "pending", created_at: new Date().toISOString() }).eq("id", r.id);
+  await botSend(bot.id, m.chat_id, `Селфи получено и убрано из чата. Заявка №${r.id} отправлена на проверку — администрация ответит здесь. После решения фото будут удалены.`, verifyMenu());
+  const { data: p } = await db.from("lm_profiles").select("name,username").eq("id", sender.id).maybeSingle();
+  const text = `Заявка на галочку №${r.id} — подтверждение личности\n\nПрофиль: ${p?.name || ""} (@${p?.username || "—"})\nКод на листке должен быть: ${r.code}\n\n` +
+    `Документ: ${await vSigned(r.doc_path)}\n\nСелфи с документом: ${await vSigned(path)}\n\n` +
+    "Проверьте: лицо на селфи совпадает с фото в документе, имя совпадает с профилем, код написан от руки. Ссылки работают 3 дня.";
+  for (const sid of await staffIds()) {
+    const dm = await botDm(bot.id, sid);
+    if (dm) await botSend(bot.id, dm, text, [[{ text: "Подтвердить", data: "v:ok:" + r.id }, { text: "Отклонить", data: "v:no:" + r.id }]]);
+  }
+}
+
 const verifyMenu = (): Kb => [[{ text: "Галочка для моего профиля", data: "v:me" }], [{ text: "Галочка для моего канала", data: "v:ch" }], [{ text: "Мои заявки", data: "v:st" }]];
-const VERIFY_HELLO = "Верификация Lumo\n\nГалочка подтверждения показывает, что профиль или канал настоящий и проверен администрацией Lumo.\n\nЧтобы подать заявку, выберите ниже, что подтвердить. Для канала нужно быть его владельцем или администратором.";
+const VERIFY_HELLO = "Верификация Lumo\n\nГалочка подтверждения показывает, что профиль или канал настоящий и проверен администрацией Lumo.\n\nДля профиля нужно подтвердить личность: фото документа и селфи с ним. Фото видит только администрация, после решения они удаляются.\n\nДля канала нужно быть его владельцем или администратором и иметь подтверждённый профиль.";
 
 async function verifyCreate(chatId: string, bot: Row, sender: Row, kind: "user" | "chat", target: Row) {
   const { data: dup } = await db.from("lm_verify_requests").select("id").eq("kind", kind).eq("target_id", target.id).eq("status", "pending").maybeSingle();
@@ -336,7 +396,7 @@ async function verifyCreate(chatId: string, bot: Row, sender: Row, kind: "user" 
 async function verifyStatus(uid: string): Promise<string> {
   const { data } = await db.from("lm_verify_requests").select("id,kind,status,created_at").eq("user_id", uid).order("id", { ascending: false }).limit(5);
   if (!data || !data.length) return "У вас пока нет заявок.";
-  const st: Row = { pending: "на рассмотрении", approved: "подтверждена", rejected: "отклонена" };
+  const st: Row = { collect: "ждёт фото", pending: "на рассмотрении", approved: "подтверждена", rejected: "отклонена", cancelled: "отменена" };
   return "Ваши заявки:\n\n" + data.map((x: Row) => `№${x.id} · ${x.kind === "user" ? "профиль" : "канал"} · ${st[x.status] || x.status} · ${ruDate(x.created_at)}`).join("\n");
 }
 
@@ -350,6 +410,8 @@ async function verifyMsg(chatId: string, bot: Row, sender: Row, text: string) {
     if (c.verified) { await botSend(bot.id, chatId, "У этого канала уже есть галочка.", verifyMenu()); return; }
     const { data: m } = await db.from("lm_members").select("role").eq("chat_id", c.id).eq("user_id", sender.id).maybeSingle();
     if (!m || !["owner", "admin"].includes(m.role)) { await botSend(bot.id, chatId, "Подать заявку для канала может только его владелец или администратор.", verifyMenu()); return; }
+    const { data: me } = await db.from("lm_profiles").select("verified").eq("id", sender.id).maybeSingle();
+    if (!me?.verified) { await botSend(bot.id, chatId, "Сначала подтвердите свою личность — нажмите «Галочка для моего профиля». После этого можно подать заявку для канала.", verifyMenu()); return; }
     await verifyCreate(chatId, bot, sender, "chat", c);
     return;
   }
@@ -360,10 +422,24 @@ async function verifyCb(msg: Row, user: Row, data: string, bot: Row): Promise<Ro
   if (data === "v:me") {
     const { data: p } = await db.from("lm_profiles").select("id,name,username,verified").eq("id", user.id).maybeSingle();
     if (p?.verified) { await botSend(bot.id, msg.chat_id, "У вашего профиля уже есть галочка.", verifyMenu()); return {}; }
-    await verifyCreate(msg.chat_id, bot, user, "user", p || user);
-    return { toast: "Заявка отправлена" };
+    const { data: pend } = await db.from("lm_verify_requests").select("id").eq("kind", "user").eq("target_id", user.id).eq("status", "pending").maybeSingle();
+    if (pend) { await botSend(bot.id, msg.chat_id, `Заявка №${pend.id} уже на проверке. Мы напишем вам здесь, когда администрация примет решение.`, verifyMenu()); return {}; }
+    // незаконченную заявку начинаем заново (новый код)
+    const { data: old } = await db.from("lm_verify_requests").select("*").eq("kind", "user").eq("target_id", user.id).eq("status", "collect");
+    for (const o of old || []) { await vClean(o); await db.from("lm_verify_requests").update({ status: "cancelled" }).eq("id", o.id); }
+    const code = vcode();
+    const { error } = await db.from("lm_verify_requests").insert({ user_id: user.id, kind: "user", target_id: user.id, chat_id: msg.chat_id, status: "collect", code });
+    if (error) { await botSend(bot.id, msg.chat_id, "Не удалось начать проверку, попробуйте позже."); return {}; }
+    await botSend(bot.id, msg.chat_id, STEP1(code), [[{ text: "Отменить", data: "v:cancel" }]]);
+    return {};
   }
   if (data === "v:ch") { await botSend(bot.id, msg.chat_id, "Пришлите @адрес канала, для которого нужна галочка. Вы должны быть его владельцем или администратором."); return {}; }
+  if (data === "v:cancel") {
+    const { data: old } = await db.from("lm_verify_requests").select("*").eq("user_id", user.id).eq("status", "collect");
+    for (const o of old || []) { await vClean(o); await db.from("lm_verify_requests").update({ status: "cancelled" }).eq("id", o.id); }
+    await botSend(bot.id, msg.chat_id, "Проверка отменена, присланные фото удалены.", verifyMenu());
+    return {};
+  }
   if (data === "v:st") { await botSend(bot.id, msg.chat_id, await verifyStatus(user.id), verifyMenu()); return {}; }
   const m = data.match(/^v:(ok|no):(\d+)$/);
   if (m) {
@@ -377,6 +453,7 @@ async function verifyCb(msg: Row, user: Row, data: string, bot: Row): Promise<Ro
       else await db.from("lm_chats").update({ verified: true }).eq("id", r.target_id);
     }
     await db.from("lm_verify_requests").update({ status: ok ? "approved" : "rejected", decided_by: user.id, decided_at: new Date().toISOString() }).eq("id", r.id);
+    await vClean(r);   // фото документов после решения удаляем
     await botEdit(msg.id, String(msg.body || "") + (ok ? "\n\nПодтверждено" : "\n\nОтклонено"));
     if (r.chat_id) await botSend(bot.id, r.chat_id, ok
       ? `Заявка №${r.id} одобрена: ${r.kind === "user" ? "у вашего профиля" : "у канала"} теперь есть галочка подтверждения Lumo.`
@@ -485,7 +562,7 @@ export async function handleBotMsg(messageId: number, botId: string) {
   const text = m.kind === "text" ? String(m.body || "") : "";
   if (bot.builtin === "premium") return await premiumMsg(m.chat_id, bot, sender, text, m.id);
   if (bot.builtin === "botfather") return await fatherMsg(m.chat_id, bot, sender, text, m.id);
-  if (bot.builtin === "verify") return await verifyMsg(m.chat_id, bot, sender, text);
+  if (bot.builtin === "verify") return (m.kind === "image" || m.kind === "photo") ? await verifyPhoto(m, bot, sender) : await verifyMsg(m.chat_id, bot, sender, text);
   await pushUpdate(bot, {
     message: { message_id: m.id, from: fromObj(sender), chat: { id: m.chat_id, type: "private" }, date: Math.floor(new Date(m.created_at).getTime() / 1000), text: m.kind === "text" ? text : undefined, kind: m.kind, media_url: m.media_url },
   });

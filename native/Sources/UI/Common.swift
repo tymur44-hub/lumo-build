@@ -271,90 +271,191 @@ struct SectionTitle: View {
     }
 }
 
-/// Плавающая нижняя панель вкладок (как на сайте)
+/// Нижняя панель вкладок в стиле iOS 26 / Telegram: стеклянная капсула, выбранная вкладка — серая «пилюля».
+/// Если зажать и вести пальцем, пилюля превращается в увеличительную каплю-линзу, которая
+/// едет за пальцем и увеличивает значки под собой; отпустили — вкладка выбрана, линза «стекает» обратно.
 struct FloatingTabBar: View {
     @Binding var tab: AppTab
     let chatsBadge: Int
     let settingsBadge: Int
+    @EnvironmentObject var model: AppModel
+
+    private let tabs: [AppTab] = [.contacts, .chats, .settings]
+    @State private var width: CGFloat = 0
+    @State private var lensX: CGFloat?          // центр линзы, пока палец на панели
+    @State private var pressed = false
+    @State private var pops: [AppTab: Int] = [:]
+    private let pad: CGFloat = 5
+    private let height: CGFloat = 62
+
+    private var itemW: CGFloat { max(1, (width - pad * 2) / CGFloat(tabs.count)) }
+    private func center(_ t: AppTab) -> CGFloat { pad + itemW * (CGFloat(tabs.firstIndex(of: t) ?? 0) + 0.5) }
+    private func nearest(_ x: CGFloat) -> AppTab {
+        let i = Int(((x - pad) / itemW).rounded(.down))
+        return tabs[min(tabs.count - 1, max(0, i))]
+    }
+    /// где сейчас пилюля/линза
+    private var indicatorX: CGFloat { lensX ?? center(tab) }
+    /// вкладка, которая подсвечена (под линзой или выбранная)
+    private var lit: AppTab { lensX.map(nearest) ?? tab }
 
     var body: some View {
-        HStack(spacing: 2) {
-            item(.contacts, "person.crop.circle.fill", "Контакты", 0)
-            item(.chats, "bubble.left.and.bubble.right.fill", "Чаты", chatsBadge)
-            item(.settings, "gearshape.fill", "Настройки", settingsBadge)
+        ZStack(alignment: .leading) {
+            // обычная пилюля выбранной вкладки (пока не тянем)
+            Capsule().fill(Theme.active)
+                .frame(width: itemW, height: height - pad * 2)
+                .offset(x: indicatorX - itemW / 2)
+                .opacity(lensX == nil ? 1 : 0)
+            items(scale: 1)
+            if let x = lensX {
+                lens(x)
+            }
         }
-        .padding(6)
+        .frame(height: height)
+        .padding(.horizontal, 0)
+        .background(GeometryReader { g in Color.clear.onAppear { width = g.size.width }.onChange(of: g.size.width) { width = $0 } })
         .lumoGlass(Capsule(), interactive: true)
-        .shadow(color: .black.opacity(0.3), radius: 17, y: 12)
+        .shadow(color: .black.opacity(0.22), radius: 16, y: 10)
+        .contentShape(Capsule())
+        .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .onChanged { v in
+                    let x = min(max(v.location.x, pad + itemW / 2), width - pad - itemW / 2)
+                    let moved = abs(v.translation.width) > 6
+                    if lensX == nil {
+                        if !pressed { pressed = true; UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
+                        // сначала линза «выдувается» из выбранной вкладки, потом едет к пальцу
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.72)) { lensX = moved ? x : center(tab) + (x - center(tab)) * 0.35 }
+                    } else {
+                        let before = nearest(lensX!)
+                        withAnimation(.interactiveSpring(response: 0.22, dampingFraction: 0.82)) { lensX = x }
+                        if nearest(x) != before { UISelectionFeedbackGenerator().selectionChanged() }
+                    }
+                }
+                .onEnded { v in
+                    let x = min(max(v.location.x, pad), width - pad)
+                    let t = nearest(x)
+                    pressed = false
+                    select(t)
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.68)) { lensX = nil }
+                }
+        )
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture { }   // касание между кнопками не должно проваливаться в чат под панелью
     }
 
-    private func item(_ t: AppTab, _ icon: String, _ label: String, _ badge: Int) -> some View {
-        TabItemButton(tab: $tab, t: t, icon: icon, label: label, badge: badge)
+    private func select(_ t: AppTab) {
+        if t == tab, t == .chats { NotificationCenter.default.post(name: .lumoChatsTop, object: nil) }
+        if t != tab { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) { tab = t }
+        pops[t, default: 0] += 1
+    }
+
+    /// ряд вкладок; scale — для увеличенной копии внутри линзы
+    private func items(scale: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            ForEach(tabs, id: \.self) { t in
+                TabBarItem(t: t, lit: lit == t, badge: badge(t), pop: pops[t] ?? 0)
+                    .frame(width: itemW, height: height - pad * 2)
+            }
+        }
+        .padding(.horizontal, pad)
+        .frame(width: width, height: height, alignment: .leading)
+        .scaleEffect(scale, anchor: UnitPoint(x: width > 0 ? indicatorX / width : 0.5, y: 0.5))
+        .allowsHitTesting(false)
+    }
+
+    private func badge(_ t: AppTab) -> Int {
+        switch t { case .chats: return chatsBadge; case .settings: return settingsBadge; case .contacts: return 0 }
+    }
+
+    /// капля-линза: прозрачное стекло с радужной кромкой, внутри — увеличенные значки
+    private func lens(_ x: CGFloat) -> some View {
+        let w = itemW + 14, h = height + 10
+        let shape = Capsule()
+        return ZStack {
+            items(scale: 1.18)
+                .frame(width: width, height: height)
+                .offset(x: width / 2 - x)
+                .frame(width: w, height: h)
+                .clipShape(shape)
+            shape.fill(LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0.04), .white.opacity(0.12)], startPoint: .top, endPoint: .bottom))
+                .blendMode(.plusLighter)
+            // радужная преломляющая кромка
+            shape.strokeBorder(AngularGradient(colors: [.pink, .orange, .yellow, .mint, .cyan, .blue, .purple, .pink], center: .center), lineWidth: 2.2)
+                .blur(radius: 1.6).opacity(0.75)
+            shape.strokeBorder(.white.opacity(0.9), lineWidth: 0.8)
+        }
+        .frame(width: w, height: h)
+        .compositingGroup()
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
+        .position(x: x, y: height / 2)
+        .transition(.scale(scale: 0.7).combined(with: .opacity))
+        .allowsHitTesting(false)
     }
 }
 
-/// Кнопка нижней панели: при нажатии значок оживает (контакты подпрыгивают, чаты покачиваются, шестерёнка крутится)
-struct TabItemButton: View {
-    @Binding var tab: AppTab
+/// Одна вкладка: значок + подпись; у «Настроек» — своя аватарка. При выборе значок оживает.
+struct TabBarItem: View {
     let t: AppTab
-    let icon: String
-    let label: String
+    let lit: Bool
     let badge: Int
-    @State private var pop = false
+    let pop: Int
+    @EnvironmentObject var model: AppModel
+    @State private var bump = false
     @State private var spin: Double = 0
     @State private var tilt: Double = 0
 
     var body: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            if t == .chats { NotificationCenter.default.post(name: .lumoChatsTop, object: nil) }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { tab = t }
-            animate()
-        } label: {
-            VStack(spacing: 2) {
-                Image(systemName: icon).font(.system(size: 22, weight: .semibold)).frame(height: 28)
-                    .scaleEffect(pop ? 1.1 : 1)
-                    .offset(y: pop && t == .contacts ? -3 : 0)
-                    .rotationEffect(.degrees(t == .settings ? spin : tilt))
-                Text(label).font(.system(size: 11.5, weight: .bold))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
-            .foregroundColor(tab == t ? Theme.a1 : Theme.text)
-            .modifier(TabPill(selected: tab == t))
-            .overlay(alignment: .top) {
-                if badge > 0 {
-                    Text(badge > 99 ? "99+" : "\(badge)")
-                        .font(.system(size: 11, weight: .heavy))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6).frame(minWidth: 20, minHeight: 20)
-                        .background(Capsule().fill(Theme.danger))
-                        .offset(x: 18, y: 0)
-                }
+        VStack(spacing: 2) {
+            icon
+                .frame(height: 28)
+                .scaleEffect(bump ? 1.12 : 1)
+                .offset(y: bump && t == .contacts ? -3 : 0)
+                .rotationEffect(.degrees(t == .chats ? tilt : 0))
+            Text(label).font(.system(size: 11.5, weight: .semibold))
+        }
+        .foregroundColor(lit ? Theme.a1 : Theme.text)
+        .animation(.easeInOut(duration: 0.15), value: lit)
+        .overlay(alignment: .top) {
+            if badge > 0 {
+                Text(badge > 999 ? String(format: "%.1fK", Double(badge) / 1000) : "\(badge)")
+                    .font(.system(size: 11, weight: .heavy))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6).frame(minWidth: 20, minHeight: 20)
+                    .background(Capsule().fill(Theme.danger))
+                    .offset(x: 20, y: -2)
             }
         }
-        .buttonStyle(BouncyButtonStyle())
+        .onChange(of: pop) { _ in animate() }
+    }
+
+    @ViewBuilder private var icon: some View {
+        switch t {
+        case .settings:
+            let me = model.me
+            AvatarView(name: me?.name ?? "", url: me?.avatarURL, color: me?.color ?? 0, size: 28)
+                .overlay(Circle().stroke(lit ? Theme.a1 : .clear, lineWidth: 2).padding(-2))
+        case .chats:
+            Image(systemName: "bubble.left.and.bubble.right.fill").font(.system(size: 22, weight: .semibold))
+        case .contacts:
+            Image(systemName: "person.crop.circle.fill").font(.system(size: 23, weight: .semibold))
+        }
+    }
+
+    private var label: String {
+        switch t { case .settings: return Lang.tr("Настройки"); case .chats: return Lang.tr("Чаты"); case .contacts: return Lang.tr("Контакты") }
     }
 
     private func animate() {
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { pop = true }
-        switch t {
-        case .settings:
-            withAnimation(.spring(response: 0.9, dampingFraction: 0.85)) { spin += 120 }
-        case .chats:
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) { bump = true }
+        if t == .chats {
             withAnimation(.easeInOut(duration: 0.18)) { tilt = -7 }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { withAnimation(.easeInOut(duration: 0.22)) { tilt = 6 } }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { tilt = 0 } }
-        case .contacts:
-            break
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { pop = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { bump = false }
         }
     }
 }
