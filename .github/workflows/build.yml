@@ -30,6 +30,13 @@ jobs:
             build 2>&1 | tee build.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build.log
 
+      - name: Проверить, что все файлы скомпилированы
+        run: |
+          echo "Скомпилированные файлы Swift:"
+          grep -oE "[A-Za-z]+\.swift" build.log | grep -E "^[A-Z]" | sort -u
+          grep -q "ReportBuilder.swift" build.log
+          grep -q "AppIcon" build.log && echo "Иконка: есть"
+
       - name: Сохранить лог сборки
         if: always()
         uses: actions/upload-artifact@v4
