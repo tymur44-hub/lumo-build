@@ -2,32 +2,62 @@ import SwiftUI
 
 struct ReportView: View {
     let report: SalesReport
+    var showsClose: Bool = false
+    @Environment(\.dismiss) private var dismiss
     @State private var pdfURL: URL?
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 ReportContent(report: report, palette: .app)
-                FullReviewCard()
+                FullReviewCard().appear(14)
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 30)
         }
-        .background(Theme.background.ignoresSafeArea())
+        .scrollIndicators(.hidden)
+        .background(AmbientBackground())
         .navigationTitle(report.isDemo ? "Пример отчёта" : "Отчёт")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
+            if showsClose {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        Haptics.soft()
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.footnote.weight(.bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Theme.cardRaised, in: Circle())
+                    }
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 if let pdfURL {
                     ShareLink(item: pdfURL) {
-                        Label("PDF", systemImage: "square.and.arrow.up")
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.footnote.weight(.bold))
+                            .foregroundStyle(.black)
+                            .frame(width: 32, height: 32)
+                            .background(Theme.goldGradient, in: Circle())
                     }
+                    .simultaneousGesture(TapGesture().onEnded { Haptics.tap() })
+                    .transition(.scale.combined(with: .opacity))
                 } else {
-                    ProgressView()
+                    ProgressView().controlSize(.small)
                 }
             }
         }
         .task {
-            if pdfURL == nil { pdfURL = PDFExporter.export(report) }
+            if pdfURL == nil {
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                let url = PDFExporter.export(report)
+                withAnimation(Theme.snappy) { pdfURL = url }
+            }
         }
     }
 }
@@ -35,29 +65,35 @@ struct ReportView: View {
 /// Предложение полного разбора — ведёт в Telegram-бот.
 private struct FullReviewCard: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Полный разбор", systemImage: "person.crop.circle.badge.checkmark")
-                .font(.headline)
-                .foregroundStyle(Theme.gold)
-            Text("Разберём продажи по точкам и сменам и составим план на неделю: что поменять, чтобы вернуть эти деньги.")
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "person.crop.circle.badge.checkmark")
+                    .font(.title2)
+                    .foregroundStyle(Theme.goldGradient)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Полный разбор").font(.system(.headline, design: .rounded))
+                    Text("по точкам и сменам").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Text("Разберём продажи вместе и составим план на неделю: что поменять, чтобы вернуть эти деньги.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if let url = URL(string: "https://t.me/ms_sales_report_bot") {
-                Link(destination: url) {
-                    Label("Хочу полный разбор", systemImage: "paperplane.fill")
-                        .font(.headline)
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Theme.gold, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
+            Button {
+                Haptics.tap()
+                if let url = URL(string: "https://t.me/ms_sales_report_bot") { UIApplication.shared.open(url) }
+            } label: {
+                Label("Хочу полный разбор", systemImage: "paperplane.fill")
             }
+            .buttonStyle(GoldButtonStyle())
         }
-        .padding(16)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.gold.opacity(0.3)))
+        .background {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(LinearGradient(colors: [Theme.card, Theme.gold.opacity(0.14)], startPoint: .top, endPoint: .bottom))
+        }
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Theme.gold.opacity(0.3)))
     }
 }
 

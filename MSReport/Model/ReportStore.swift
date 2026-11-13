@@ -24,6 +24,16 @@ final class ReportStore {
         save()
     }
 
+    func deleteAll() {
+        reports.removeAll()
+        save()
+    }
+
+    var latest: SalesReport? { reports.first }
+    var previous: SalesReport? { reports.count > 1 ? reports[1] : nil }
+    var totalFoundPerMonth: Double { reports.first?.foundPerMonth ?? 0 }
+    var totalFoundAllTime: Double { reports.reduce(0) { $0 + $1.foundInPeriod } }
+
     private func load() {
         guard let data = try? Data(contentsOf: fileURL) else { return }
         reports = (try? JSONDecoder().decode([SalesReport].self, from: data)) ?? []
