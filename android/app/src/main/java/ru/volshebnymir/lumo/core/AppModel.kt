@@ -1172,6 +1172,13 @@ object AppModel {
         val c = chat(m.chatId)
         if (isActive && m.kind != "call" && c?.muted != true && !quiet) { Notifier.beep(); if (urgent) Notifier.urgentBuzz(ctx) }
         if (visible) { scope.launch { delay(300); markRead(m.chatId) }; return }
+        // идёт игра — баннер сверху: нажать, и игра уедет вниз, откроется чат
+        if (ru.volshebnymir.lumo.ui.LumoGames.open != null && !ru.volshebnymir.lumo.ui.LumoGames.mini && m.kind != "call") {
+            val ch = c
+            if (ch != null) ru.volshebnymir.lumo.ui.LumoGames.banner = ru.volshebnymir.lumo.ui.LumoGames.Banner(m.chatId, ch.displayName,
+                when (m.kind) { "text" -> m.body ?: ""; "image" -> "Фото"; "video" -> "Видео"; "voice" -> "Голосовое сообщение"; "video_note" -> "Видеосообщение"; "sticker" -> "Стикер"; "game" -> "Приглашение в игру"; else -> "Сообщение" },
+                ch.displayAvatar, ch.displayColor)
+        }
         if (m.kind == "call" && (m.metaStatus == null || m.metaStatus == "ended" || m.metaStatus == "rejected")) return
         if (!notified.add(m.id)) return
         scope.launch {

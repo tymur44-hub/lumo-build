@@ -28,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -69,8 +70,16 @@ object LumoGames {
         "football" -> if (v >= 3) "Гол!" else "Мимо"
         else -> if (v == 1) "Орёл" else "Решка"
     }
-    /** открытая игра — показывается поверх всего приложения */
+    /** открытая игра — показывается поверх всего приложения; свёрнутая — полоска внизу */
     var open by mutableStateOf<String?>(null)
+    var mini by mutableStateOf(false)
+    var barTitle by mutableStateOf("Игра")
+    var barStatus by mutableStateOf("")
+    var barKind by mutableStateOf("chess")
+    /** сообщение из другого чата во время игры */
+    data class Banner(val chatId: String, val title: String, val body: String, val avatar: String?, val color: Int, val at: Long = System.currentTimeMillis())
+    var banner by mutableStateOf<Banner?>(null)
+    fun show(id: String) { open = id; mini = false }
     val seen = HashSet<Int>()
 
     suspend fun call(body: JSONObject): JSONObject {
@@ -282,7 +291,7 @@ fun GameBubble(m: Message, mine: Boolean) {
         }
         Box(Modifier.padding(top = 10.dp).fillMaxWidth().height(40.dp).clip(RoundedCornerShape(12.dp))
             .background(if (mine) SolidColor(Color.White.copy(alpha = .18f)) else if (btn == "Посмотреть") SolidColor(p.panel2) else p.accent)
-            .bouncy { s("game")?.let { LumoGames.open = it } }, contentAlignment = Alignment.Center) {
+            .bouncy { s("game")?.let { LumoGames.show(it) } }, contentAlignment = Alignment.Center) {
             Text(btn, color = if (!mine && btn == "Посмотреть") p.text else Color.White, fontWeight = FontWeight.Black, fontSize = 14.5.sp)
         }
         Text(fmtTime(m), color = fg.copy(alpha = .6f), fontSize = 11.sp, modifier = Modifier.align(Alignment.End).padding(top = 4.dp))
@@ -296,6 +305,9 @@ fun GamesDialog(chatId: String, onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
     var game by remember { mutableStateOf("ttt") }
     var stake by remember { mutableStateOf(0) }
+    // таймер партии: минуты и добавка за ход
+    var clock by remember { mutableStateOf(0 to 0) }
+    val clocks = listOf(Triple(0, 0, "Без таймера"), Triple(1, 0, "1 мин"), Triple(3, 2, "3 + 2"), Triple(5, 0, "5 мин"), Triple(10, 0, "10 мин"), Triple(15, 10, "15 + 10"), Triple(30, 0, "30 мин"))
     var custom by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false)) {
@@ -333,6 +345,20 @@ fun GamesDialog(chatId: String, onClose: () -> Unit) {
                         if (game == k) Icon(Icons.Filled.CheckCircle, null, tint = p.a1, modifier = Modifier.size(22.dp))
                     }
                 }
+                if (game == "chess" || game == "checkers") {
+                    hdr("ТАЙМЕР")
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        clocks.forEach { (m, inc, label) ->
+                            val on = clock.first == m && clock.second == inc
+                            Text(label, color = if (on) Color.White else p.text, fontWeight = FontWeight.Bold, fontSize = 13.5.sp,
+                                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (on) p.accent else SolidColor(p.panel2))
+                                    .clickable { clock = m to inc }.padding(horizontal = 12.dp, vertical = 8.dp))
+                        }
+                    }
+                    Text(if (clock.first > 0) "У каждого ${clock.first} мин на партию" + (if (clock.second > 0) " и +${clock.second} сек за ход" else "") +
+                        ". Время вышло — поражение. Если соперник выйдет из игры, часы остановятся, а через 30 секунд победа достанется вам."
+                        else "Без ограничения времени: соперник может думать над ходом до суток.", color = p.muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 6.dp))
+                }
                 hdr("СТАВКА ЛЮМЕНАМИ")
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     listOf(0, 10, 50, 100, 500).forEach { v ->
@@ -359,9 +385,11 @@ fun GamesDialog(chatId: String, onClose: () -> Unit) {
                 busy = true
                 scope.launch {
                     try {
-                        val g = LumoGames.call(JSONObject().put("action", "new").put("chat_id", chatId).put("kind", game).put("stake", stake))
+                        val req = JSONObject().put("action", "new").put("chat_id", chatId).put("kind", game).put("stake", stake)
+                        if ((game == "chess" || game == "checkers") && clock.first > 0) req.put("clock_min", clock.first).put("clock_inc", clock.second)
+                        val g = LumoGames.call(req)
                         onClose(); AppModel.say("Приглашение отправлено")
-                        g.optString("id").takeIf { it.isNotEmpty() }?.let { delay(300); LumoGames.open = it }
+                        g.optString("id").takeIf { it.isNotEmpty() }?.let { delay(300); LumoGames.show(it) }
                     } catch (e: Exception) { AppModel.say(e.message ?: "Ошибка") }
                     busy = false
                 }
@@ -376,7 +404,7 @@ fun GamesDialog(chatId: String, onClose: () -> Unit) {
     }
 }
 
-/** Экран игры вдвоём: общая страница игр в WebView */
+/** Экран игры вдвоём: общая страница игр в WebView. Свёрнутая игра — полоска над нижней панелью, страница продолжает жить */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun GameOverlay() {
@@ -384,23 +412,70 @@ fun GameOverlay() {
     val p = P
     var token by remember(id) { mutableStateOf<String?>(null) }
     LaunchedEffect(id) { token = runCatching { Api.token() }.getOrNull(); if (token == null) LumoGames.open = null }
-    val close = { LumoGames.open = null }
-    BackHandler { close() }
+    val close = { LumoGames.open = null; LumoGames.mini = false }
+    val mini = LumoGames.mini
+    BackHandler(enabled = !mini) { LumoGames.mini = true }
     val dark = p.bg.luminance() < .5f
-    Dialog(onDismissRequest = { close() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        val t = token
-        if (t == null) Box(Modifier.fillMaxSize().background(p.bg), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = p.muted) }
-        else AndroidView({ c ->
-            WebView(c).apply {
-                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                addJavascriptInterface(object { @JavascriptInterface fun leave() { post { close() } } }, "LumoBridge")
-                val conf = JSONObject().put("api", Net.base + "/functions/v1/lumo-games").put("apikey", Config.ANON).put("token", t)
-                    .put("gameId", id).put("theme", if (dark) "dark" else "light")
-                val html = (ru.volshebnymir.lumo.core.RemoteConfig.gamesHtml() ?: c.assets.open("games.html").bufferedReader().use { it.readText() }).replace("/*CFG*/", "window.LUMO_GAME=$conf;")
-                loadDataWithBaseURL("https://lumomess.ru/", html, "text/html", "utf-8", null)
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val full = maxHeight
+        val barH = 64.dp
+        val bottomGap = 96.dp
+        val spec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.86f, stiffness = 380f)
+        val h by androidx.compose.animation.core.animateDpAsState(if (mini) barH else full, spec, label = "h")
+        val y by androidx.compose.animation.core.animateDpAsState(if (mini) full - barH - bottomGap else 0.dp, spec, label = "y")
+        val side by androidx.compose.animation.core.animateDpAsState(if (mini) 10.dp else 0.dp, spec, label = "s")
+        val r by androidx.compose.animation.core.animateDpAsState(if (mini) 20.dp else 0.dp, spec, label = "r")
+        Box(Modifier.offset(y = y).padding(horizontal = side).fillMaxWidth().height(h)
+            .shadow(if (mini) 12.dp else 0.dp, RoundedCornerShape(r)).clip(RoundedCornerShape(r)).background(p.bg)) {
+            val t = token
+            if (t == null) Box(Modifier.fillMaxWidth().requiredHeight(full).background(p.bg), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = p.muted) }
+            else AndroidView({ c ->
+                WebView(c).apply {
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    addJavascriptInterface(object {
+                        @JavascriptInterface fun leave() { post { close() } }
+                        @JavascriptInterface fun post(m: String) {
+                            this@apply.post {
+                                if (m == "minimize") LumoGames.mini = true
+                                else if (m.startsWith("info|")) { val q = m.split("|"); if (q.size >= 4) { LumoGames.barTitle = q[1]; LumoGames.barStatus = q[2]; LumoGames.barKind = q[3] } }
+                            }
+                        }
+                    }, "LumoBridge")
+                    val conf = JSONObject().put("api", Net.base + "/functions/v1/lumo-games").put("apikey", Config.ANON).put("token", t)
+                        .put("gameId", id).put("theme", if (dark) "dark" else "light").put("mini", true)
+                    val html = (ru.volshebnymir.lumo.core.RemoteConfig.gamesHtml() ?: c.assets.open("games.html").bufferedReader().use { it.readText() }).replace("/*CFG*/", "window.LUMO_GAME=$conf;")
+                    loadDataWithBaseURL("https://lumomess.ru/", html, "text/html", "utf-8", null)
+                }
+            }, Modifier.fillMaxWidth().requiredHeight(full).align(Alignment.TopCenter).systemBarsPadding())
+            if (mini) Row(Modifier.fillMaxWidth().height(barH).background(p.panel).clickable { LumoGames.mini = false }.padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                GameIcon(LumoGames.barKind, 40)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(LumoGames.barTitle, color = p.text, fontWeight = FontWeight.Bold, fontSize = 15.5.sp)
+                    Text(LumoGames.barStatus, color = if (LumoGames.barStatus.startsWith("Ваш ход")) p.a1 else p.muted, fontSize = 13.sp, maxLines = 1)
+                }
+                Icon(Icons.Filled.KeyboardArrowUp, null, tint = p.muted, modifier = Modifier.size(28.dp))
             }
-        }, Modifier.fillMaxSize().background(p.bg).systemBarsPadding())
+        }
+        // сообщение из другого чата: баннер сверху, нажали — игра уезжает вниз, открывается чат
+        val b = LumoGames.banner
+        LaunchedEffect(b) { if (b != null) { kotlinx.coroutines.delay(4500); if (LumoGames.banner == b) LumoGames.banner = null } }
+        androidx.compose.animation.AnimatedVisibility(b != null && !mini, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(10.dp),
+            enter = androidx.compose.animation.slideInVertically { -it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { -it } + androidx.compose.animation.fadeOut()) {
+            val bb = b ?: return@AnimatedVisibility
+            Row(Modifier.fillMaxWidth().shadow(12.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp)).background(p.panel)
+                .clickable { LumoGames.banner = null; LumoGames.mini = true; AppModel.push(Screen.Chat(bb.chatId)) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Avatar(bb.title, bb.avatar, bb.color, 42.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(bb.title, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1)
+                    Text(bb.body, color = p.muted, fontSize = 14.sp, maxLines = 2)
+                }
+            }
+        }
     }
 }
