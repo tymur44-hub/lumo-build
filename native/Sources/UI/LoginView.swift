@@ -42,6 +42,7 @@ struct LoginView: View {
     @State private var tgBusy = false
     @State private var tgTask: Task<Void, Never>?
     @State private var phoneAuth = false
+    @State private var agree = false
     @Environment(\.scenePhase) private var phase
 
     var body: some View {
@@ -75,6 +76,7 @@ struct LoginView: View {
                     Text(e).foregroundColor(Theme.danger).font(.subheadline).multilineTextAlignment(.center)
                 }
 
+                if register { ConsentRow(agree: $agree) }
                 GradientButton(title: register ? "Зарегистрироваться" : "Войти", loading: loading) { submit() }
                     .padding(.top, 6)
 
@@ -171,6 +173,7 @@ struct LoginView: View {
         guard !password.isEmpty else { error = "Введите пароль"; return }
         if register && password.count < 6 { error = "Пароль — не короче 6 символов"; return }
         if register && name.trimmingCharacters(in: .whitespaces).isEmpty { error = "Введите имя"; return }
+        if register && !agree { error = "Чтобы создать аккаунт, примите Политику конфиденциальности"; return }
         loading = true
         error = nil
         Task {

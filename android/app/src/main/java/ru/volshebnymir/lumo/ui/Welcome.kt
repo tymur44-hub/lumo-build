@@ -78,8 +78,14 @@ fun WelcomeScreen(onContinue: () -> Unit) {
                 }
             }
             Spacer(Modifier.weight(1f))
-            Box(Modifier.fillMaxWidth().padding(bottom = 44.dp).alpha(button.value.coerceIn(0f, 1f)).graphicsLayer { translationY = (1f - button.value) * 80f }) {
-                GradientButton("Продолжить") { onContinue() }
+            var agree by remember { mutableStateOf(false) }
+            var policy by remember { mutableStateOf(false) }
+            var warn by remember { mutableStateOf(false) }
+            if (policy) PolicyDialog { policy = false }
+            Column(Modifier.fillMaxWidth().padding(bottom = 44.dp).alpha(button.value.coerceIn(0f, 1f)).graphicsLayer { translationY = (1f - button.value) * 80f }) {
+                ConsentRow(agree, { agree = it; warn = false }) { policy = true }
+                if (warn) Text("Чтобы продолжить, примите Политику конфиденциальности", color = p.danger, fontSize = 13.sp, modifier = Modifier.padding(bottom = 6.dp))
+                GradientButton("Продолжить", enabled = true) { if (agree) onContinue() else warn = true }
             }
         }
     }

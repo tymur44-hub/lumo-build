@@ -17,6 +17,7 @@ public sealed class LoginView : Grid
     readonly TextBlock err = T.Txt("", 13, T.Danger);
     readonly Button go;
     readonly HyperlinkButton sw = new() { HorizontalAlignment = HorizontalAlignment.Center };
+    readonly CheckBox agree = new() { Visibility = Visibility.Collapsed };
     readonly ProgressRing ring = new() { IsActive = false, Width = 22, Height = 22, Visibility = Visibility.Collapsed };
 
     public LoginView()
@@ -36,6 +37,16 @@ public sealed class LoginView : Grid
         card.Children.Add(name);
         card.Children.Add(user);
         card.Children.Add(pass);
+        // согласие при регистрации (152-ФЗ)
+        var at = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12.5, Foreground = T.Muted };
+        at.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = "Принимаю " });
+        var link = new Microsoft.UI.Xaml.Documents.Hyperlink { Foreground = T.A2 };
+        link.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = "Политику конфиденциальности" });
+        link.Click += async (_, _) => await Dialogs.Policy(App.Win);
+        at.Inlines.Add(link);
+        at.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = " и даю согласие на обработку моих персональных данных" });
+        agree.Content = at;
+        card.Children.Add(agree);
         card.Children.Add(err);
         go = T.Primary("Войти", Submit);
         card.Children.Add(go);
@@ -44,6 +55,9 @@ public sealed class LoginView : Grid
         sw.Content = "Нет аккаунта? Зарегистрироваться";
         sw.Click += (_, _) => Toggle();
         card.Children.Add(sw);
+        var pl = new HyperlinkButton { Content = "Политика конфиденциальности", HorizontalAlignment = HorizontalAlignment.Center, FontSize = 12 };
+        pl.Click += async (_, _) => await Dialogs.Policy(App.Win);
+        card.Children.Add(pl);
         Children.Add(card);
         pass.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) Submit(); };
         user.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) pass.Focus(FocusState.Keyboard); };
@@ -55,6 +69,7 @@ public sealed class LoginView : Grid
         title.Text = register ? "Регистрация" : "Вход в Lumo";
         sub.Text = register ? "Придумайте юзернейм (латиница, цифры, _) и пароль" : "Введите юзернейм и пароль от аккаунта";
         name.Visibility = register ? Visibility.Visible : Visibility.Collapsed;
+        agree.Visibility = register ? Visibility.Visible : Visibility.Collapsed;
         ((TextBlock)go.Content).Text = register ? "Создать аккаунт" : "Войти";
         sw.Content = register ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться";
         err.Text = "";
@@ -67,6 +82,7 @@ public sealed class LoginView : Grid
         if (u.Length < 3) { err.Text = "Юзернейм — не короче 3 символов"; return; }
         if (p.Length < 6) { err.Text = "Пароль — не короче 6 символов"; return; }
         if (register && name.Text.Trim().Length == 0) { err.Text = "Введите имя"; return; }
+        if (register && agree.IsChecked != true) { err.Text = "Чтобы создать аккаунт, примите Политику конфиденциальности"; return; }
         err.Text = ""; go.IsEnabled = false; ring.IsActive = true; ring.Visibility = Visibility.Visible;
         try
         {

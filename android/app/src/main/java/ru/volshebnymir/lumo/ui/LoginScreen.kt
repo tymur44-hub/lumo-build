@@ -59,6 +59,9 @@ fun LoginScreen(onPhone: () -> Unit = {}) {
     var tgKey by remember { mutableStateOf<String?>(null) }
 
     var showPhone by remember { mutableStateOf(false) }
+    var agree by remember { mutableStateOf(false) }
+    var policy by remember { mutableStateOf(false) }
+    val needAgree = "Чтобы продолжить, примите Политику конфиденциальности"
     fun openBot() {
         val bot = AppModel.botName ?: return; val k = tgKey ?: return
         runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/$bot?start=l_$k")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -90,6 +93,7 @@ fun LoginScreen(onPhone: () -> Unit = {}) {
             if (reg) LumoField(name, { name = it }, "Имя")
             LumoField(user, { user = it.trim() }, "Юзернейм")
             LumoField(pass, { pass = it }, "Пароль", password = true)
+            ConsentRow(agree, { agree = it; if (it && err == needAgree) err = null }) { policy = true }
             err?.let { Text(it, color = p.danger, fontSize = 14.sp, textAlign = TextAlign.Center) }
             GradientButton(if (reg) "Зарегистрироваться" else "Войти", loading) {
                 val u = user.lowercase().removePrefix("@")
@@ -98,6 +102,7 @@ fun LoginScreen(onPhone: () -> Unit = {}) {
                     pass.isEmpty() -> err = "Введите пароль"
                     reg && pass.length < 6 -> err = "Пароль — не короче 6 символов"
                     reg && name.isBlank() -> err = "Введите имя"
+                    reg && !agree -> err = needAgree
                     else -> {
                         loading = true; err = null
                         scope.launch {
@@ -116,6 +121,7 @@ fun LoginScreen(onPhone: () -> Unit = {}) {
             Row(
                 Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF2AABEE)).bouncy {
                     err = null
+                    if (!agree) { err = needAgree; return@bouncy }
                     if (tgKey != null) { openBot(); return@bouncy }
                     scope.launch {
                         if (AppModel.telegramBot() == null) { err = "Вход через Telegram сейчас недоступен"; return@launch }
@@ -133,7 +139,7 @@ fun LoginScreen(onPhone: () -> Unit = {}) {
             }
             if (tgKey != null) Text("В Telegram нажмите кнопку в боте и вернитесь сюда — вход произойдёт сам.", color = p.muted, fontSize = 13.sp, textAlign = TextAlign.Center)
             Row(
-                Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF2BD67B)).bouncy { err = null; showPhone = true },
+                Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF2BD67B)).bouncy { err = null; if (!agree) err = needAgree else showPhone = true },
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
             ) {
                 Icon(Icons.Filled.Phone, null, tint = Color.White, modifier = Modifier.size(19.dp))
@@ -141,9 +147,10 @@ fun LoginScreen(onPhone: () -> Unit = {}) {
                 Text("Войти по номеру телефона", color = Color.White, fontWeight = FontWeight.Bold)
             }
             Text("Войти по номеру телефона", color = p.a1, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 4.dp).bouncy { onPhone() })
+                modifier = Modifier.padding(top = 4.dp).bouncy { if (!agree) err = needAgree else onPhone() })
             Spacer(Modifier.height(40.dp))
         }
         if (showPhone) PhoneAuthScreen(bind = false) { showPhone = false }
+        if (policy) PolicyDialog { policy = false }
     }
 }

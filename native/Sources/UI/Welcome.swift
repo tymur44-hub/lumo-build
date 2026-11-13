@@ -9,6 +9,8 @@ struct WelcomeView: View {
     @State private var button = false
     @State private var float = false
     @State private var pulse = false
+    @State private var agree = false
+    @State private var warn = false
 
     private let items: [(String, String, String)] = [
         ("bolt.fill", "Быстрые сообщения", "Доставляются мгновенно и без лишних шагов"),
@@ -52,9 +54,16 @@ struct WelcomeView: View {
                 }
                 .padding(.horizontal, 28).padding(.top, 30)
                 Spacer(minLength: 20)
-                GradientButton(title: "Продолжить") { UIImpactFeedbackGenerator(style: .light).impactOccurred(); onContinue() }
-                    .padding(.horizontal, 24).padding(.bottom, 56)
-                    .opacity(button ? 1 : 0).offset(y: button ? 0 : 30)
+                VStack(spacing: 10) {
+                    ConsentRow(agree: $agree)
+                    if warn { Text("Чтобы продолжить, примите Политику конфиденциальности").font(.footnote).foregroundColor(Theme.danger) }
+                    GradientButton(title: "Продолжить") {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        if agree { onContinue() } else { warn = true }
+                    }
+                }
+                .padding(.horizontal, 24).padding(.bottom, 56)
+                .opacity(button ? 1 : 0).offset(y: button ? 0 : 30)
             }
         }
         .onAppear {

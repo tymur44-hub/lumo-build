@@ -370,6 +370,12 @@ fun PrivacyScreen() {
             }
         }
         Text("Вы можете выбрать, кому разрешаете приглашать Вас в группы и каналы.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 30.dp))
+        Spacer(Modifier.height(6.dp))
+        var policyDlg by remember { mutableStateOf(false) }
+        if (policyDlg) PolicyDialog { policyDlg = false }
+        Card {
+            SettingsRow(Icons.Filled.Lock, Color(0xFF13B0A5), "Политика конфиденциальности", "Какие данные обрабатывает Lumo и как их удалить") { policyDlg = true }
+        }
         Spacer(Modifier.height(30.dp))
     }
 }

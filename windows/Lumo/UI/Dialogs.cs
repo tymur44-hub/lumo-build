@@ -140,6 +140,13 @@ public static class Dialogs
             };
             sp.Children.Add(cb);
         }
+        var docs = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
+        var pol = new HyperlinkButton { Content = "Политика конфиденциальности", Padding = new Thickness(0) };
+        pol.Click += async (_, _) => { Sheet.CloseTop(); await Task.Delay(250); await Policy(App.Win); };
+        var del = new HyperlinkButton { Content = "Удалить аккаунт", Padding = new Thickness(0), Foreground = T.Danger };
+        del.Click += async (_, _) => { Sheet.CloseTop(); await Task.Delay(250); if (App.Win != null) await DeleteAccount(App.Win); };
+        docs.Children.Add(pol); docs.Children.Add(del);
+        sp.Children.Add(docs);
         sp.Children.Add(T.Txt("Чёрный список", 12, T.Muted, bold: true));
         var blocked = new StackPanel { Spacing = 6 };
         sp.Children.Add(blocked);
@@ -773,6 +780,59 @@ public static class Dialogs
             Store.Say("Приглашение отправлено");
             var id = g.Str("id");
             if (id != null) { await Task.Delay(300); WebOverlay.I?.OpenGame(id); }
+        }
+        catch (Exception e) { Store.Say(e.Message); }
+    }
+
+    // ---------- политика конфиденциальности ----------
+
+    /// <summary>Текст политики (Assets/privacy.md) в оформлении приложения</summary>
+    public static UIElement PolicyView()
+    {
+        var sp = new StackPanel { Spacing = 8 };
+        string md;
+        try { md = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Assets", "privacy.md")); } catch { md = "Политика доступна на lumomess.ru/?privacy"; }
+        foreach (var raw in md.Replace("\r", "").Split('\n'))
+        {
+            var line = raw.TrimEnd();
+            if (line.Length == 0) continue;
+            if (line.StartsWith("# ")) continue;   // заголовок — в шапке окна
+            if (line.StartsWith("## ")) { var h = T.Txt(line[3..], 15.5, bold: true); h.Margin = new Thickness(0, 8, 0, 0); sp.Children.Add(h); continue; }
+            var bullet = line.StartsWith("- ");
+            var text = bullet ? line[2..] : line;
+            var rtb = BubbleView.RichText(text, T.Text);
+            rtb.FontSize = 13.5;
+            if (bullet)
+            {
+                var g = new Grid { ColumnSpacing = 8 };
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                g.Children.Add(new Border { Width = 5, Height = 5, CornerRadius = new CornerRadius(3), Background = T.A2, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 8, 0, 0) });
+                Grid.SetColumn(rtb, 1); g.Children.Add(rtb);
+                sp.Children.Add(g);
+            }
+            else sp.Children.Add(rtb);
+        }
+        return sp;
+    }
+
+    public static async Task Policy(MainWindow? w)
+    {
+        var sp = new StackPanel { Width = 560 };
+        sp.Children.Add(PolicyView());
+        await Show(new Sheet { Title = "Политика конфиденциальности", Content = sp, CloseButtonText = "Закрыть", Width = 606 });
+    }
+
+    public static async Task DeleteAccount(MainWindow w)
+    {
+        if (!await Confirm(w, "Удалить аккаунт навсегда?", "Удалить", "Профиль, ваши файлы и личные чаты будут удалены без возможности восстановления.")) return;
+        if (!await Confirm(w, "Точно удалить аккаунт @" + (Store.Me?.Username ?? "") + "?", "Да, удалить")) return;
+        try
+        {
+            var r = await Api.Function("/account", J.O(("action", "delete")));
+            if (r.Has("error")) { Store.Say(r.Str("error") ?? "Ошибка"); return; }
+            Store.Say("Аккаунт удалён");
+            Api.Forget();
         }
         catch (Exception e) { Store.Say(e.Message); }
     }

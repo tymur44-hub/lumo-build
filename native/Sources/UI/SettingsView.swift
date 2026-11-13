@@ -1064,6 +1064,7 @@ struct PrivacyView: View {
     @ObservedObject private var ex = ExtraStore.shared
     @ObservedObject private var store = PhoneStore.shared
     @State private var showLock = false
+    @State private var showPolicy = false
 
     var body: some View {
         ScrollView {
@@ -1116,10 +1117,18 @@ struct PrivacyView: View {
                     }
                 }
                 TGHint(text: "Вы можете выбрать, кому разрешаете приглашать Вас в группы и каналы.")
+                TGCard {
+                    Button { showPolicy = true } label: {
+                        TGIconRow(icon: "doc.text.fill", color: Color(hex: 0x13b0a5), title: "Политика конфиденциальности", value: "")
+                    }
+                    .buttonStyle(RowButtonStyle())
+                }
+                .padding(.top, 12)
             }
         }
         .background(Theme.bg.ignoresSafeArea())
         .sheet(isPresented: $showLock) { LockSettingsSheet().environmentObject(model) }
+        .sheet(isPresented: $showPolicy) { PolicyView() }
         .navigationTitle("Конфиденциальность")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.loadBlocks(); await model.loadMe(); await store.load() }
