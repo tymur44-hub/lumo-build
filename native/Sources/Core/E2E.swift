@@ -317,6 +317,13 @@ final class E2E: ObservableObject {
     }
 
     private var checkedAt: [String: Date] = [:]
+    /// Кнопка «Запросить ключ заново»: без ограничения по времени сверяем ключ собеседника с сервером и пересчитываем ключ чата
+    func forceRefresh(_ chatId: String, peer: String?) async {
+        if let p = peer { checkedAt[p] = nil; UserDefaults.standard.removeObject(forKey: "e2e_last_" + p); peerPubs[p] = nil }
+        chatKeys[chatId] = nil
+        if !(await refresh(chatId, peer: peer)), let p = peer { await prepare(chatId, peer: p) }
+    }
+
     /// Собеседник мог сменить ключ (новое устройство, сброс), пока приложение было открыто —
     /// тогда старый ключ чата не расшифрует его новые сообщения. Сверяем ключ с сервером (не чаще раза в 20 с)
     /// и при смене пересчитываем ключ чата. true — ключ обновился.

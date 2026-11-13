@@ -882,7 +882,7 @@ final class AppModel: ObservableObject {
 
     private var crashFlushed = false
     func loadChats() async {
-        if !crashFlushed, loggedIn { crashFlushed = true; Task.detached(priority: .background) { await CrashReporter.flush() } }
+        if !crashFlushed, loggedIn { crashFlushed = true; Task.detached(priority: .background) { await CrashReporter.flush() }; Outbox.shared.restore() }
         guard loggedIn else { return }
         do {
             let rows = try await API.shared.rpc("lm_chats_v2") as? [JSON] ?? []
@@ -1538,7 +1538,8 @@ final class AppModel: ObservableObject {
                 E2E.shared.dropCaches()
                 savedRow = try await insertRow()
             }
-            guard let saved = savedRow else { throw APIError(message: "Не отправлено", status: 0) }
+            guard let saved = savedRow else { throw APIError(message: "Не отправлено", status: 500) }
+            Outbox.shared.remove(pid)
             let m = dec(Message(json: saved))
             var list = messages[chatId] ?? []
             list.removeAll { $0.id == pid }
@@ -1549,10 +1550,23 @@ final class AppModel: ObservableObject {
             if chat(chatId)?.isPrivate == true { Task { try? await Task.sleep(nanoseconds: 600_000_000); await Streaks.shared.load() } }
             return true
         } catch {
+            // нет связи — сообщение остаётся с часиками и уйдёт само, когда сеть вернётся
+            if Self.isOffline(error) {
+                Outbox.shared.add(.init(pid: pid, chatId: chatId, kind: kind, body: body, media: media,
+                                        meta: (try? JSONSerialization.data(withJSONObject: meta)) ?? Data(), replyTo: replyTo, forwardedFrom: forwardedFrom))
+                return false
+            }
             messages[chatId]?.removeAll { $0.id == pid }
+            Outbox.shared.remove(pid)
             say("Не отправлено: " + error.localizedDescription)
             return false
         }
+    }
+
+    nonisolated static func isOffline(_ e: Error) -> Bool {
+        if let u = e as? URLError { return u.code != .cancelled }
+        if let a = e as? APIError { return a.status == 0 || a.status == 502 || a.status == 503 || a.status == 504 }
+        return false
     }
 
     /// Отправка файла: сначала в списке появляется заглушка, потом файл загружается и сообщение уходит

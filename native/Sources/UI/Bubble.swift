@@ -450,7 +450,10 @@ struct MessageRow: View {
                         .foregroundColor(.white.opacity(0.85))
                     }
                     if let r = m.replyTo { replyQuote(r) }
-                    if m.kind == "text", let sp = SpecialMsg.parse(m.body) {
+                    if m.kind == "text", m.body == E2E.locked {
+                        LockedMessageView(chatId: m.chatId, mine: mine)
+                        HStack { Spacer(minLength: 0); timeLine(onMedia: false) }
+                    } else if m.kind == "text", let sp = SpecialMsg.parse(m.body) {
                         VStack(alignment: .leading, spacing: 4) {
                             switch sp {
                             case .location(let t, let la, let lo): LocationCard(title: t, lat: la, lng: lo, mine: mine)
@@ -673,4 +676,47 @@ func viewsText(_ n: Int) -> String {
 struct ReactAnchorKey: PreferenceKey {
     static var defaultValue: Anchor<CGRect>? = nil
     static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
+}
+
+
+/// Сообщение, которое это устройство не смогло расшифровать: понятное объяснение и кнопка «Запросить ключ заново»
+struct LockedMessageView: View {
+    let chatId: String
+    let mine: Bool
+    @EnvironmentObject var model: AppModel
+    @State private var busy = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "lock.trianglebadge.exclamationmark").font(.system(size: 17, weight: .semibold))
+                Text("Не удалось открыть зашифрованное сообщение").font(.system(size: 15, weight: .semibold))
+            }
+            Text("Похоже, ключ шифрования на этом устройстве устарел. Обновите ключ — обычно сообщение сразу откроется.")
+                .font(.system(size: 13)).opacity(0.8).fixedSize(horizontal: false, vertical: true)
+            Button {
+                guard !busy else { return }
+                busy = true
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                Task {
+                    await E2E.shared.forceRefresh(chatId, peer: model.chat(chatId)?.peerId)
+                    await model.loadMessages(chatId)
+                    busy = false
+                    if (model.messages[chatId] ?? []).contains(where: { $0.body == E2E.locked }) {
+                        model.say("Не открылось — попросите собеседника отправить сообщение ещё раз")
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    if busy { ProgressView().scaleEffect(0.7) } else { Image(systemName: "key.fill") }
+                    Text("Запросить ключ заново")
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .padding(.horizontal, 12).frame(height: 34)
+                .background(Capsule().fill((mine ? Color.white : Theme.a1).opacity(0.18)))
+            }
+            .buttonStyle(BouncyButtonStyle())
+        }
+        .foregroundColor(mine ? .white : Theme.text)
+        .frame(maxWidth: 260, alignment: .leading)
+    }
 }
