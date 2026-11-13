@@ -192,8 +192,109 @@ async function finish(g: Game, patch: Game, winner: string | null, result: strin
 }
 const other = (g: Game, uid: string) => (uid === g.p1 ? g.p2 : g.p1);
 
-async function view(g: Game, me: string) {
+// ---------- таймер, присутствие в игре, реакции ----------
+const AWAY_MS = 6000;       // столько без связи — игрок «вышел из игры»
+const ABANDON_MS = 30000;   // после этого — поражение
+const REACTS = ["👍", "👏", "😂", "😮", "😢", "😡", "🔥", "❤️", "🤝", "🤔", "😎", "🎉"];
+const CLOCK_BASE = [1, 3, 5, 10, 15, 30];      // минуты
+const CLOCK_INC = [0, 2, 3, 5, 10];            // добавка за ход, секунды
+
+type Pres = { user_id: string; seen_at: string | null; react: string | null; react_at: string | null };
+async function presence(g: Game): Promise<Record<string, Pres>> {
+  const { data } = await db.from("lm_game_presence").select("user_id,seen_at,react,react_at").eq("game_id", g.id);
+  const m: Record<string, Pres> = {};
+  for (const r of (data || []) as Pres[]) m[r.user_id] = r;
+  return m;
+}
+const ms = (s: string | null | undefined) => (s ? new Date(s).getTime() : 0);
+const timed = (g: Game) => !!g.state?.clock && (g.kind === "chess" || g.kind === "checkers");
+const sideOf = (g: Game, uid: string | null) => (uid === g.p1 ? "w" : "b");
+
+/** с какого момента партия стоит на паузе (кто-то из игроков вышел), или null */
+function pausedSince(g: Game, pres: Record<string, Pres>, now: number): number | null {
+  let t: number | null = null;
+  for (const uid of [g.p1, g.p2]) {
+    const seen = ms(pres[uid]?.seen_at) || ms(g.state?.clock?.at);
+    if (seen && now - seen > AWAY_MS) { const s = seen + AWAY_MS; t = t === null ? s : Math.min(t, s); }
+  }
+  return t;
+}
+/** сколько времени осталось у ходящего прямо сейчас (мс) */
+function remaining(g: Game, pres: Record<string, Pres>, now: number): number {
+  const c = g.state.clock, side = sideOf(g, g.turn);
+  if (!c?.at) return c?.[side] ?? 0;
+  const p = pausedSince(g, pres, now);
+  return c[side] - (Math.min(now, p ?? now) - c.at);
+}
+
+/** игрок на связи: отмечаем присутствие; вернулся после выхода — часы сдвигаем на время паузы */
+async function heartbeat(g: Game, me: string, pres: Record<string, Pres>): Promise<Game> {
+  if (me !== g.p1 && me !== g.p2) return g;
+  const now = Date.now(), prev = ms(pres[me]?.seen_at);
+  if (now - prev < 2500) return g;
+  await db.from("lm_game_presence").upsert({ game_id: g.id, user_id: me, seen_at: new Date(now).toISOString() });
+  pres[me] = { ...(pres[me] || { user_id: me, react: null, react_at: null }), seen_at: new Date(now).toISOString() };
+  if (g.status === "active" && timed(g) && g.state.clock.at && prev && now - prev > AWAY_MS) {
+    const gap = now - prev - AWAY_MS;   // столько часы «стояли»
+    const at = Math.max(g.state.clock.at, prev + AWAY_MS);
+    const shift = Math.max(0, Math.min(gap, now - at));
+    if (shift > 0) return await save(g, { state: { ...g.state, clock: { ...g.state.clock, at: g.state.clock.at + shift } } });
+  }
+  return g;
+}
+
+/** проверки при каждом обращении: время вышло или соперник ушёл больше чем на 30 секунд */
+async function referee(g: Game, me: string, pres: Record<string, Pres>): Promise<Game> {
+  if (g.status !== "active" || !timed(g) || !g.state.clock.at) return g;
+  const now = Date.now();
+  if (me === g.p1 || me === g.p2) {
+    const opp = other(g, me);
+    const oppSeen = ms(pres[opp]?.seen_at) || g.state.clock.at;
+    if (now - oppSeen > AWAY_MS + ABANDON_MS) {
+      const ng = await finish(g, {}, me, "abandon");
+      await syncMsg(ng);
+      return ng;
+    }
+  }
+  if (remaining(g, pres, now) <= 0) {
+    const loser = g.turn, winner = other(g, loser);
+    // у победителя один король — мата не поставить, значит ничья
+    const b: string = g.state.board || "";
+    const wSide = sideOf(g, winner);
+    const winnerPieces = g.kind === "chess" ? [...b].filter((p) => p !== "." && p !== (wSide === "w" ? "K" : "k") && (wSide === "w" ? p === p.toUpperCase() : p === p.toLowerCase())).length : 1;
+    const ng = await finish(g, { state: { ...g.state, clock: { ...g.state.clock, [sideOf(g, loser)]: 0, at: null } } }, winnerPieces ? winner : null, winnerPieces ? "time" : "time_draw");
+    await syncMsg(ng);
+    return ng;
+  }
+  return g;
+}
+
+async function view(g: Game, me: string, pres?: Record<string, Pres>) {
   const out: Game = { ...g };
+  const now = Date.now();
+  pres = pres || await presence(g);
+  if (timed(g)) {
+    const c = g.state.clock, p = g.status === "active" ? pausedSince(g, pres, now) : null;
+    const live = { ...c };
+    if (g.status === "active" && c.at) live[sideOf(g, g.turn)] = Math.max(0, remaining(g, pres, now));
+    out.clock = { w: live.w, b: live.b, base: c.base, inc: c.inc, running: g.status === "active" && c.at && !p ? sideOf(g, g.turn) : null, paused: !!p };
+  }
+  // соперник: в сети ли, в игре ли, сколько осталось до победы, если ушёл
+  const opp = me === g.p1 ? g.p2 : g.p1;
+  if (opp) {
+    const seen = ms(pres[opp]?.seen_at);
+    const { data: pr } = await db.from("lm_profiles").select("last_seen,app_active").eq("id", opp).maybeSingle();
+    out.opp_in_game = !!seen && now - seen <= AWAY_MS;
+    out.opp_online = out.opp_in_game || (!!pr?.last_seen && now - ms(pr.last_seen) < 70000);
+    if (g.status === "active" && timed(g) && (me === g.p1 || me === g.p2) && !out.opp_in_game) {
+      const base = seen || g.state.clock.at || now;
+      out.opp_left_ms = Math.max(0, base + AWAY_MS + ABANDON_MS - now);
+    }
+  }
+  const reacts: Game = {};
+  for (const [uid, r] of Object.entries(pres)) if (r.react && now - ms(r.react_at) < 12000) reacts[uid] = { e: r.react, at: r.react_at };
+  out.reacts = reacts;
+  out.now = now;
   const [p1n, p2n] = await Promise.all([profileName(g.p1), profileName(g.p2)]);
   out.p1n = p1n; out.p2n = p2n; out.me = me;
   if (g.kind === "sea") {
@@ -232,8 +333,14 @@ async function handle(me: string, b: Game) {
     const { count } = await db.from("lm_games").select("id", { count: "exact", head: true }).eq("p1", me).eq("status", "invite");
     if ((count || 0) >= 5) fail("У вас уже 5 непринятых приглашений — отмените старые");
     await debit(me, stake, chat);
-    const state = kind === "ttt" ? { board: "........." } : kind === "checkers" ? { board: checkersStart(), quiet: 0, last: null }
+    const state: Game = kind === "ttt" ? { board: "........." } : kind === "checkers" ? { board: checkersStart(), quiet: 0, last: null }
       : kind === "chess" ? chessStart() : { shots: {}, ready: {} };
+    // таймер партии (шахматы, шашки): минуты на партию + добавка за каждый ход
+    const cb = Math.floor(Number(b.clock_min) || 0), ci = Math.floor(Number(b.clock_inc) || 0);
+    if (cb && (kind === "chess" || kind === "checkers")) {
+      if (!CLOCK_BASE.includes(cb) || !CLOCK_INC.includes(ci)) fail("Такого таймера нет");
+      state.clock = { base: cb * 60000, inc: ci * 1000, w: cb * 60000, b: cb * 60000, at: null };
+    }
     const { data: g, error } = await db.from("lm_games").insert({ chat_id: chat, kind, p1: me, stake, state }).select("*").single();
     if (error) { await credit(me, stake, chat, "game_refund"); fail(error.message); }
     const { data: m, error: me2 } = await db.from("lm_messages").insert({ chat_id: chat, sender_id: me, kind: "game", body: TITLES[kind], meta: { game: g.id, g: kind, stake, st: "invite" } }).select("id").single();
@@ -246,11 +353,23 @@ async function handle(me: string, b: Game) {
     await syncMsg(ng);
     return await view(ng, me);
   }
-  const g = await load(String(b.game_id || ""));
+  let g = await load(String(b.game_id || ""));
   if (!(await isMember(g.chat_id, me))) fail("Вы не участник чата");
   const player = me === g.p1 || me === g.p2;
 
-  if (action === "get") return await view(g, me);
+  if (action === "get") {
+    const pres = await presence(g);
+    let ng = await heartbeat(g, me, pres);
+    ng = await referee(ng, me, pres);
+    return await view(ng, me, pres);
+  }
+  if (action === "react") {
+    const e = String(b.emoji || "");
+    if (!REACTS.includes(e)) fail("Такой реакции нет");
+    if (me !== g.p1 && me !== g.p2) fail("Реакции — только для игроков");
+    await db.from("lm_game_presence").upsert({ game_id: g.id, user_id: me, seen_at: new Date().toISOString(), react: e, react_at: new Date().toISOString() });
+    return await view(g, me);
+  }
 
   if (action === "join") {
     if (g.status !== "invite") fail("Приглашение уже неактуально");
@@ -258,7 +377,8 @@ async function handle(me: string, b: Game) {
     await debit(me, g.stake, g.chat_id);
     let ng: Game;
     try {
-      ng = await save(g, { p2: me, status: g.kind === "sea" ? "setup" : "active", turn: g.kind === "sea" ? null : g.p1 });
+      const st = g.state?.clock ? { ...g.state, clock: { ...g.state.clock, at: Date.now() } } : g.state;
+      ng = await save(g, { p2: me, status: g.kind === "sea" ? "setup" : "active", turn: g.kind === "sea" ? null : g.p1, state: st });
     } catch (e) { await credit(me, g.stake, g.chat_id, "game_refund"); throw e; }
     await syncMsg(ng);
     return await view(ng, me);
@@ -324,6 +444,17 @@ async function handle(me: string, b: Game) {
   if (g.status !== "active") fail("Игра не идёт");
   if (g.turn !== me) fail("Сейчас ход соперника");
   const opp = other(g, me)!;
+  // таймер: снимаем потраченное время, добавляем прибавку за ход; не успел — поражение
+  let clockAfter: Game | null = null;
+  if (timed(g) && g.state.clock.at) {
+    const pres = await presence(g);
+    g = await heartbeat(g, me, pres);
+    const rest = remaining(g, pres, Date.now());
+    if (rest <= 0) { const ng = await referee(g, opp, pres); return await view(ng, me, pres); }
+    const side = sideOf(g, me);
+    clockAfter = { ...g.state.clock, [side]: rest + g.state.clock.inc, at: Date.now() };
+  }
+  const withClock = (st: Game) => (clockAfter ? { ...st, clock: clockAfter } : st);
 
   if (g.kind === "ttt") {
     const i = Math.floor(Number(b.i));
@@ -348,8 +479,9 @@ async function handle(me: string, b: Game) {
     const foe: Color = side === "w" ? "b" : "w";
     const v = chessVerdict(ns!, foe);
     let ng: Game;
-    if (v.over) ng = await finish(g, { state: ns }, v.winner ? (v.winner === "w" ? g.p1 : g.p2) : null, v.result);
-    else ng = await save(g, { state: ns, turn: opp });
+    const nst = withClock(ns!);
+    if (v.over) ng = await finish(g, { state: nst }, v.winner ? (v.winner === "w" ? g.p1 : g.p2) : null, v.result);
+    else ng = await save(g, { state: nst, turn: opp });
     if (ng.status === "done") await syncMsg(ng);
     return await view(ng, me);
   }
@@ -361,7 +493,7 @@ async function handle(me: string, b: Game) {
     const mv = moves.find((m) => m.path.length === path.length && m.path.every((s, k) => s[0] === path[k][0] && s[1] === path[k][1]));
     if (!mv) fail(moves.some((m) => m.cap > 0) ? "Нужно бить — взятие обязательно" : "Так ходить нельзя");
     const quiet = mv!.cap ? 0 : (g.state.quiet || 0) + 1;
-    const state = { board: mv!.board, quiet, last: mv!.path };
+    const state = withClock({ board: mv!.board, quiet, last: mv!.path });
     const oppMoves = checkersMoves(mv!.board, side === "w" ? "b" : "w");
     let ng: Game;
     if (!oppMoves.length) ng = await finish(g, { state }, me, "no_moves");

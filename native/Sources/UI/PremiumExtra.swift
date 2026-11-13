@@ -195,6 +195,8 @@ struct IncomingBannerView: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             model.banner = nil
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            // идёт игра — она плавно уезжает вниз полоской, открывается чат
+            if GameHost.shared.open != nil, !GameHost.shared.mini { GameHost.shared.minimize() }
             model.open(chatId)
         } label: {
             HStack(spacing: 12) {

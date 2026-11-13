@@ -31,18 +31,78 @@ enum LumoGames {
     }
 }
 
-/// Открытая игра — показывается поверх всего приложения
+/// Открытая игра — поверх всего приложения; можно свернуть в полоску внизу и вернуться
 final class GameHost: ObservableObject {
     static let shared = GameHost()
-    struct Open: Identifiable { let id: String }
+    struct Open: Identifiable, Equatable { let id: String }
     @Published var open: Open?
-    func show(_ id: String) { if !id.isEmpty { open = Open(id: id) } }
+    @Published var mini = false
+    /// для полоски: название игры, чей ход, вид игры
+    @Published var title = "Игра"
+    @Published var status = ""
+    @Published var kind = "chess"
+    func show(_ id: String) {
+        guard !id.isEmpty else { return }
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.86)) {
+            if open?.id != id { open = Open(id: id) }
+            mini = false
+        }
+    }
+    func minimize() { withAnimation(.spring(response: 0.5, dampingFraction: 0.86)) { mini = true } }
+    func expand() { UIImpactFeedbackGenerator(style: .light).impactOccurred(); withAnimation(.spring(response: 0.5, dampingFraction: 0.86)) { mini = false } }
+    func close() { withAnimation(.easeInOut(duration: 0.3)) { open = nil; mini = false } }
 }
 
 struct GameHostModifier: ViewModifier {
-    @ObservedObject var host = GameHost.shared
     func body(content: Content) -> some View {
-        content.fullScreenCover(item: $host.open) { o in GameScreen(gameId: o.id) { host.open = nil } }
+        content.overlay { GameOverlayView() }
+    }
+}
+
+/// Игра на весь экран; свёрнутая — полоска над нижней панелью, страница игры продолжает жить
+struct GameOverlayView: View {
+    @ObservedObject var host = GameHost.shared
+    var body: some View {
+        GeometryReader { geo in
+            if let o = host.open {
+                let H = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
+                let barH: CGFloat = 64
+                let bottomGap: CGFloat = geo.safeAreaInsets.bottom + 78
+                ZStack(alignment: .top) {
+                    GameScreen(gameId: o.id) { host.close() }
+                        .frame(width: geo.size.width, height: H, alignment: .top)
+                        .allowsHitTesting(!host.mini)
+                    if host.mini {
+                        Button { host.expand() } label: {
+                            HStack(spacing: 12) {
+                                GameIcon(kind: host.kind, size: 40)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(host.title).font(.system(size: 15.5, weight: .bold)).foregroundColor(Theme.text)
+                                    Text(host.status).font(.system(size: 13, weight: .medium)).foregroundColor(host.status.hasPrefix("Ваш ход") ? Theme.a1 : Theme.muted).lineLimit(1)
+                                }
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.up").font(.system(size: 15, weight: .bold)).foregroundColor(Theme.muted)
+                                    .frame(width: 34, height: 34).background(Circle().fill(Theme.text.opacity(0.07)))
+                            }
+                            .padding(.horizontal, 12)
+                            .frame(height: barH)
+                            .frame(maxWidth: .infinity)
+                            .background(Theme.panel)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.opacity)
+                    }
+                }
+                .frame(width: geo.size.width - (host.mini ? 20 : 0), height: host.mini ? barH : H, alignment: .top)
+                .clipShape(RoundedRectangle(cornerRadius: host.mini ? 20 : 0, style: .continuous))
+                .shadow(color: .black.opacity(host.mini ? 0.25 : 0), radius: 14, y: 6)
+                .offset(x: host.mini ? 10 : 0, y: host.mini ? H - barH - bottomGap : 0)
+                .ignoresSafeArea()
+                .transition(.move(edge: .bottom))
+                .gesture(host.mini ? DragGesture(minimumDistance: 12).onEnded { v in if v.translation.height < -30 { host.expand() } } : nil)
+            }
+        }
     }
 }
 
@@ -506,7 +566,7 @@ struct GameWeb: UIViewRepresentable {
         w.scrollView.bounces = false
         w.scrollView.contentInsetAdjustmentBehavior = .never
         let conf: [String: Any] = ["api": Net.base + "/functions/v1/lumo-games", "apikey": Config.anonKey, "token": token,
-                                   "gameId": gameId, "theme": dark ? "dark" : "light"]
+                                   "gameId": gameId, "theme": dark ? "dark" : "light", "mini": true]
         let js = (try? JSONSerialization.data(withJSONObject: conf)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
         let html = (RemoteConfig.shared.gamesHTML() ?? gamesHTML).replacingOccurrences(of: "/*CFG*/", with: "window.LUMO_GAME=\(js);")
         w.loadHTMLString(html, baseURL: URL(string: "https://lumomess.ru/"))
@@ -523,7 +583,15 @@ struct GameWeb: UIViewRepresentable {
         let onClose: () -> Void
         init(_ f: @escaping () -> Void) { onClose = f }
         func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
-            if (m.body as? String) == "close" { DispatchQueue.main.async { self.onClose() } }
+            let s = m.body as? String ?? ""
+            DispatchQueue.main.async {
+                if s == "close" { self.onClose() }
+                else if s == "minimize" { GameHost.shared.minimize() }
+                else if s.hasPrefix("info|") {
+                    let p = s.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+                    if p.count >= 4 { GameHost.shared.title = p[1]; GameHost.shared.status = p[2]; GameHost.shared.kind = p[3] }
+                }
+            }
         }
     }
 }
