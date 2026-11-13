@@ -20,6 +20,9 @@ public sealed class ShellView : Grid
     readonly Dictionary<string, ChatRow> rows = new();
     ChatView? chat;
     string? openId;
+    string tab = "all";
+    readonly StackPanel tabs = new() { Orientation = Orientation.Horizontal, Spacing = 4, Padding = new Thickness(10, 0, 10, 6) };
+    readonly ScrollViewer tabsScroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollMode = ScrollMode.Disabled };
 
     public ShellView(MainWindow w)
     {
@@ -29,6 +32,7 @@ public sealed class ShellView : Grid
 
         // ----- левая колонка -----
         var left = new Grid { Background = T.Panel, BorderBrush = T.Line, BorderThickness = new Thickness(0, 0, 1, 0) };
+        left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         left.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -44,7 +48,9 @@ public sealed class ShellView : Grid
         var title = T.Txt("Чаты", 20, bold: true); title.VerticalAlignment = VerticalAlignment.Center; title.Margin = new Thickness(12, 0, 0, 0);
         Grid.SetColumn(title, 1); head.Children.Add(title);
         var tools = new StackPanel { Orientation = Orientation.Horizontal };
-        tools.Children.Add(T.IconButton("\uE710", "Новый чат: найдите человека по юзернейму", () => { search.Focus(FocusState.Programmatic); win.ShowToast("Введите @юзернейм в поиске"); }));
+        var newBtn = T.IconButton("\uE710", "Новый чат, группа или канал", () => { });
+        newBtn.Click += (_, _) => NewMenu().ShowAt(newBtn);
+        tools.Children.Add(newBtn);
         tools.Children.Add(T.IconButton("\uE713", "Настройки", async () => await Dialogs.Settings(win)));
         Grid.SetColumn(tools, 2); head.Children.Add(tools);
         left.Children.Add(head);
@@ -52,11 +58,14 @@ public sealed class ShellView : Grid
         search.Margin = new Thickness(12, 0, 12, 8);
         Grid.SetRow(search, 1); left.Children.Add(search);
 
+        tabsScroll.Content = tabs;
+        Grid.SetRow(tabsScroll, 2); left.Children.Add(tabsScroll);
+
         var listHost = new Grid();
         listHost.Children.Add(list); listHost.Children.Add(results);
         loading.HorizontalAlignment = HorizontalAlignment.Center; loading.VerticalAlignment = VerticalAlignment.Top;
         listHost.Children.Add(loading);
-        Grid.SetRow(listHost, 2); left.Children.Add(listHost);
+        Grid.SetRow(listHost, 3); left.Children.Add(listHost);
         Children.Add(left);
 
         // ----- правая колонка -----
@@ -77,6 +86,7 @@ public sealed class ShellView : Grid
 
         Store.ChatsChanged += OnChats;
         Store.OnlineChanged += OnChats;
+        Folders.Changed += OnFolders;
         Store.TypingChanged += OnTyping;
         Store.MeChanged += OnMe;
         KeyboardAccelerators.Add(Accel(Windows.System.VirtualKey.F, () => search.Focus(FocusState.Keyboard)));
@@ -94,6 +104,7 @@ public sealed class ShellView : Grid
     {
         Store.ChatsChanged -= OnChats;
         Store.OnlineChanged -= OnChats;
+        Folders.Changed -= OnFolders;
         Store.TypingChanged -= OnTyping;
         Store.MeChanged -= OnMe;
         chat?.Detach();
@@ -106,7 +117,8 @@ public sealed class ShellView : Grid
     void OnChats()
     {
         loading.IsActive = false; loading.Visibility = Visibility.Collapsed;
-        var chats = Store.Chats;
+        if (!foldersLoaded && Store.MyId != null) { foldersLoaded = true; Folders.Load(); }
+        var chats = Folders.Filter(Store.Chats, tab).ToList();
         var seen = new HashSet<string>();
         for (int i = 0; i < chats.Count; i++)
         {
@@ -122,6 +134,60 @@ public sealed class ShellView : Grid
         }
         foreach (var k in rows.Keys.Where(k => !seen.Contains(k)).ToList()) { list.Items.Remove(rows[k]); rows.Remove(k); }
         if (openId != null && rows.TryGetValue(openId, out var sel) && list.SelectedItem != sel) list.SelectedItem = sel;
+        BuildTabs();
+    }
+
+    bool foldersLoaded;
+
+    void OnFolders() { BuildTabs(); OnChats(); }
+
+    void BuildTabs()
+    {
+        tabs.Children.Clear();
+        void Tab(string id, string name, bool custom = false)
+        {
+            var sel = tab == id;
+            var unread = Folders.Filter(Store.Chats, id).Where(c => !c.Muted).Sum(c => c.Unread);
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            sp.Children.Add(new TextBlock { Text = name, FontSize = 13, FontWeight = sel ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal, Foreground = sel ? T.White : T.Muted, VerticalAlignment = VerticalAlignment.Center });
+            if (unread > 0 && id != "all")
+                sp.Children.Add(new Border { Background = sel ? T.B(0x40FFFFFF) : T.B(0xFF4A4D72), CornerRadius = new CornerRadius(8), Padding = new Thickness(5, 0, 5, 0), Child = new TextBlock { Text = unread > 99 ? "99+" : unread.ToString(), FontSize = 11, Foreground = T.White } });
+            var b = new Button { Content = sp, Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(15), BorderThickness = new Thickness(0) };
+            T.Fill(b, sel ? T.Accent : T.Transparent, sel ? T.Accent : T.B(0x14FFFFFF));
+            b.Click += (_, _) => { tab = id; BuildTabs(); OnChats(); };
+            if (custom)
+            {
+                b.RightTapped += (_, e) =>
+                {
+                    e.Handled = true;
+                    var fl = new MenuFlyout();
+                    var ed = new MenuFlyoutItem { Text = "Изменить папку", Icon = new FontIcon { Glyph = "\uE70F", FontFamily = T.IconFont } };
+                    ed.Click += async (_, _) => await Dialogs.EditFolder(win, Folders.List.FirstOrDefault(f => f.Id == id));
+                    var del = new MenuFlyoutItem { Text = "Удалить папку", Icon = new FontIcon { Glyph = "\uE74D", FontFamily = T.IconFont }, Foreground = T.Danger };
+                    del.Click += (_, _) => { Folders.Remove(id); if (tab == id) tab = "all"; };
+                    fl.Items.Add(ed); fl.Items.Add(del);
+                    fl.ShowAt(b);
+                };
+            }
+            tabs.Children.Add(b);
+        }
+        Tab("all", "Все");
+        foreach (var f in Folders.List) Tab(f.Id, f.Name, true);
+        if (Folders.Archive.Count > 0) Tab("archive", "Архив");
+        var add = T.IconButton("\uE710", "Новая папка", async () => await Dialogs.EditFolder(win, null), 30, 12);
+        tabs.Children.Add(add);
+        if (tab != "all" && tab != "archive" && Folders.List.All(f => f.Id != tab)) tab = "all";
+    }
+
+    MenuFlyout NewMenu()
+    {
+        var fl = new MenuFlyout();
+        MenuFlyoutItem It(string t, string g, Action a) { var i = new MenuFlyoutItem { Text = t, Icon = new FontIcon { Glyph = g, FontFamily = T.IconFont } }; i.Click += (_, _) => a(); return i; }
+        fl.Items.Add(It("Найти человека по юзернейму", "\uE721", () => { search.Focus(FocusState.Programmatic); win.ShowToast("Введите @юзернейм в поиске"); }));
+        fl.Items.Add(It("Новая группа", "\uE716", async () => { var id = await Dialogs.CreateChat(win, "group"); if (id != null) Open(id); }));
+        fl.Items.Add(It("Новый канал", "\uE789", async () => { var id = await Dialogs.CreateChat(win, "channel"); if (id != null) Open(id); }));
+        fl.Items.Add(It("Новая папка", "\uE8B7", async () => await Dialogs.EditFolder(win, null)));
+        return fl;
     }
 
     public async void Open(string chatId)
@@ -291,6 +357,20 @@ public sealed class ChatRow : ListViewItem
         fl.Items.Add(It(c.Pinned ? "Открепить" : "Закрепить", "\uE718", async () => await Store.SetPinned(Id, !c.Pinned)));
         fl.Items.Add(It(c.Muted ? "Включить уведомления" : "Выключить уведомления", c.Muted ? "\uE767" : "\uE74F", async () => await Store.SetMuted(Id, !c.Muted)));
         if (c.Unread > 0) fl.Items.Add(It("Отметить прочитанным", "\uE73E", async () => { await Store.LoadMessages(Id); Store.MarkRead(Id); }));
+        if (Folders.List.Count > 0)
+        {
+            var sub = new MenuFlyoutSubItem { Text = "Папки", Icon = new FontIcon { Glyph = "\uE8B7", FontFamily = T.IconFont } };
+            foreach (var f in Folders.List)
+            {
+                var t = new ToggleMenuFlyoutItem { Text = f.Name, IsChecked = f.Chats.Contains(Id) };
+                var fid = f.Id;
+                t.Click += (_, _) => Folders.Toggle(fid, Id);
+                sub.Items.Add(t);
+            }
+            fl.Items.Add(sub);
+        }
+        var arch = Folders.Archive.Contains(Id);
+        fl.Items.Add(It(arch ? "Вернуть из архива" : "В архив", "\uE7B8", () => Folders.SetArchived(Id, !arch)));
         return fl;
     }
 

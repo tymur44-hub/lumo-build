@@ -51,7 +51,7 @@ public sealed class Sheet
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var t = T.Txt(Title, 18, bold: true, lines: 1); t.VerticalAlignment = VerticalAlignment.Center;
         head.Children.Add(t);
-        var x = T.IconButton("", "Закрыть (Esc)", () => Finish(ContentDialogResult.None), 32, 12);
+        var x = T.IconButton("\uE711", "Закрыть (Esc)", () => Finish(ContentDialogResult.None), 32, 12);
         Grid.SetColumn(x, 1); head.Children.Add(x);
         g.Children.Add(head);
 
@@ -103,6 +103,7 @@ public sealed class Sheet
     }
 
     public void Hide() => Finish(ContentDialogResult.None);
+    public void Hide2(ContentDialogResult r) => Finish(r);
 
     public static void CloseTop() { if (stack.Count > 0) stack[^1].Hide(); }
 

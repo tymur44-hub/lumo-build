@@ -271,4 +271,145 @@ public static class Dialogs
         var yes = s.Kind == "channel" ? "Подписаться" : "Вступить";
         return await Show(Make(w, "", sp, yes, "Отмена")) == ContentDialogResult.Primary;
     }
+
+    // ---------- кружок ----------
+
+    /// <summary>Записать видеосообщение: предпросмотр в круге, «Начать» → «Отправить»</summary>
+    public static async Task<(string path, double dur)?> RecordRound(MainWindow w, string chatId)
+    {
+        var rec = new VideoNoteRecorder();
+        var err = await rec.Open();
+        if (err != null) { Store.Say(err); return null; }
+        var sp = new StackPanel { Spacing = 14, Width = 340 };
+        var circle = new Grid { Width = 300, Height = 300, CornerRadius = new CornerRadius(150), Background = T.B(0xFF000000), HorizontalAlignment = HorizontalAlignment.Center };
+        var pe = new MediaPlayerElement { Stretch = Stretch.UniformToFill, AutoPlay = true, AreTransportControlsEnabled = false };
+        if (rec.Preview != null) pe.Source = rec.Preview;
+        circle.Children.Add(pe);
+        sp.Children.Add(circle);
+        var time = T.Txt("Нажмите «Начать»", 14, T.Muted); time.HorizontalAlignment = HorizontalAlignment.Center;
+        sp.Children.Add(time);
+        var sheet = new Sheet { Title = "Видеосообщение", Content = sp, PrimaryButtonText = "Начать", CloseButtonText = "Отмена", Width = 386 };
+        bool recording = false;
+        DispatcherTimer? timer = null;
+        (string, double)? result = null;
+        var task = sheet.ShowAsync();
+        // первая «Начать» запускает запись, вторая — отправляет
+        while (true)
+        {
+            var r = await task;
+            if (r != ContentDialogResult.Primary) break;
+            if (!recording)
+            {
+                var e2 = await rec.Start();
+                if (e2 != null) { Store.Say(e2); break; }
+                recording = true;
+                Store.UserTyping(chatId, "video");
+                sheet = new Sheet { Title = "Идёт запись", Content = Detach(sp), PrimaryButtonText = "Отправить", CloseButtonText = "Отмена", Width = 386 };
+                timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+                timer.Tick += async (_, _) =>
+                {
+                    time.Text = Fmt.Duration(rec.Seconds) + " / 1:00";
+                    Store.UserTyping(chatId, "video");
+                    if (rec.Seconds >= 60) sheet.Hide2(ContentDialogResult.Primary);
+                };
+                timer.Start();
+                task = sheet.ShowAsync();
+                continue;
+            }
+            timer?.Stop();
+            result = await rec.Stop();
+            Store.UserTyping(chatId, "stop");
+            pe.Source = null;
+            return result;
+        }
+        timer?.Stop();
+        pe.Source = null;
+        if (recording) { var x = await rec.Stop(); if (x != null) try { File.Delete(x.Value.path); } catch { } }
+        else rec.Close();
+        Store.UserTyping(chatId, "stop");
+        return null;
+    }
+
+    static UIElement Detach(UIElement e)
+    {
+        if (e is FrameworkElement fe && fe.Parent is ScrollViewer sv) sv.Content = null;
+        return e;
+    }
+
+    // ---------- папки ----------
+
+    static ListView ChatPicker(IEnumerable<ChatItem> chats, ICollection<string> selected, double height = 320)
+    {
+        var lv = new ListView { SelectionMode = ListViewSelectionMode.Multiple, Height = height };
+        foreach (var c in chats)
+        {
+            var g = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Tag = c.Id, Padding = new Thickness(0, 4, 0, 4) };
+            var av = new AvatarView(32); av.Set(c.DisplayName, c.DisplayAvatar, c.DisplayColor);
+            g.Children.Add(av);
+            var n = T.Txt(c.IsPrivate && c.PeerId == Store.MyId ? "Избранное" : c.DisplayName, 14, lines: 1); n.VerticalAlignment = VerticalAlignment.Center;
+            g.Children.Add(n);
+            lv.Items.Add(g);
+            if (selected.Contains(c.Id)) lv.SelectedItems.Add(g);
+        }
+        return lv;
+    }
+
+    static List<string> Picked(ListView lv) => lv.SelectedItems.OfType<FrameworkElement>().Select(x => x.Tag as string).Where(x => x != null).Select(x => x!).ToList();
+
+    public static async Task EditFolder(MainWindow w, Folders.Folder? f)
+    {
+        var name = new TextBox { Header = "Название папки", Text = f?.Name ?? "", MaxLength = 24 };
+        var sp = new StackPanel { Spacing = 10, Width = 400 };
+        sp.Children.Add(name);
+        sp.Children.Add(T.Txt("Чаты в папке", 12, T.Muted));
+        var lv = ChatPicker(Store.Chats, f?.Chats ?? new List<string>());
+        sp.Children.Add(lv);
+        if (await Show(Make(w, f == null ? "Новая папка" : "Изменить папку", sp, f == null ? "Создать" : "Сохранить", "Отмена")) != ContentDialogResult.Primary) return;
+        var n = name.Text.Trim();
+        if (n.Length == 0) { Store.Say("Введите название папки"); return; }
+        Folders.Upsert(new Folders.Folder(f?.Id ?? Guid.NewGuid().ToString("N")[..8], n, Picked(lv)));
+    }
+
+    // ---------- новая группа или канал ----------
+
+    public static async Task<string?> CreateChat(MainWindow w, string type)
+    {
+        var channel = type == "channel";
+        var sp = new StackPanel { Spacing = 10, Width = 420 };
+        byte[]? photo = null;
+        var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14 };
+        var av = new AvatarView(64); av.SetIcon(channel ? "\uE789" : "\uE716", T.Accent);
+        var pick = new Button { Content = av, Padding = new Thickness(0), CornerRadius = new CornerRadius(32), BorderThickness = new Thickness(0) };
+        T.Fill(pick, T.Transparent);
+        ToolTipService.SetToolTip(pick, "Выбрать фото");
+        pick.Click += async (_, _) =>
+        {
+            var p = new Windows.Storage.Pickers.FileOpenPicker();
+            WinRT.Interop.InitializeWithWindow.Initialize(p, w.Hwnd);
+            foreach (var e in new[] { ".jpg", ".jpeg", ".png" }) p.FileTypeFilter.Add(e);
+            var f = await p.PickSingleFileAsync(); if (f == null) return;
+            photo = await File.ReadAllBytesAsync(f.Path);
+            av.Set("", f.Path, 0);
+        };
+        top.Children.Add(pick);
+        var title = new TextBox { Header = channel ? "Название канала" : "Название группы", Width = 330, MaxLength = 64 };
+        top.Children.Add(title);
+        sp.Children.Add(top);
+        var desc = new TextBox { Header = "Описание (необязательно)", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 70 };
+        sp.Children.Add(desc);
+        TextBox? uname = null;
+        if (channel)
+        {
+            uname = new TextBox { Header = "Публичная ссылка (необязательно)", PlaceholderText = "имя_канала" };
+            sp.Children.Add(uname);
+        }
+        sp.Children.Add(T.Txt(channel ? "Подписчики (можно добавить позже)" : "Участники", 12, T.Muted));
+        var lv = ChatPicker(Store.Chats.Where(c => c.IsPrivate && c.PeerId != null && c.PeerId != Store.MyId && !c.PeerBot), Array.Empty<string>(), 240);
+        sp.Children.Add(lv);
+        if (await Show(Make(w, channel ? "Новый канал" : "Новая группа", sp, "Создать", "Отмена")) != ContentDialogResult.Primary) return null;
+        var t = title.Text.Trim();
+        if (t.Length == 0) { Store.Say("Введите название"); return null; }
+        var members = Picked(lv).Select(id => Store.Chat(id)?.PeerId).Where(x => x != null).Select(x => x!).ToList();
+        return await Store.CreateChat(type, t, desc.Text.Trim(), members, uname?.Text, photo);
+    }
 }

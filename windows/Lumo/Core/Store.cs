@@ -108,7 +108,7 @@ public static class Store
         Realtime.Disconnect();
         Started = false; Me = null;
         Chats = new(); ChatPreview.Clear(); Messages.Clear(); Reactions.Clear(); ReplyCache.Clear(); Profiles.Clear(); Online.Clear(); Typing.Clear();
-        HasMore.Clear(); hidden.Clear(); cleared.Clear(); notified.Clear(); typingChannels.Clear(); OpenChatId = null;
+        HasMore.Clear(); hidden.Clear(); cleared.Clear(); notified.Clear(); typingChannels.Clear(); OpenChatId = null; contacts = null;
         E2E.Forget();
     }
 
@@ -239,10 +239,36 @@ public static class Store
         catch (Exception e) { Say(e.Message); return null; }
     }
 
+    static List<string>? contacts;
+    /// <summary>Мои контакты (id пользователей)</summary>
+    public static async Task<List<string>> ContactIds(bool fresh = false)
+    {
+        if (contacts != null && !fresh) return contacts;
+        try { contacts = (await Api.Select("lm_contacts", Api.Q(("select", "contact_id")))).Select(r => r.Str("contact_id")).Where(x => x != null).Select(x => x!).ToList(); }
+        catch { contacts ??= new(); }
+        return contacts;
+    }
+
     public static async Task<List<SearchResult>> Search(string q)
     {
         try { return (await Api.Rpc("lm_search", J.O(("q", q)))).Objects().Select(SearchResult.From).ToList(); }
         catch { return new(); }
+    }
+
+    /// <summary>Создать группу или канал; id нового чата</summary>
+    public static async Task<string?> CreateChat(string type, string title, string description, List<string> members, string? username, byte[]? avatar)
+    {
+        try
+        {
+            var p = J.O(("p_type", type), ("p_title", title), ("p_members", members), ("p_description", description), ("p_protected", false), ("p_requests", false));
+            if (!string.IsNullOrWhiteSpace(username)) p["p_username"] = username.Trim().TrimStart('@').ToLowerInvariant();
+            var cid = (await Api.Rpc("lm_create_chat_v3", p))?.GetValue<string>();
+            if (cid != null && avatar != null)
+                try { var url = await Api.Upload(avatar, "jpg", "image/jpeg"); await Api.Update("lm_chats", Api.Q(("id", cid)), J.O(("avatar_url", url))); } catch { }
+            await LoadChats();
+            return cid;
+        }
+        catch (Exception e) { Say(e.Message); return null; }
     }
 
     public static async Task Join(string chatId)

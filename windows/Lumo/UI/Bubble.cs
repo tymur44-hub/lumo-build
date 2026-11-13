@@ -164,6 +164,9 @@ public sealed class BubbleView : Grid
                 var dur = m.Meta.Dbl("dur") ?? m.Meta.Dbl("duration");
                 tx.Children.Add(T.Txt(dur is > 0 ? Fmt.Duration(dur.Value) : st switch { "rejected" => "Отклонён", "missed" => "Пропущен", "busy" => "Занято", _ => "" }, 12.5, mine ? T.OutMuted : T.Muted));
                 sp.Children.Add(tx);
+                ToolTipService.SetToolTip(sp, "Позвонить ещё раз");
+                sp.Background = T.Transparent;
+                sp.Tapped += (_, e) => { e.Handled = true; var c = Store.Chat(m.ChatId); if (c != null && c.IsPrivate) CallHost.I?.Start(c, m.IsVideoCall); };
                 return sp;
             }
             default:

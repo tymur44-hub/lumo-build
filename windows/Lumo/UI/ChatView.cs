@@ -40,6 +40,14 @@ public sealed class ChatView : Grid
     readonly Grid overlay = new() { Visibility = Visibility.Collapsed, Background = T.Dim };
     readonly ProgressRing loading = new() { IsActive = true, Width = 32, Height = 32, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     Message? replyTo, editing;
+    readonly Button send;
+    readonly Button roundBtn;
+    readonly FontIcon sendIcon = T.Icon("\uE724", 16, T.White);
+    readonly Grid recPanel = new() { Visibility = Visibility.Collapsed, MinHeight = 40 };
+    readonly TextBlock recTime = T.Txt("0:00", 14);
+    readonly ProgressBar recLevel = new() { Minimum = 0, Maximum = 1, Height = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+    VoiceRecorder? voice;
+    DispatcherTimer? recTimer;
     bool loadingOlder, firstLoad = true;
 
     public ChatView(MainWindow w, string chatId)
@@ -65,6 +73,12 @@ public sealed class ChatView : Grid
         info.Tapped += (_, _) => ShowInfo();
         av.Tapped += (_, _) => ShowInfo();
         var tools = new StackPanel { Orientation = Orientation.Horizontal };
+        var cc = Store.Chat(chatId);
+        if (cc != null && cc.IsPrivate && cc.PeerId != null && cc.PeerId != Store.MyId && !cc.PeerBot)
+        {
+            tools.Children.Add(T.IconButton("\uE717", "Аудиозвонок", () => { var c = Store.Chat(ChatId); if (c != null) CallHost.I?.Start(c, false); }));
+            tools.Children.Add(T.IconButton("\uE714", "Видеозвонок", () => { var c = Store.Chat(ChatId); if (c != null) CallHost.I?.Start(c, true); }));
+        }
         tools.Children.Add(T.IconButton("\uE721", "Поиск по чату (Ctrl+F)", () => _ = Dialogs.SearchInChat(win, this)));
         tools.Children.Add(T.IconButton("\uE946", "Информация", ShowInfo));
         var more = T.IconButton("\uE712", "Ещё", () => { });
@@ -139,18 +153,35 @@ public sealed class ChatView : Grid
         attach.VerticalAlignment = VerticalAlignment.Bottom;
         composer.Children.Add(attach);
         Grid.SetColumn(input, 1); composer.Children.Add(input);
-        var send = new Button { Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Padding = new Thickness(0), BorderThickness = new Thickness(0), Content = T.Icon("\uE724", 16, T.White), VerticalAlignment = VerticalAlignment.Bottom };
+        send = new Button { Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Padding = new Thickness(0), BorderThickness = new Thickness(0), Content = sendIcon, VerticalAlignment = VerticalAlignment.Bottom };
         T.Fill(send, T.Accent, T.Grad(0xFF8C70FF, 0xFF45CCFF));
-        ToolTipService.SetToolTip(send, "Отправить (Enter)");
-        send.Click += (_, _) => SendText();
-        Grid.SetColumn(send, 2); composer.Children.Add(send);
+        send.Click += (_, _) => OnSendButton();
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Bottom };
+        roundBtn = T.IconButton("\uE714", "Видеосообщение (кружок)", () => _ = RecordRound(), 40, 18);
+        right.Children.Add(roundBtn); right.Children.Add(send);
+        Grid.SetColumn(right, 2); composer.Children.Add(right);
+        // запись голосового: вместо поля ввода
+        recPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        recPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        recPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        recPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var dot = new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = T.Danger, Margin = new Thickness(6, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+        recPanel.Children.Add(dot);
+        recTime.VerticalAlignment = VerticalAlignment.Center; recTime.Width = 52;
+        Grid.SetColumn(recTime, 1); recPanel.Children.Add(recTime);
+        Grid.SetColumn(recLevel, 2); recPanel.Children.Add(recLevel);
+        var cancel = new HyperlinkButton { Content = "Отмена", VerticalAlignment = VerticalAlignment.Center };
+        cancel.Click += (_, _) => CancelVoice();
+        Grid.SetColumn(cancel, 3); recPanel.Children.Add(cancel);
+        Grid.SetColumn(recPanel, 1); composer.Children.Add(recPanel);
         Grid.SetRow(composer, 4); Children.Add(composer);
         Grid.SetRow(readOnlyBar, 4); Children.Add(readOnlyBar);
 
         input.PreviewKeyDown += OnKey;
-        input.TextChanged += (_, _) => { if (input.Text.Length > 0 && editing == null) Store.UserTyping(ChatId); Drafts[ChatId] = input.Text; };
+        input.TextChanged += (_, _) => { if (input.Text.Length > 0 && editing == null) Store.UserTyping(ChatId); Drafts[ChatId] = input.Text; SendMode(); };
         input.Paste += OnPaste;
         input.Text = Drafts.GetValueOrDefault(ChatId) ?? "";
+        SendMode();
 
         // просмотр фото и видео — поверх чата
         Grid.SetRowSpan(overlay, 5);
@@ -177,6 +208,7 @@ public sealed class ChatView : Grid
         Store.ChatsChanged -= OnChats;
         Store.TypingChanged -= OnTyping;
         Store.OnlineChanged -= Header;
+        if (voice != null) CancelVoice();
         if (Store.OpenChatId == ChatId) Store.UserTyping(ChatId, "stop");
     }
 
@@ -346,6 +378,85 @@ public sealed class ChatView : Grid
             await Store.Send(ChatId, "text", text.Substring(i, Math.Min(4000, text.Length - i)), replyTo: i == 0 ? r : null);
     }
 
+    // ----- голосовые и кружки -----
+
+    bool HasText => input.Text.Trim().Length > 0 || editing != null;
+
+    void SendMode()
+    {
+        var rec = voice != null;
+        var text = HasText;
+        sendIcon.Glyph = rec || text ? "\uE724" : "\uE720";
+        ToolTipService.SetToolTip(send, rec ? "Отправить голосовое" : text ? "Отправить (Enter)" : "Записать голосовое");
+        roundBtn.Visibility = rec || text ? Visibility.Collapsed : Visibility.Visible;
+        input.Visibility = rec ? Visibility.Collapsed : Visibility.Visible;
+        recPanel.Visibility = rec ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void OnSendButton()
+    {
+        if (voice != null) { _ = FinishVoice(); return; }
+        if (HasText) { SendText(); return; }
+        _ = StartVoice();
+    }
+
+    async Task StartVoice()
+    {
+        if (voice != null) return;
+        var v = new VoiceRecorder();
+        v.Level += lv => DispatcherQueue.TryEnqueue(() => recLevel.Value = Math.Min(1, Math.Sqrt(lv) * 1.4));
+        var err = await v.Start();
+        if (err != null) { Store.Say(err); return; }
+        voice = v;
+        SendMode();
+        Store.UserTyping(ChatId, "voice");
+        recTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        recTimer.Tick += (_, _) =>
+        {
+            if (voice == null) return;
+            recTime.Text = Fmt.Duration(voice.Seconds);
+            Store.UserTyping(ChatId, "voice");
+            if (voice.Seconds > 15 * 60) _ = FinishVoice();
+        };
+        recTimer.Start();
+    }
+
+    void CancelVoice()
+    {
+        recTimer?.Stop();
+        voice?.Cancel(); voice = null;
+        recTime.Text = "0:00"; recLevel.Value = 0;
+        Store.UserTyping(ChatId, "stop");
+        SendMode();
+    }
+
+    async Task FinishVoice()
+    {
+        var v = voice; if (v == null) return;
+        voice = null; recTimer?.Stop();
+        recTime.Text = "0:00"; recLevel.Value = 0;
+        SendMode();
+        Store.UserTyping(ChatId, "stop");
+        var res = await v.Stop();
+        if (res == null) { Store.Say("Слишком короткое голосовое"); return; }
+        var (path, dur, wave) = res.Value;
+        var meta = new System.Text.Json.Nodes.JsonObject { ["dur"] = Math.Max(1, (int)Math.Round(dur)), ["wave"] = J.ToNode(wave) };
+        var r = replyTo?.Id; CancelReply();
+        await Store.SendBytes(ChatId, "voice", await File.ReadAllBytesAsync(path), "m4a", meta, replyTo: r);
+        try { File.Delete(path); } catch { }
+    }
+
+    async Task RecordRound()
+    {
+        var res = await Dialogs.RecordRound(win, ChatId);
+        if (res == null) return;
+        var (path, dur) = res.Value;
+        var meta = new System.Text.Json.Nodes.JsonObject { ["dur"] = Math.Max(1, (int)Math.Round(dur)) };
+        var r = replyTo?.Id; CancelReply();
+        await Store.SendBytes(ChatId, "video_note", await File.ReadAllBytesAsync(path), "mp4", meta, replyTo: r);
+        try { File.Delete(path); } catch { }
+    }
+
     public void Reply(Message m)
     {
         if (m.Id <= 0 || Store.Chat(ChatId)?.CanPost != true) return;
@@ -374,6 +485,7 @@ public sealed class ChatView : Grid
         if (editing != null) input.Text = "";
         replyTo = null; editing = null;
         replyBar.Visibility = Visibility.Collapsed;
+        SendMode();
     }
 
     async Task PickFiles()

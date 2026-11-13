@@ -15,6 +15,9 @@ public sealed class MainWindow : Window
     readonly Grid root = new() { Background = T.Bg };
     readonly Grid host = new();
     readonly Grid layer = new() { Visibility = Visibility.Collapsed };
+    readonly Grid callLayer = new();
+    readonly Border callBar;
+    readonly TextBlock callBarText = new() { Foreground = T.White, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
     readonly Border toast;
     readonly TextBlock toastText = new() { Foreground = T.Text, FontSize = 13, TextWrapping = TextWrapping.Wrap };
     readonly TextBlock titleText = new() { Text = "Lumo", FontSize = 12, Foreground = T.Muted, VerticalAlignment = VerticalAlignment.Center };
@@ -46,6 +49,18 @@ public sealed class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 90),
             MaxWidth = 460, Child = toastText, Visibility = Visibility.Collapsed, IsHitTestVisible = false,
         };
+        Grid.SetRowSpan(callLayer, 2);
+        root.Children.Add(callLayer);
+        callBar = new Border
+        {
+            Background = T.Grad(0xFF13B0A5, 0xFF2EE6A6), CornerRadius = new CornerRadius(16), Padding = new Thickness(14, 6, 14, 6),
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 0, 0),
+            Child = callBarText, Visibility = Visibility.Collapsed,
+        };
+        callBar.Tapped += (_, _) => CallHost.I?.Expand();
+        ToolTipService.SetToolTip(callBar, "Вернуться к звонку");
+        Grid.SetRow(callBar, 1);
+        root.Children.Add(callBar);
         Grid.SetRowSpan(layer, 2);
         root.Children.Add(layer);
         Sheet.Layer = layer;
@@ -66,6 +81,13 @@ public sealed class MainWindow : Window
         catch { }
 
         Realtime.Post = a => DispatcherQueue.TryEnqueue(() => a());
+        var calls = new CallHost(this, callLayer);
+        calls.Changed += () =>
+        {
+            callBar.Visibility = calls.State != null && calls.Minimized ? Visibility.Visible : Visibility.Collapsed;
+            callBarText.Text = "Звонок · " + calls.PeerName + (calls.Seconds > 0 ? " · " + Fmt.Duration(calls.Seconds) : "") + " — вернуться";
+        };
+        Store.OnlineChanged += () => calls.SyncOnline();
         Activated += (_, e) =>
         {
             Store.WindowActive = e.WindowActivationState != WindowActivationState.Deactivated;
@@ -100,6 +122,7 @@ public sealed class MainWindow : Window
         host.Children.Clear();
         if (!want)
         {
+            CallHost.I?.Detach();
             Store.Stop(); shell = null;
             host.Children.Add(new LoginView());
         }
@@ -116,6 +139,7 @@ public sealed class MainWindow : Window
     {
         await Store.Start();
         if (Store.Demo) { _ = DemoScript(); return; }
+        CallHost.I?.Attach();
         if (E2E.Status == E2E.State.NeedRestore) await Dialogs.RestoreKeys(this);
     }
 
@@ -154,7 +178,10 @@ public sealed class MainWindow : Window
     /// <summary>Дополнительные экраны демо (этапы 2–3)</summary>
     async Task DemoExtra(string dir)
     {
-        await Task.CompletedTask;
+        CallHost.I?.DemoRing();
+        await Task.Delay(2500);
+        if (CallHost.I != null) await CallHost.I.Snapshot(Path.Combine(dir, "5-call.png"));
+        await Capture(Path.Combine(dir, "5b-window.png"));
     }
 
     public async Task Capture(string path)

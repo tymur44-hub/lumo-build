@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Lumo — звонок</title>
+<style>
+:root{--bg:#0c0d1a;--panel:#13142a;--p2:#1a1c36;--text:#eef0ff;--muted:#8d90b8;--a1:#7c5cff;--a2:#22c1ff;--danger:#ff5b7a;--ok:#3ee0a0}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:transparent;color:var(--text);font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif;overflow:hidden;user-select:none}
+#call{position:fixed;inset:0;display:none;background:radial-gradient(120% 90% at 50% 0%,#2a1f6b 0%,#14153a 45%,#0c0d1a 100%)}
+#call.on{display:block}
+#rv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;display:none}
+#lv{position:absolute;right:18px;top:18px;width:220px;aspect-ratio:4/3;object-fit:cover;border-radius:16px;background:#000;display:none;box-shadow:0 8px 30px rgba(0,0,0,.45);transform:scaleX(-1);border:1px solid rgba(255,255,255,.15)}
+#who{position:absolute;left:0;right:0;top:16%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px}
+#av{width:140px;height:140px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:700;color:#fff;background-size:cover;background-position:center;box-shadow:0 10px 40px rgba(124,92,255,.35)}
+#av.pulse{animation:pulse 1.8s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(124,92,255,.55)}100%{box-shadow:0 0 0 38px rgba(124,92,255,0)}}
+#name{font-size:28px;font-weight:600}
+#status{font-size:15px;color:var(--muted)}
+#call.vid #who{top:24px;left:24px;right:auto;text-align:left;align-items:flex-start;gap:4px;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+#call.vid #av{display:none}
+#call.vid #name{font-size:20px}
+#bar{position:absolute;left:0;right:0;bottom:38px;display:flex;justify-content:center;gap:22px}
+.b{width:64px;height:64px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(255,255,255,.12);backdrop-filter:blur(14px);transition:transform .15s,background .15s;color:#fff}
+.b:hover{background:rgba(255,255,255,.2)}
+.b:active{transform:scale(.94)}
+.b.off{background:#fff;color:#14153a}
+.b.red{background:var(--danger)}
+.b.green{background:var(--ok)}
+.b svg{width:28px;height:28px}
+.lab{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
+.bw{display:flex;flex-direction:column;align-items:center}
+#min{position:absolute;left:18px;top:18px;width:40px;height:40px}
+#min svg{width:20px;height:20px}
+#call.vid #min{left:auto;right:250px}
+#code{position:absolute;left:50%;transform:translateX(-50%);top:18px;font-size:12px;color:var(--muted);background:rgba(0,0,0,.3);padding:5px 12px;border-radius:99px;display:none}
+</style>
+</head>
+<body>
+<div id="call">
+  <video id="rv" autoplay playsinline></video>
+  <audio id="ra" autoplay></audio>
+  <video id="lv" autoplay playsinline muted></video>
+  <button class="b" id="min" title="Свернуть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg></button>
+  <div id="code"></div>
+  <div id="who"><div id="av"></div><div id="name"></div><div id="status"></div></div>
+  <div id="bar"></div>
+</div>
+<script>
+'use strict';
+const I={
+ mic:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+ micOff:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M9 9v2a3 3 0 0 0 5.1 2.1M15 10V6a3 3 0 0 0-5.7-1.3M5 11a7 7 0 0 0 11.5 5.3M19 11a7 7 0 0 1-.6 2.8M12 18v3"/></svg>',
+ cam:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>',
+ camOff:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M16 16H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h1M10 6h4a2 2 0 0 1 2 2v4l5-3v8"/></svg>',
+ end:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-2.7 0-5.2.7-7.4 2-.6.3-.9 1-.8 1.6l.4 2.3c.1.7.8 1.2 1.5 1.1l3.3-.6c.6-.1 1-.6 1-1.2v-1.8c1.3-.4 2.7-.4 4 0v1.8c0 .6.4 1.1 1 1.2l3.3.6c.7.1 1.4-.4 1.5-1.1l.4-2.3c.1-.6-.2-1.3-.8-1.6C17.2 9.7 14.7 9 12 9z"/></svg>',
+ acc:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1z"/></svg>',
+ vacc:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 8v8H5V8h10m1-2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4V7a1 1 0 0 0-1-1z"/></svg>'
+};
+const $=s=>document.querySelector(s);
+const AV=[['#ff8a5b','#ff5b8a'],['#7c5cff','#b05cff'],['#22c1ff','#3a7bff'],['#2ee6a6','#13b0a5'],['#ffc94a','#ff8a3d'],['#ff5b7a','#c44dff'],['#5bd0ff','#7c5cff'],['#9be15d','#00c6a7']];
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const initials=n=>{ const p=String(n||'').trim().split(/\s+/).filter(Boolean); if(!p.length) return '?'; return (p.length>1?p[0][0]+p[1][0]:p[0].slice(0,2)).toUpperCase(); };
+const fmtDur=s=>{ s=Math.max(0,Math.round(s)); const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0'); };
+const uid8=()=>Math.random().toString(36).slice(2,10);
+
+// ---------- мост с приложением ----------
+const host=window.chrome&&window.chrome.webview;
+let reqN=0; const reqs=new Map();
+function post(o){ try{ host.postMessage(o); }catch(e){ console.warn(e); } }
+function ask(op,data){ return new Promise(r=>{ const id=++reqN; reqs.set(id,r); post({op,id,...data}); setTimeout(()=>{ if(reqs.has(id)){ reqs.delete(id); r(null); } },8000); }); }
+const toast=t=>post({op:'toast',text:t});
+const E2E={ encStr:(cid,text)=>ask('enc',{cid,text}), decStr:(cid,text)=>ask('dec',{cid,text}), callKey:peer=>ask('sec',{peer}) };
+
+let ME={id:'',name:'',avatar:null,color:0}, ICE=[{urls:'stun:stun.l.google.com:19302'}], CFG={callsFrom:'all',contacts:[],online:[],blocked:[]};
+const doneCalls=new Set();
+const C={st:null};
+
+window.LC={cmd(m){
+  switch(m.op){
+    case 'init': ME=m.me; if(m.ice&&m.ice.length) ICE=m.ice; Object.assign(CFG,m.cfg||{}); break;
+    case 'cfg': Object.assign(CFG,m.cfg||{}); break;
+    case 'res': { const r=reqs.get(m.id); if(r){ reqs.delete(m.id); r(m.value); } break; }
+    case 'sig': onSig(m.payload); break;
+    case 'start': startCall(m); break;
+    case 'accept': acceptCall(); break;
+    case 'reject': rejectCall(); break;
+    case 'hangup': hangup(); break;
+  }
+}};
+
+function sig(to,data){
+  const payload={...data,from:ME.id,callId:data.callId||C.callId};
+  if((data.t==='offer'||data.t==='answer')&&!data.auth) payload.nokey=1;
+  post({op:'sig',to,payload});
+}
+const sdpFp=s=>[...new Set([...String(s||'').matchAll(/a=fingerprint:(\S+) (\S+)/gi)].map(m=>m[1].toLowerCase()+' '+m[2].toUpperCase()))].sort().join(',');
+async function sdpAuth(typ,sdp){ await C.secP; if(!C.secCid) return undefined; return (await E2E.encStr(C.secCid,`lumo-call1|${C.callId}|${typ}|${sdpFp(sdp)}`))||undefined; }
+async function sdpOk(p,typ){ await C.secP; if(!C.secCid) return true; if(!p.auth){ if(p.nokey){ if(C._unv!==C.callId){ C._unv=C.callId; toast('У собеседника нет ключа шифрования на этом устройстве — подлинность звонка не проверена'); } return true; } return false; }
+  const x=await E2E.decStr(C.secCid,p.auth); return x===`lumo-call1|${C.callId}|${typ}|${sdpFp(p.sdp&&p.sdp.sdp)}`; }
+function callTampered(){ toast('Звонок остановлен: данные соединения подменены'); hangup(); }
+
+// ---------- звуки ----------
+let AC=null;
+function ac(){ try{ if(!AC||AC.state==='closed') AC=new AudioContext(); AC.resume?.(); }catch{} return AC; }
+function beep(f,d,v){ const a=ac(); if(!a) return; const o=a.createOscillator(), g=a.createGain(); o.frequency.value=f; g.gain.value=v; o.connect(g); g.connect(a.destination); const t=a.currentTime; g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+d); o.start(t); o.stop(t+d+0.02); }
+function ringtone(kind){ stopRing(); const play=()=>{ if(!C.ring) return; if(kind==='in'){ beep(660,.25,.12); setTimeout(()=>{ if(C.ring) beep(880,.3,.12); },300); } else beep(425,1.0,.08); }; C.ring=setInterval(play,kind==='in'?1800:5000); play(); }
+function stopRing(){ clearInterval(C.ring); C.ring=null; }
+
+// ---------- исходящий ----------
+const AUD_C={echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1};
+const VID_C={width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30,max:30}};
+async function startCall(m){
+  if(C.st) return toast('Вы уже в звонке');
+  let local;
+  try{ local=await navigator.mediaDevices.getUserMedia({audio:AUD_C,video:m.video?VID_C:false}); }
+  catch{ try{ local=await navigator.mediaDevices.getUserMedia({audio:true}); m.video=false; }catch{ return toast('Нет доступа к микрофону'); } }
+  Object.assign(C,{st:'calling',ringing:false,peer:m.peer,video:!!m.video,callId:uid8(),role:'caller',iceQ:[],chatId:m.chatId,muted:false,camOff:false,pendingOffer:null,
+    peerName:m.name,peerAvatar:m.avatar,peerColor:m.color,local,secCid:null,t0:0,everUp:false});
+  C.secP=E2E.callKey(m.peer).then(v=>{ C.secCid=v||null; });
+  post({op:'show'}); callUI(); ringtone('out');
+  post({op:'pingTg',peer:m.peer,video:C.video});
+  const ringPl={t:'ring',video:C.video,name:ME.name,avatar:ME.avatar,color:ME.color,chatId:m.chatId,rc:{a:0,v:[]},callId:C.callId};
+  sig(C.peer,ringPl);
+  clearInterval(C.reRing); C.reRing=setInterval(()=>{ if(C.st==='calling'&&C.callId===ringPl.callId) sig(C.peer,ringPl); else clearInterval(C.reRing); },3000);
+  setTimeout(()=>{ if(C.st==='calling'&&!C.ringing&&CFG.online.includes(C.peer)){ C.ringing=true; callUI(); } },800);
+  C.timeoutT=setTimeout(()=>{ if(C.st==='calling'){ sig(C.peer,{t:'cancel'}); endCall('missed'); } },45000);
+}
+
+// ---------- сигналы ----------
+async function onSig(p){
+  if(!p||p.t==='rm'||p.t==='kf') return;
+  if(p.t==='ring'){
+    if(doneCalls.has(p.callId)) return;
+    if((CFG.blocked||[]).includes(p.from)){ doneCalls.add(p.callId); sig(p.from,{t:'nocall',callId:p.callId}); return; }
+    if(C.st){ if(p.callId!==C.callId) sig(p.from,{t:'busy',callId:p.callId}); else if(C.st==='incoming') sig(p.from,{t:'ringing',callId:p.callId}); return; }
+    const cf=CFG.callsFrom||'all'; if(cf==='none'||(cf==='contacts'&&!(CFG.contacts||[]).includes(p.from))){ doneCalls.add(p.callId); sig(p.from,{t:'nocall',callId:p.callId}); return; }
+    Object.assign(C,{st:'incoming',peer:p.from,video:!!p.video,callId:p.callId,role:'callee',iceQ:[],chatId:p.chatId,peerName:p.name,peerAvatar:p.avatar,peerColor:p.color,
+      muted:false,camOff:false,pendingOffer:null,secCid:null,t0:0,everUp:false,local:null});
+    C.secP=E2E.callKey(p.from).then(v=>{ C.secCid=v||null; });
+    post({op:'show',incoming:true,name:p.name,video:!!p.video}); callUI(); ringtone('in');
+    sig(p.from,{t:'ringing',callId:p.callId});
+    C.inT=setTimeout(()=>{ if(C.st==='incoming') endCall('missed',true); },50000);
+    return;
+  }
+  if(p.t==='taken'){ if(C.st==='incoming'&&p.callId===C.callId) endCall('elsewhere',true); return; }
+  if(!C.st||p.callId!==C.callId||p.from!==C.peer) return;
+  if(C.st==='incoming'&&(p.t==='offer'||p.t==='ice'||p.t==='hb')){ endCall('elsewhere',true); return; }
+  C.lastPeer=Date.now();
+  switch(p.t){
+    case 'accept': if(C.st!=='calling') return; clearTimeout(C.timeoutT); clearInterval(C.reRing); stopRing(); startActive(); await makePC(); if(!C.pc) return;
+      try{ const o=await C.pc.createOffer(); const od={type:o.type,sdp:opusTune(o.sdp)}; await C.pc.setLocalDescription(od); sig(C.peer,{t:'offer',sdp:od,auth:await sdpAuth('offer',od.sdp)}); }catch(e){ console.warn(e); } break;
+    case 'offer': if(!C.pc){ C.pendingOffer=p; return; }
+      if(!(await sdpOk(p,'offer'))) return callTampered();
+      try{ await C.pc.setRemoteDescription(p.sdp); const a=await C.pc.createAnswer(); const ad={type:a.type,sdp:opusTune(a.sdp)}; await C.pc.setLocalDescription(ad); sig(C.peer,{t:'answer',sdp:ad,auth:await sdpAuth('answer',ad.sdp)}); flushIce(); }catch(e){ console.warn(e); } break;
+    case 'answer': if(!C.pc) return; if(!(await sdpOk(p,'answer'))) return callTampered(); try{ await C.pc.setRemoteDescription(p.sdp); flushIce(); }catch(e){ console.warn(e); } break;
+    case 'ice': if(C.pc&&C.pc.remoteDescription) C.pc.addIceCandidate(p.c).catch(()=>{}); else C.iceQ.push(p.c); break;
+    case 'reject': endCall('rejected'); toast('Звонок отклонён'); break;
+    case 'busy': endCall('missed'); toast('Абонент занят'); break;
+    case 'nocall': endCall('missed'); toast('Пользователь ограничил входящие звонки'); break;
+    case 'cancel': endCall('missed',true); break;
+    case 'hangup': endCall(C.t0?'ended':'missed',true); break;
+    case 'media': C.peerCamOff=!!p.camOff; if(p.video) C.video=true; callUI(); break;
+    case 'restart': if(C.role==='caller') restartIce(); break;
+    case 'ringing': if(C.st==='calling'&&!C.ringing){ C.ringing=true; callUI(); } break;
+  }
+}
+function opusTune(sdp){ try{ const m=sdp.match(/a=rtpmap:(\d+) opus\/48000/i); if(!m) return sdp; const pt=m[1]; const re=new RegExp('a=fmtp:'+pt+' ([^\\r\\n]*)');
+  return sdp.replace(re,(all,par)=>{ let q=par; if(!/useinbandfec/.test(q)) q+=';useinbandfec=1'; if(!/maxaveragebitrate/.test(q)) q+=';maxaveragebitrate=64000'; return 'a=fmtp:'+pt+' '+q; }); }catch{ return sdp; } }
+async function restartIce(){ if(!C.pc) return; try{ const o=await C.pc.createOffer({iceRestart:true}); const od={type:o.type,sdp:opusTune(o.sdp)}; await C.pc.setLocalDescription(od); sig(C.peer,{t:'offer',sdp:od,auth:await sdpAuth('offer',od.sdp)}); }catch{} }
+function flushIce(){ (C.iceQ||[]).forEach(c=>C.pc.addIceCandidate(c).catch(()=>{})); C.iceQ=[]; }
+async function makePC(){
+  if(!C.st||!C.local||C.pc) return;
+  const pc=new RTCPeerConnection({iceServers:ICE,iceCandidatePoolSize:4}); C.pc=pc;
+  C.local.getTracks().forEach(t=>pc.addTrack(t,C.local));
+  pc.onicecandidate=e=>{ if(e.candidate&&C.pc===pc) sig(C.peer,{t:'ice',c:e.candidate.toJSON()}); };
+  pc.ontrack=e=>{ C.remote=e.streams[0]||new MediaStream([e.track]); if(e.track.kind==='video') C.video=true; callUI(); };
+  pc.onconnectionstatechange=()=>{ if(C.pc!==pc) return; const s=pc.connectionState;
+    if(s==='connected'){ C.everUp=true; C.reconn=false; clearTimeout(C.rT); if(!C.t0) startActive(); callUI(); code(); }
+    if(s==='failed'||s==='disconnected'){ if(C.everUp) C.reconn=true; callUI(); clearTimeout(C.rT);
+      const tryR=()=>{ if(C.pc!==pc||!C.st) return; const st=pc.connectionState; if(st==='connected'||st==='closed') return; if(C.role==='caller') restartIce(); else sig(C.peer,{t:'restart'}); C.rT=setTimeout(tryR,3000); };
+      C.rT=setTimeout(tryR,s==='failed'?300:1000); }
+  };
+}
+async function code(){ try{ const s=C.pc.localDescription.sdp+'\n'+C.pc.remoteDescription.sdp; const set=new Set(); for(const m of s.matchAll(/a=fingerprint:(\S+) (\S+)/gi)) set.add(m[1].toLowerCase()+' '+m[2].toUpperCase());
+  if(set.size<2) return; $('#code').textContent='Звонок зашифрован'; $('#code').style.display='block'; }catch{} }
+
+function startActive(){
+  if(!C.st||C.t0) return; C.t0=Date.now(); C.st='active'; C.lastPeer=Date.now(); callUI();
+  clearInterval(C.timer); C.timer=setInterval(()=>{ const t=$('#status'); if(t&&C.st==='active'&&!C.reconn) t.textContent=fmtDur((Date.now()-C.t0)/1000); post({op:'state',st:C.st,t:Math.round((Date.now()-C.t0)/1000),name:C.peerName}); },1000);
+  clearInterval(C.hb); C.hb=setInterval(()=>{ if(C.st==='active') sig(C.peer,{t:'hb'}); },4000);
+  clearInterval(C.watch); C.watch=setInterval(()=>{ if(C.st!=='active') return; if(!C.everUp&&Date.now()-C.t0>30000){ toast('Не удалось соединиться'); hangup(); return; } if(Date.now()-(C.lastPeer||0)>45000){ toast('Связь с собеседником потеряна'); hangup(); } },3000);
+}
+async function acceptCall(){
+  if(C.st!=='incoming') return; stopRing(); clearTimeout(C.inT); const id=C.callId; C.st='answering'; callUI();
+  let st=null;
+  try{ st=await navigator.mediaDevices.getUserMedia({audio:AUD_C,video:C.video?VID_C:false}); }
+  catch{ try{ st=await navigator.mediaDevices.getUserMedia({audio:true}); C.video=false; }catch{ toast('Нет доступа к микрофону'); C.st='incoming'; return rejectCall(); } }
+  if(C.callId!==id||!C.st){ st.getTracks().forEach(t=>t.stop()); return; }
+  C.local=st; sig(C.peer,{t:'accept',rc:{a:0,v:[]}}); sig(ME.id,{t:'taken'}); startActive();
+  await makePC(); if(C.callId!==id||!C.st||!C.pc) return;
+  if(C.pendingOffer){ const po=C.pendingOffer; C.pendingOffer=null; await onSig(po); }
+}
+function rejectCall(){ if(!C.st) return; sig(C.peer,{t:'reject'}); sig(ME.id,{t:'taken'}); endCall('rejected',true); }
+function hangup(){ if(!C.st) return; sig(C.peer,{t:C.st==='calling'?'cancel':'hangup'}); endCall(C.t0?'ended':'missed'); }
+function endCall(status,remote=false){
+  if(!C.st) return;
+  const wasCaller=C.role==='caller', dur=C.t0?Math.round((Date.now()-C.t0)/1000):0, chatId=C.chatId, video=C.video;
+  stopRing(); if(C.callId) doneCalls.add(C.callId);
+  clearInterval(C.reRing); clearTimeout(C.timeoutT); clearTimeout(C.inT); clearInterval(C.timer); clearInterval(C.hb); clearInterval(C.watch); clearTimeout(C.rT);
+  try{ C.pc&&C.pc.close(); }catch{} try{ C.local&&C.local.getTracks().forEach(t=>t.stop()); }catch{}
+  ['#rv','#lv','#ra'].forEach(s=>{ const v=$(s); try{ v.pause(); v.srcObject=null; }catch{} });
+  $('#code').style.display='none';
+  Object.assign(C,{st:null,pc:null,local:null,remote:null,t0:0,peer:null,callId:null,pendingOffer:null,iceQ:[],secCid:null,secP:null,reconn:false,everUp:false,peerCamOff:false});
+  if(remote&&status==='ended') toast('Звонок завершён');
+  post({op:'ended',status:dur?'ended':status,dur,video,chatId,wasCaller});
+  callUI();
+}
+
+// ---------- кнопки ----------
+function toggleMute(){ if(!C.local) return; C.muted=!C.muted; C.local.getAudioTracks().forEach(t=>t.enabled=!C.muted); callUI(); }
+async function toggleCam(){
+  if(!C.local) return;
+  const vt=C.local.getVideoTracks()[0];
+  if(!vt){ // аудиозвонок: включаем камеру и договариваемся заново
+    try{ const t=(await navigator.mediaDevices.getUserMedia({video:VID_C})).getVideoTracks()[0]; C.local.addTrack(t); C.video=true; C.camOff=false;
+      if(C.pc){ C.pc.addTrack(t,C.local); if(C.role==='caller') restartIce(); else { try{ const o=await C.pc.createOffer(); const od={type:o.type,sdp:opusTune(o.sdp)}; await C.pc.setLocalDescription(od); sig(C.peer,{t:'offer',sdp:od,auth:await sdpAuth('offer',od.sdp)}); }catch{} } }
+      sig(C.peer,{t:'media',camOff:false,video:true}); }catch{ toast('Нет доступа к камере'); }
+    callUI(); return; }
+  C.camOff=!C.camOff; vt.enabled=!C.camOff; sig(C.peer,{t:'media',camOff:C.camOff}); callUI();
+}
+
+function btn(id,cls,icon,label,fn){ return `<div class="bw"><button class="b ${cls}" id="${id}" title="${esc(label)}">${icon}</button><div class="lab">${esc(label)}</div></div>`; }
+function callUI(){
+  const box=$('#call');
+  if(!C.st){ box.className=''; post({op:'hide'}); return; }
+  box.className='on';
+  const av=$('#av'); const c=AV[((C.peerColor||0)%8+8)%8];
+  av.style.background=C.peerAvatar?`url("${C.peerAvatar}") center/cover`:`linear-gradient(135deg,${c[0]},${c[1]})`;
+  av.textContent=C.peerAvatar?'':initials(C.peerName);
+  av.className=(C.st==='calling'||C.st==='incoming')?'pulse':'';
+  $('#name').textContent=C.peerName||'Lumo';
+  const st=$('#status');
+  if(C.st==='calling') st.textContent=C.ringing?'Вызов…':'Звонок…';
+  else if(C.st==='incoming') st.textContent=C.video?'Входящий видеозвонок':'Входящий звонок';
+  else if(C.st==='answering') st.textContent='Соединение…';
+  else if(C.reconn) st.textContent='Переподключение…';
+  else if(C.st==='active'&&!C.everUp) st.textContent='Соединение…';
+  else if(C.t0) st.textContent=fmtDur((Date.now()-C.t0)/1000);
+  const rv=$('#rv'), lv=$('#lv'), ra=$('#ra');
+  const remoteVid=!!(C.remote&&C.remote.getVideoTracks().length&&!C.peerCamOff);
+  if(C.remote){ if(ra.srcObject!==C.remote){ ra.srcObject=C.remote; ra.play().catch(()=>{}); } }
+  if(remoteVid){ if(rv.srcObject!==C.remote){ rv.srcObject=C.remote; rv.muted=true; rv.play().catch(()=>{}); } rv.style.display='block'; } else rv.style.display='none';
+  const localVid=!!(C.local&&C.local.getVideoTracks().length&&!C.camOff);
+  if(localVid){ if(lv.srcObject!==C.local){ lv.srcObject=C.local; lv.play().catch(()=>{}); } lv.style.display='block'; } else lv.style.display='none';
+  box.classList.toggle('vid',remoteVid);
+  let h='';
+  if(C.st==='incoming'){
+    h=btn('rej','red',I.end,'Отклонить')+btn('acc','green',C.video?I.vacc:I.acc,'Принять');
+  } else {
+    h=btn('mute',C.muted?'off':'',C.muted?I.micOff:I.mic,C.muted?'Включить звук':'Микрофон')
+     +btn('cam',(C.local&&C.local.getVideoTracks().length&&!C.camOff)?'off':'',(C.local&&C.local.getVideoTracks().length&&!C.camOff)?I.cam:I.camOff,'Камера')
+     +btn('hang','red',I.end,'Завершить');
+  }
+  const bar=$('#bar'); if(bar.dataset.h!==h){ bar.innerHTML=h; bar.dataset.h=h;
+    const on=(id,fn)=>{ const e=document.getElementById(id); if(e) e.onclick=fn; };
+    on('rej',rejectCall); on('acc',acceptCall); on('mute',toggleMute); on('cam',toggleCam); on('hang',hangup); }
+  post({op:'state',st:C.st,t:C.t0?Math.round((Date.now()-C.t0)/1000):0,name:C.peerName});
+}
+$('#min').onclick=()=>post({op:'minimize'});
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') post({op:'minimize'}); });
+post({op:'ready'});
+</script>
+</body>
+</html>
