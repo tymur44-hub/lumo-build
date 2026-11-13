@@ -10,6 +10,7 @@ import ru.volshebnymir.lumo.core.AppModel
 class LumoApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
+        ru.volshebnymir.lumo.core.CrashReporter.install(this)
         ru.volshebnymir.lumo.ui.Look.init(this)
         ru.volshebnymir.lumo.ui.Lang.load(this)
         ru.volshebnymir.lumo.ui.Extra.init(this)

@@ -743,6 +743,7 @@ fun StoryStack() {
 
 
 /** Закреплённые чаты — кружками в одну строку над списком */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PinnedRow(list: List<ChatItem>) {
     val p = P

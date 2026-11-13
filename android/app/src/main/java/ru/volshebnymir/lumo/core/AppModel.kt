@@ -672,7 +672,9 @@ object AppModel {
 
     // ---------- чаты ----------
 
+    private var crashFlushed = false
     suspend fun loadChats() {
+        if (!crashFlushed && myId != null) { crashFlushed = true; scope.launch { CrashReporter.flush(ctx) } }
         runCatching { draftsLoad() }
         if (!loggedIn) return
         try {
