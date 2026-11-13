@@ -1,0 +1,36 @@
+name: build-windows-native
+on: workflow_dispatch
+jobs:
+  win:
+    runs-on: windows-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 8.0.x }
+      - name: Сборка
+        working-directory: windows/Lumo
+        run: dotnet publish Lumo.csproj -c Release -r win-x64 -p:Platform=x64 -o ../out
+      - name: Проверка запуска
+        shell: pwsh
+        working-directory: windows/out
+        run: |
+          $p = Start-Process -FilePath .\Lumo.exe -PassThru
+          Start-Sleep -Seconds 12
+          if ($p.HasExited) { Write-Host "Lumo exited with code $($p.ExitCode)"; Get-Content "$env:LOCALAPPDATA\Lumo\log.txt" -ErrorAction SilentlyContinue; exit 1 }
+          Write-Host "SMOKE-OK"
+          Get-Content "$env:LOCALAPPDATA\Lumo\log.txt" -ErrorAction SilentlyContinue
+          Stop-Process -Id $p.Id -Force
+      - name: Архив и установщик
+        shell: pwsh
+        run: |
+          Compress-Archive -Path windows/out/* -DestinationPath Lumo-Windows-x64.zip
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\iscc.exe" /Qp windows/installer.iss
+          Get-ChildItem windows/dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-native-${{ github.run_number }}
+          name: Lumo для Windows (нативное) ${{ github.run_number }}
+          files: |
+            Lumo-Windows-x64.zip
+            windows/dist/Lumo-Setup.exe
