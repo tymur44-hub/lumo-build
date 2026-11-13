@@ -115,7 +115,12 @@ public sealed class MainWindow : Window
         };
         Closed += (_, _) => { Store.Presence(false); Notifications.Shutdown(); };
         Store.Toast += ShowToast;
-        Store.Notify += (c, t, b) => { if (!Store.WindowActive || Store.OpenChatId != c) Notifications.Show(c, t, b); };
+        Store.Notify += (c, t, b) =>
+        {
+            if (!Store.WindowActive || Store.OpenChatId != c) Notifications.Show(c, t, b);
+            // идёт игра — баннер сверху: нажать, и игра свернётся, откроется чат
+            if (Store.WindowActive && WebOverlay.I is { Mode: "game", Minimized: false }) ShowBanner(c, t, b);
+        };
         Store.ChatsChanged += UpdateTitle;
         Store.NetState += _ => UpdateTitle();
         Api.SessionChanged += s => DispatcherQueue.TryEnqueue(() =>
@@ -235,12 +240,35 @@ public sealed class MainWindow : Window
         catch (Exception e) { App.Log("capture: " + e.Message); }
     }
 
+    public void CloseChatView() => shell?.CloseChat();
+
     public void OpenChat(string chatId) { if (chatId != "call") shell?.Open(chatId); }
 
     public void BringToFront()
     {
         try { if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter p && p.State == Microsoft.UI.Windowing.OverlappedPresenterState.Minimized) p.Restore(); } catch { }
         Activate();
+    }
+
+    Border? banner;
+    async void ShowBanner(string chatId, string title, string body)
+    {
+        if (banner != null) root.Children.Remove(banner);
+        var sp = new StackPanel { Spacing = 2 };
+        sp.Children.Add(T.Txt(title, 14, bold: true, lines: 1));
+        sp.Children.Add(T.Txt(body, 13, T.Muted, lines: 1));
+        var b = new Border
+        {
+            Background = T.Panel2, CornerRadius = new CornerRadius(18), Padding = new Thickness(16, 10, 16, 10), BorderBrush = T.Line, BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 8, 0, 0), Width = 420, Child = sp,
+        };
+        b.Tapped += (_, _) => { root.Children.Remove(b); WebOverlay.I?.Minimize(); OpenChat(chatId); };
+        Grid.SetRow(b, 1);
+        root.Children.Add(b);
+        banner = b;
+        await Task.Delay(4500);
+        root.Children.Remove(b);
+        if (banner == b) banner = null;
     }
 
     CancellationTokenSource? toastCts;

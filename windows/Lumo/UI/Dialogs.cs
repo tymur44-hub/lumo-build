@@ -69,7 +69,7 @@ public static class Dialogs
         sp.Children.Add(T.Txt("Lumo для Windows 1.0", 12, T.Muted));
 
         // разделы настроек
-        var root = new StackPanel { Spacing = 14, Width = 460 };
+        var root = new StackPanel { Spacing = 14, Width = 500 };
         var seg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         var host = new Grid { MinHeight = 420 };
         var sections = new (string name, Func<Task<UIElement>> make)[]
@@ -94,7 +94,7 @@ public static class Dialogs
         }
         for (int i = 0; i < sections.Length; i++)
         {
-            var b = new Button { Content = new TextBlock { Text = sections[i].name, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }, Height = 32, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(0) };
+            var b = new Button { Content = new TextBlock { Text = sections[i].name, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }, Height = 32, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(0) };
             var idx = i;
             b.Click += async (_, _) => await Select(idx);
             segBtns.Add(b); seg.Children.Add(b);
@@ -292,7 +292,123 @@ public static class Dialogs
         var mute = new ToggleSwitch { Header = "Уведомления", IsOn = !c.Muted, OnContent = "Включены", OffContent = "Выключены" };
         mute.Toggled += async (_, _) => await Store.SetMuted(c.Id, !mute.IsOn);
         details.Children.Add(mute);
-        await Show(Make(w, "", sp));
+        Sheet? sheet = null;
+
+        // действия
+        var acts = new StackPanel { Spacing = 2, Margin = new Thickness(0, 6, 0, 0) };
+        void Act(string text, string glyph, Func<Task> fn, bool danger = false)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+            row.Children.Add(T.Icon(glyph, 16, danger ? T.Danger : T.A2));
+            row.Children.Add(new TextBlock { Text = text, FontSize = 14, Foreground = danger ? T.Danger : T.Text });
+            var b = new Button { Content = row, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(12, 10, 12, 10), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(0) };
+            T.Fill(b, T.Transparent, T.B(0x14FFFFFF));
+            b.Click += async (_, _) => await fn();
+            acts.Children.Add(b);
+        }
+        if (c.IsPrivate && c.PeerId != null && c.PeerId != Store.MyId)
+        {
+            var peer = c.PeerId;
+            var contacts = await Store.ContactIds();
+            if (!contacts.Contains(peer))
+                Act("Добавить в контакты", "\uE8FA", async () => { try { await Api.InsertQuiet("lm_contacts", J.O(("contact_id", peer))); await Store.ContactIds(true); Store.Say("Добавлено в контакты"); } catch (Exception e2) { Store.Say(e2.Message); } });
+            Act("Код шифрования", "\uE72E", async () => { sheet?.Hide(); await Task.Delay(200); await Safety(w, c); });
+            Act("Заблокировать", "\uE8F8", async () =>
+            {
+                if (!await Confirm(w, "Заблокировать " + c.DisplayName + "?", "Заблокировать", "Человек не сможет писать вам и звонить.")) return;
+                try { await Api.Rpc("lm_block", J.O(("p_user", peer), ("p_on", true))); Store.Say("Пользователь заблокирован"); } catch (Exception e2) { Store.Say(e2.Message); }
+            }, true);
+        }
+        if (!c.IsPrivate)
+        {
+            Act(c.IsChannel ? "Подписчики" : "Участники", "\uE716", async () => { sheet?.Hide(); await Task.Delay(200); await Members(w, c); });
+            if (c.IsAdmin) Act(c.IsChannel ? "Добавить подписчиков" : "Добавить участников", "\uE8FA", async () => { sheet?.Hide(); await Task.Delay(200); await AddMembers(w, c); });
+            if (c.IsAdmin) Act("Ссылка-приглашение", "\uE71B", async () =>
+            {
+                try
+                {
+                    var code = (await Api.Rpc("lm_chat_invite", J.O(("p_chat", c.Id), ("p_reset", false))))?.GetValue<string>();
+                    if (code == null) return;
+                    var link = Config.SITE + "+" + code;
+                    var dp = new Windows.ApplicationModel.DataTransfer.DataPackage(); dp.SetText(link);
+                    Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dp);
+                    Store.Say("Ссылка скопирована: " + link);
+                }
+                catch (Exception e2) { Store.Say(e2.Message); }
+            });
+        }
+        Act(c.IsPrivate ? "Удалить чат" : c.IsChannel ? "Отписаться" : "Покинуть группу", "\uE74D", async () =>
+        {
+            var everyone = false;
+            if (c.Role == "owner" && !c.IsPrivate)
+            {
+                if (!await Confirm(w, "Удалить " + (c.IsChannel ? "канал" : "группу") + " для всех?", "Удалить")) return;
+                everyone = true;
+            }
+            else if (!await Confirm(w, c.IsPrivate ? "Удалить чат у себя?" : "Выйти из " + (c.IsChannel ? "канала" : "группы") + "?", c.IsPrivate ? "Удалить" : "Выйти")) return;
+            sheet?.Hide();
+            await Store.DeleteChat(c.Id, everyone);
+            App.Win?.CloseChatView();
+        }, true);
+        sp.Children.Add(acts);
+        sheet = Make(w, "", sp);
+        await Show(sheet);
+    }
+
+    // ---------- участники ----------
+
+    public static async Task Members(MainWindow w, ChatItem c)
+    {
+        var sp = new StackPanel { Spacing = 4, Width = 400 };
+        sp.Children.Add(new ProgressRing { IsActive = true, Width = 24, Height = 24 });
+        var sheet = Make(w, c.IsChannel ? "Подписчики" : "Участники", sp);
+        var t = Show(sheet);
+        try
+        {
+            var rows = await Api.Select("lm_members", Api.Q(("select", "user_id,role"), ("chat_id", "eq." + c.Id), ("limit", "500")));
+            var list = rows.Select(r => (id: r.Str("user_id") ?? "", role: r.Str("role") ?? "member")).Where(x => x.id.Length > 0).ToList();
+            await Store.LoadProfiles(list.Select(x => x.id));
+            var order = new Dictionary<string, int> { ["owner"] = 0, ["admin"] = 1 };
+            sp.Children.Clear();
+            sp.Children.Add(T.Txt(list.Count + " " + Fmt.Plural(list.Count, "человек", "человека", "человек"), 12, T.Muted));
+            foreach (var (id, role) in list.OrderBy(x => order.GetValueOrDefault(x.role, 2)).ThenBy(x => Store.DisplayName(x.id)))
+            {
+                var p = Store.Profiles.GetValueOrDefault(id);
+                var g = new Grid { ColumnSpacing = 10, Padding = new Thickness(4, 6, 4, 6) };
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var av = new AvatarView(36); av.Set(p?.Name ?? "?", p?.AvatarUrl, p?.Color ?? 0, Store.Online.Contains(id));
+                g.Children.Add(av);
+                var tx = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                tx.Children.Add(T.Txt(id == Store.MyId ? "Вы" : Store.DisplayName(id), 14, bold: true, lines: 1));
+                tx.Children.Add(T.Txt(Store.Online.Contains(id) ? "в сети" : Fmt.LastSeen(p?.LastSeen, p?.ShowSeen ?? true), 12, T.Muted, lines: 1));
+                Grid.SetColumn(tx, 1); g.Children.Add(tx);
+                if (role is "owner" or "admin") { var r = T.Txt(role == "owner" ? "владелец" : "админ", 12, T.A2); r.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(r, 2); g.Children.Add(r); }
+                if (id != Store.MyId)
+                {
+                    g.Background = T.Transparent;
+                    var uid = id;
+                    g.Tapped += async (_, _) => { sheet.Hide(); var cid = await Store.OpenDm(uid); if (cid != null) w.OpenChat(cid); };
+                }
+                sp.Children.Add(g);
+            }
+        }
+        catch (Exception e) { sp.Children.Clear(); sp.Children.Add(T.Txt(e.Message, 13, T.Danger)); }
+        await t;
+    }
+
+    public static async Task AddMembers(MainWindow w, ChatItem c)
+    {
+        var sp = new StackPanel { Spacing = 8, Width = 400 };
+        sp.Children.Add(T.Txt("Выберите из своих личных чатов", 12, T.Muted));
+        var lv = ChatPicker(Store.Chats.Where(x => x.IsPrivate && x.PeerId != null && x.PeerId != Store.MyId && !x.PeerBot), Array.Empty<string>(), 340);
+        sp.Children.Add(lv);
+        if (await Show(Make(w, c.IsChannel ? "Добавить подписчиков" : "Добавить участников", sp, "Добавить", "Отмена")) != ContentDialogResult.Primary) return;
+        var ids = Picked(lv).Select(id => Store.Chat(id)?.PeerId).Where(x => x != null).Select(x => x!).ToList();
+        if (ids.Count == 0) return;
+        try { await Api.Rpc("lm_add_members", J.O(("p_chat", c.Id), ("p_members", ids))); await Store.LoadChats(); Store.Say("Добавлено: " + ids.Count); }
+        catch (Exception e) { Store.Say(e.Message); }
     }
 
     public static async Task Safety(MainWindow w, ChatItem c)
@@ -600,7 +716,7 @@ public static class Dialogs
             var (k, name, glyph) = throws[i];
             tg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             var c = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
-            var ic = T.Icon(glyph, 22, T.A2); ic.HorizontalAlignment = HorizontalAlignment.Center; c.Children.Add(ic);
+            var ic = Art.Throw(k, k switch { "dice" => 5, "coin" => 1, "darts" => 6, _ => 5 }, 34); ic.HorizontalAlignment = HorizontalAlignment.Center; c.Children.Add(ic);
             c.Children.Add(new TextBlock { Text = name, FontSize = 12, Foreground = T.Text, HorizontalAlignment = HorizontalAlignment.Center });
             var b = new Button { Content = c, HorizontalAlignment = HorizontalAlignment.Stretch, Height = 72, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(0) };
             T.Fill(b, T.Panel2, T.B(0xFF24264A));

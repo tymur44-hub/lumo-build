@@ -50,7 +50,7 @@ public static class Store
     {
         if (Started || MyId == null) return;
         Started = true;
-        if (Demo) { DemoData.Load(); ChatsChanged?.Invoke(); MeChanged?.Invoke(); return; }
+        if (Demo) { DemoData.Load(); ChatsChanged?.Invoke(); MeChanged?.Invoke(); StoriesChanged?.Invoke(); return; }
         var id = MyId!;
         _ = Net.Pick();
         await LoadMe();
@@ -299,6 +299,24 @@ public static class Store
             return cid;
         }
         catch (Exception e) { Say(e.Message); return null; }
+    }
+
+    /// <summary>Удалить чат у себя (выйти; в личном — ещё очистить историю) или у всех (владелец)</summary>
+    public static async Task DeleteChat(string chatId, bool everyone)
+    {
+        var id = MyId; if (id == null) return;
+        try
+        {
+            if (everyone) await Api.Rpc("lm_delete_chat", J.O(("p_chat", chatId), ("p_all", true)));
+            else
+            {
+                if (Chat(chatId)?.IsPrivate == true) try { await Api.Rpc("lm_clear_chat", J.O(("p_chat", chatId))); } catch { }
+                await Api.Delete("lm_members", Api.Q(("chat_id", chatId), ("user_id", id)));
+            }
+            Messages.Remove(chatId);
+            await LoadChats();
+        }
+        catch (Exception e) { Say(e.Message); }
     }
 
     public static async Task Join(string chatId)

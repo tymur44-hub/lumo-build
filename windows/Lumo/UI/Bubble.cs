@@ -190,14 +190,7 @@ public sealed class BubbleView : Grid
     static readonly Dictionary<string, (uint, uint)> gameColors = new() { ["ttt"] = (0xFF22C1FF, 0xFF3A7BFF), ["checkers"] = (0xFFA7743F, 0xFF6B4426), ["sea"] = (0xFF2BB3FF, 0xFF1460C8), ["chess"] = (0xFF4A4F5C, 0xFF16181D) };
     static readonly Dictionary<string, string> gameGlyphs = new() { ["ttt"] = "\uE711", ["checkers"] = "\uEA3A", ["sea"] = "\uE804", ["chess"] = "\uE7FC" };
 
-    public static FrameworkElement GameIcon(string k, double size = 46)
-    {
-        var c = gameColors.GetValueOrDefault(k, (0xFF7C5CFF, 0xFF22C1FF));
-        var g = new Grid { Width = size, Height = size, CornerRadius = new CornerRadius(size * 0.3), Background = T.Grad(c.Item1, c.Item2) };
-        var ic = T.Icon(gameGlyphs.GetValueOrDefault(k, "\uE7FC"), size * 0.46, T.White); ic.HorizontalAlignment = HorizontalAlignment.Center; ic.VerticalAlignment = VerticalAlignment.Center;
-        g.Children.Add(ic);
-        return g;
-    }
+    public static FrameworkElement GameIcon(string k, double size = 46) => Art.Game(k, size);
 
     /// <summary>Карточка игры вдвоём (как на телефонах)</summary>
     FrameworkElement GameCard(Message m)
@@ -257,10 +250,7 @@ public sealed class BubbleView : Grid
             _ => ("Монетка", v == 1 ? "Орёл" : "Решка"),
         };
         var card = new StackPanel { Width = 170, Spacing = 6, Padding = new Thickness(12), CornerRadius = new CornerRadius(18), Background = mine ? T.Out : T.Bubble, HorizontalAlignment = HorizontalAlignment.Left };
-        var face = new Grid { Width = 64, Height = 64, CornerRadius = new CornerRadius(16), Background = T.Grad(0xFFFFFFFF, 0xFFDCD8F4), HorizontalAlignment = HorizontalAlignment.Center };
-        var num = new TextBlock { Text = k == "dice" ? v.ToString() : k == "coin" ? (v == 1 ? "О" : "Р") : v.ToString(), FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-            Foreground = T.B(0xFF25264A), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        face.Children.Add(num);
+        var face = Art.Throw(k, v, 72); face.HorizontalAlignment = HorizontalAlignment.Center;
         card.Children.Add(face);
         var l1 = T.Txt(name, 12.5, mine ? T.OutMuted : T.Muted); l1.HorizontalAlignment = HorizontalAlignment.Center; card.Children.Add(l1);
         var l2 = T.Txt(label, 15, mine ? T.White : T.Text, bold: true); l2.HorizontalAlignment = HorizontalAlignment.Center; card.Children.Add(l2);
