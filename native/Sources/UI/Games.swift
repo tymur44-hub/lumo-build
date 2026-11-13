@@ -399,6 +399,9 @@ struct GamesSheet: View {
     let chatId: String
     @State private var game = "ttt"
     @State private var stake = 0
+    /// таймер партии: минуты и добавка за ход (0 — без таймера)
+    @State private var clock: (Int, Int) = (0, 0)
+    private let clocks: [(Int, Int, String)] = [(0, 0, "Без таймера"), (1, 0, "1 мин"), (3, 2, "3 + 2"), (5, 0, "5 мин"), (10, 0, "10 мин"), (15, 10, "15 + 10"), (30, 0, "30 мин")]
     @State private var custom = ""
     @State private var busy = false
 
@@ -450,6 +453,28 @@ struct GamesSheet: View {
                             }
                             .buttonStyle(.plain)
                         }
+                    }
+                    if game == "chess" || game == "checkers" {
+                        header("ТАЙМЕР")
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(clocks, id: \.2) { c in
+                                    let on = clock.0 == c.0 && clock.1 == c.1
+                                    Button { UISelectionFeedbackGenerator().selectionChanged(); clock = (c.0, c.1) } label: {
+                                        HStack(spacing: 4) {
+                                            if c.0 > 0 { Image(systemName: "timer").font(.system(size: 11, weight: .bold)) }
+                                            Text(c.2).font(.system(size: 13.5, weight: .bold))
+                                        }
+                                        .foregroundColor(on ? .white : Theme.text)
+                                        .padding(.horizontal, 12).padding(.vertical, 8)
+                                        .background(RoundedRectangle(cornerRadius: 12).fill(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.panel2)))
+                                    }
+                                }
+                            }
+                        }
+                        Text(clock.0 > 0 ? "У каждого \(clock.0) мин на партию" + (clock.1 > 0 ? " и +\(clock.1) сек за каждый ход" : "") + ". Время вышло — поражение. Если соперник выйдет из игры, часы остановятся, а через 30 секунд победа достанется вам."
+                             : "Без ограничения времени: соперник может думать над ходом до суток.")
+                            .font(.system(size: 12.5)).foregroundColor(Theme.muted).padding(.top, 6)
                     }
                     header("СТАВКА ЛЮМЕНАМИ")
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -515,7 +540,9 @@ struct GamesSheet: View {
         busy = true
         Task {
             do {
-                let g = try await LumoGames.call(["action": "new", "chat_id": chatId, "kind": game, "stake": stake])
+                var body: [String: Any] = ["action": "new", "chat_id": chatId, "kind": game, "stake": stake]
+                if (game == "chess" || game == "checkers") && clock.0 > 0 { body["clock_min"] = clock.0; body["clock_inc"] = clock.1 }
+                let g = try await LumoGames.call(body)
                 busy = false
                 dismiss()
                 model.say("Приглашение отправлено")
