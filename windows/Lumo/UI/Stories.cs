@@ -7,16 +7,18 @@ using Microsoft.UI.Xaml.Media;
 namespace Lumo.UI;
 
 /// <summary>Полоса историй над списком чатов</summary>
-public sealed class StoriesStrip : ScrollViewer
+public sealed class StoriesStrip : Grid
 {
     readonly StackPanel row = new() { Orientation = Orientation.Horizontal, Spacing = 10, Padding = new Thickness(12, 2, 12, 8) };
     public event Action<int>? Open;
 
     public StoriesStrip()
     {
-        HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden; HorizontalScrollMode = ScrollMode.Enabled;
-        VerticalScrollBarVisibility = ScrollBarVisibility.Disabled; VerticalScrollMode = ScrollMode.Disabled;
-        Content = row;
+        Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollMode = ScrollMode.Enabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollMode = ScrollMode.Disabled, Content = row,
+        });
         Store.StoriesChanged += Build;
         Build();
     }
