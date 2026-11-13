@@ -116,6 +116,24 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-famil
 @keyframes fade{from{opacity:0}}
 .drawb{display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px 12px;border-radius:16px;background:color-mix(in srgb,var(--gold) 18%,var(--panel));font-size:14px;font-weight:700}
 .drawb span{flex:1}.drawb button{border:0;border-radius:12px;padding:8px 12px;font:inherit;font-weight:800;cursor:pointer}
+/* таймер, статус соперника, реакции */
+.clk{display:inline-block;margin-top:4px;padding:3px 8px;border-radius:9px;background:var(--panel2);font:800 15px/1.2 -apple-system,BlinkMacSystemFont,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums;color:var(--text);letter-spacing:.5px}
+.pl.on .clk{background:var(--a1);color:#fff}
+.clk.low{background:#ff4d5e!important;color:#fff!important}.clk.low.tick{animation:clp 1s steps(2) infinite}
+@keyframes clp{50%{opacity:.6}}
+.clk.pz{opacity:.6}
+.od{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px;background:#8d90b8}
+.od.on{background:#2bd67b;box-shadow:0 0 0 3px rgba(43,214,123,.22)}.od.game{background:#2bd67b;animation:odp 1.6s ease-in-out infinite}
+@keyframes odp{50%{box-shadow:0 0 0 5px rgba(43,214,123,.12)}}
+.leftb{display:flex;align-items:center;gap:10px;margin-top:10px;padding:11px 13px;border-radius:16px;background:color-mix(in srgb,#ff9f43 20%,var(--panel));font-size:14px;font-weight:700}
+.leftb b{font-variant-numeric:tabular-nums;font-size:17px;color:#ff9f43}
+.rbtn svg{width:22px;height:22px}
+.rpick{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 58px);transform:translateX(-50%);display:grid;grid-template-columns:repeat(6,1fr);gap:4px;padding:8px;border-radius:20px;background:var(--panel);box-shadow:0 14px 40px rgba(0,0,0,.4);z-index:9;animation:rpi .22s cubic-bezier(.2,1.4,.4,1)}
+@keyframes rpi{from{opacity:0;transform:translateX(-50%) scale(.85) translateY(-8px)}}
+.rpick button{width:46px;height:46px;border:0;border-radius:14px;background:none;font-size:28px;cursor:pointer;padding:0}
+.rpick button:active{transform:scale(.88)}
+.rfly{position:fixed;z-index:8;width:76px;height:76px;pointer-events:none;margin:-38px 0 0 -38px}
+.rfly img{width:100%;height:100%}.rfly span{font-size:56px;line-height:76px;display:block;text-align:center}
 /* кнопки */
 .acts{display:flex;gap:10px;margin-top:14px}
 .btn{flex:1;height:52px;border:0;border-radius:16px;font:inherit;font-size:16px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;color:#fff;background:linear-gradient(135deg,var(--a1),var(--a2));transition:transform .12s,opacity .2s}
@@ -149,13 +167,22 @@ var I={x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-widt
  flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
  shuffle:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>',
  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>',
- play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>'};
+ play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>',
+ smile:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.2"/><path d="M8 14.2c1 1.4 2.4 2.1 4 2.1s3-.7 4-2.1"/><circle cx="9" cy="9.8" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.8" r="1.1" fill="currentColor" stroke="none"/></svg>'};
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function toast(t){var e=$('#err');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(function(){e.classList.remove('on')},2600)}
 function ask(t,sub,yes,fn){ var o=document.createElement('div'); o.className='ask'; o.innerHTML='<div class="askb"><b>'+esc(t)+'</b><span>'+esc(sub)+'</span><div class="acts"><button class="btn ghost" data-n>Отмена</button><button class="btn" style="background:var(--danger)" data-y>'+esc(yes)+'</button></div></div>';
   document.body.appendChild(o); requestAnimationFrame(function(){o.classList.add('on')});
   var done=function(){ o.classList.remove('on'); setTimeout(function(){o.remove()},250); };
   o.onclick=function(e){ if(e.target===o||e.target.hasAttribute('data-n')) done(); if(e.target.hasAttribute('data-y')){ done(); fn(); } }; }
+/* свернуть игру вниз (приложение оставит её полоской внизу экрана) — если игра идёт и приложение это умеет */
+function post(msg){ try{ if(window.webkit&&webkit.messageHandlers&&webkit.messageHandlers.lumo) return webkit.messageHandlers.lumo.postMessage(msg); }catch(e){}
+  try{ if(window.LumoBridge&&LumoBridge.post) return LumoBridge.post(msg); }catch(e){} try{ parent.postMessage({lumoGame:msg},'*'); }catch(e){} }
+function closeOrMin(){ if(C.mini&&G&&(G.status==='active'||G.status==='setup'||G.status==='invite')&&player()) return post('minimize'); close(); }
+var lastInfo='';
+function postInfo(){ if(!C.mini||!G) return; var t=TITLES[G.kind]||'Игра', s=G.status==='done'?'Партия окончена':G.status==='invite'?'Ждём соперника':G.status==='active'&&player()?(G.turn===G.me?'Ваш ход':'Ход соперника'):statusText();
+  if(G.clock&&G.status==='active'){ var my=G.me===G.p1?'w':'b'; s+=' · '+fmtClock(G.clock[my]); }
+  var m='info|'+t+'|'+s+'|'+G.kind; if(m!==lastInfo){ lastInfo=m; post(m); } }
 function close(){ try{ if(window.webkit&&webkit.messageHandlers&&webkit.messageHandlers.lumo) return webkit.messageHandlers.lumo.postMessage('close'); }catch(e){}
   try{ if(window.LumoBridge) return LumoBridge.leave(); }catch(e){} try{ parent.postMessage({lumoGame:'close'},'*'); }catch(e){} }
 function lum(n){var m=n%10,mm=n%100;return n+' '+(m===1&&mm!==11?'люмен':m>=2&&m<=4&&(mm<10||mm>=20)?'люмена':'люменов')}
@@ -163,7 +190,11 @@ function api(body){ return fetch(C.api,{method:'POST',headers:{'Content-Type':'a
   .then(function(r){ return r.json().then(function(j){ if(r.status===401) throw new Error('Сессия устарела — закройте и откройте игру заново'); if(j.error) throw new Error(j.error); return j; }); }); }
 function act(body){ if(busy) return; busy=true; body.game_id=C.gameId; return api(body).then(function(g){ busy=false; set(g); }).catch(function(e){ busy=false; toast(e.message); poll(); }); }
 function set(g){ G=g; lastVer=g.ver; render(); }
-function poll(){ if(document.hidden||busy) return; api({action:'get',game_id:C.gameId}).then(function(g){ if(g.ver!==lastVer||!G) set(g); }).catch(function(e){ if(!G) $('#app').innerHTML='<div class="load">'+esc(e.message)+'</div>'; }); }
+function poll(){ if(document.hidden||busy) return; api({action:'get',game_id:C.gameId}).then(function(g){ if(g.ver!==lastVer||!G) return set(g);
+    // ход не менялся — обновляем только часы, статус соперника и реакции, без перерисовки доски
+    var re=(G.opp_in_game!==g.opp_in_game)||(G.opp_online!==g.opp_online)||((G.opp_left_ms==null)!==(g.opp_left_ms==null))||(!!(G.clock&&G.clock.paused)!==!!(g.clock&&g.clock.paused));
+    G.clock=g.clock; G.opp_in_game=g.opp_in_game; G.opp_online=g.opp_online; G.opp_left_ms=g.opp_left_ms; G.reacts=g.reacts; G._recv=Date.now(); G._flag=0; G._lflag=0;
+    if(re&&!chDrag) render(); else { tickClocks(); showReacts(); } }).catch(function(e){ if(!G) $('#app').innerHTML='<div class="load">'+esc(e.message)+'</div>'; }); }
 function startPoll(){ clearInterval(timer); timer=setInterval(poll,1500); }
 document.addEventListener('visibilitychange',function(){ if(!document.hidden) poll(); });
 window.lumoToken=function(t){ C.token=t; };
@@ -185,19 +216,26 @@ function mark(kind,isP1){ if(kind==='ttt') return isP1?'<svg class="mk x" viewBo
   if(kind==='chess') return '<span class="cp" style="width:26px;height:26px;flex:none">'+chPiece(isP1?'K':'k')+'</span>'; return ''; }
 function head(){
   var g=G, t1=g.status==='active'&&g.turn===g.p1, t2=g.status==='active'&&g.turn===g.p2;
-  var p=function(id,nm,on,cls,isP1){ return '<div class="pl '+cls+(on?' on':'')+'"><div class="av'+(isP1?'':' o')+'">'+esc((nm||'?').charAt(0).toUpperCase())+'</div><div style="min-width:0;flex:1"><b>'+esc(nm||'Ожидание…')+'</b><span>'+(id===g.me?'Вы':g.status==='done'&&g.winner===id?'Победитель':isP1?'Создал игру':'Соперник')+'</span></div>'+mark(g.kind,isP1)+'</div>'; };
-  return '<div class="top"><button class="ib" id="gX" title="Закрыть">'+I.x+'</button><h1>'+TITLES[g.kind]+'</h1>'+(g.stake?'<span class="chip" title="Ставка каждого игрока">'+I.gem+g.stake+'</span>':'<span style="width:40px"></span>')+'</div>'+
+  var sub=function(id,isP1){
+    if(id===g.me) return 'Вы';
+    if(g.status==='done'&&g.winner===id) return 'Победитель';
+    if(id&&player()&&g.status!=='done'){ var st=g.opp_in_game?['game','в игре']:g.opp_online?['on','в сети']:['','не в сети']; return '<i class="od '+st[0]+'"></i>'+st[1]; }
+    return isP1?'Создал игру':'Соперник'; };
+  var clk=function(isP1){ if(!g.clock) return ''; return '<br><span class="clk" data-side="'+(isP1?'w':'b')+'">'+fmtClock(g.clock[isP1?'w':'b'])+'</span>'; };
+  var p=function(id,nm,on,cls,isP1){ return '<div class="pl '+cls+(on?' on':'')+'" data-uid="'+esc(id||'')+'"><div class="av'+(isP1?'':' o')+'">'+esc((nm||'?').charAt(0).toUpperCase())+'</div><div style="min-width:0;flex:1"><b>'+esc(nm||'Ожидание…')+'</b><span>'+sub(id,isP1)+'</span>'+clk(isP1)+'</div>'+mark(g.kind,isP1)+'</div>'; };
+  var canReact=player()&&(g.status==='active'||g.status==='setup');
+  return '<div class="top"><button class="ib" id="gX" title="Свернуть">'+I.x+'</button><h1>'+TITLES[g.kind]+'</h1>'+(canReact?'<button class="ib rbtn" id="gR" title="Реакция">'+I.smile+'</button>':'')+(g.stake?'<span class="chip" title="Ставка каждого игрока">'+I.gem+g.stake+'</span>':(canReact?'':'<span style="width:40px"></span>'))+'</div>'+
    '<div class="players">'+p(g.p1,g.p1n,t1,'',true)+'<span class="vs">VS</span>'+p(g.p2,g.p2n,t2,'r',false)+'</div>'+
    '<div class="status'+(g.status==='active'&&g.turn===g.me?' me':'')+'">'+esc(statusText())+'</div>';
 }
 function result(){
   var g=G; if(g.status!=='done') return '';
-  var bank=g.stake*2, win=g.winner===g.me, why={resign:' — соперник сдался',timeout:' — соперник не ходил больше суток',no_moves:'',fleet:'',line:'',mate:' — мат'}[g.result]||'';
-  var drawWhy={stalemate:'Пат',material:'Недостаточно фигур для мата',fifty:'50 ходов без взятий',repetition:'Троекратное повторение',agreed:'По согласию'}[g.result];
+  var bank=g.stake*2, win=g.winner===g.me, why={resign:' — соперник сдался',timeout:' — соперник не ходил больше суток',no_moves:'',fleet:'',line:'',mate:' — мат',time:' — у соперника кончилось время',abandon:' — соперник вышел из игры'}[g.result]||'';
+  var drawWhy={stalemate:'Пат',material:'Недостаточно фигур для мата',fifty:'50 ходов без взятий',repetition:'Троекратное повторение',agreed:'По согласию',time_draw:'Время вышло, но матовать нечем'}[g.result];
   if(!g.winner) return '<div class="res"><b>Ничья'+(drawWhy?' · '+drawWhy:'')+'</b><span>'+(g.stake?'Ставки вернулись игрокам':'Хорошая партия')+'</span></div>';
   if(!player()) return '<div class="res"><b>Победил(а) '+esc(g.winner===g.p1?g.p1n:g.p2n)+'</b>'+(g.stake?'<span>Выигрыш: '+lum(bank)+'</span>':'')+'</div>';
-  if(win) return '<div class="res win"><b>'+(g.result==='mate'?'Мат! ':'')+'Вы победили'+(g.result==='resign'?'':'!')+'</b><span>'+(g.stake?'Выигрыш: +'+lum(bank):'Отличная игра')+esc(g.result==='resign'||g.result==='timeout'?why:'')+'</span></div>';
-  return '<div class="res"><b>Победил(а) '+esc(oppName())+'</b><span>'+(g.stake?'Ставка ушла сопернику':'В следующий раз получится')+'</span></div>';
+  if(win) return '<div class="res win"><b>'+(g.result==='mate'?'Мат! ':'')+'Вы победили'+(g.result==='resign'?'':'!')+'</b><span>'+(g.stake?'Выигрыш: +'+lum(bank):'Отличная игра')+esc(g.result==='resign'||g.result==='timeout'||g.result==='time'||g.result==='abandon'?why:'')+'</span></div>';
+  return '<div class="res"><b>Победил(а) '+esc(oppName())+'</b><span>'+(g.result==='time'?'У вас кончилось время. ':g.result==='abandon'?'Вы вышли из игры больше чем на 30 секунд. ':'')+(g.stake?'Ставка ушла сопернику':'В следующий раз получится')+'</span></div>';
 }
 function actions(){
   var g=G, h='';
@@ -212,12 +250,47 @@ function actions(){
   } else if(g.status!=='active') h='<button class="btn ghost" id="gDone">Закрыть</button>';
   return h?'<div class="acts">'+h+'</div>':'';
 }
+/* ---- часы ---- */
+function fmtClock(msv){ msv=Math.max(0,msv||0); var s=Math.ceil(msv/1000); if(msv<10000&&msv>0) return (msv/1000).toFixed(1).replace('.',','); var m=Math.floor(s/60); return m+':'+String(s%60).padStart(2,'0'); }
+var clockTimer=null;
+function tickClocks(){ clearInterval(clockTimer); if(!G) return;
+  var upd=function(){ var el=Date.now()-(G._recv||Date.now());
+    if(G.clock){ ['w','b'].forEach(function(sd){ var e=document.querySelector('.clk[data-side="'+sd+'"]'); if(!e) return;
+      var v=G.clock[sd]-(G.clock.running===sd?el:0); e.textContent=fmtClock(v);
+      e.classList.toggle('low',v<20000&&G.status==='active'); e.classList.toggle('tick',G.clock.running===sd&&v<10000); e.classList.toggle('pz',!!G.clock.paused);
+      if(G.clock.running===sd&&v<=0&&!G._flag){ G._flag=1; poll(); } }); }
+    var lb=document.getElementById('gLeft'); if(lb&&G.opp_left_ms!=null){ var lv=G.opp_left_ms-el; lb.textContent=fmtClock(lv); if(lv<=0&&!G._lflag){ G._lflag=1; poll(); } } };
+  upd(); if(G.status==='active') clockTimer=setInterval(upd,100); }
+/* ---- реакции во время игры ---- */
+var REACTS=['👍','👏','😂','😮','😢','😡','🔥','❤️','🤝','🤔','😎','🎉'], seenReact={};
+function reactPick(){ var o=document.querySelector('.rpick'); if(o){ o.remove(); return; }
+  o=document.createElement('div'); o.className='rpick'; o.innerHTML=REACTS.map(function(e){return '<button>'+e+'</button>';}).join('');
+  document.body.appendChild(o);
+  o.onclick=function(ev){ var bt=ev.target.closest('button'); if(!bt) return; o.remove(); var e=bt.textContent;
+    flyReact(G.me,e); seenReact[G.me]=Date.now()+1;
+    api({action:'react',game_id:C.gameId,emoji:e}).catch(function(err){ toast(err.message); }); };
+  setTimeout(function(){ document.addEventListener('click',function h(ev){ if(!ev.target.closest('.rpick')&&!ev.target.closest('#gR')){ var x=document.querySelector('.rpick'); if(x) x.remove(); document.removeEventListener('click',h); } }); },0); }
+function emoCode(e){ return [].map.call(Array.from(e),function(c){return c.codePointAt(0).toString(16);}).join('_'); }
+function flyReact(uid,e){
+  var card=document.querySelector('.pl[data-uid="'+uid+'"]'), r=card?card.getBoundingClientRect():{left:innerWidth/2-20,top:120,width:40,height:40};
+  var f=document.createElement('div'); f.className='rfly'; f.style.left=(r.left+r.width/2)+'px'; f.style.top=(r.top+r.height/2)+'px';
+  var img=new Image(); img.src='https://fonts.gstatic.com/s/e/notoemoji/latest/'+emoCode(e)+'/512.webp';
+  img.onerror=function(){ if(img.src.indexOf('_fe0f')>0){ img.src=img.src.replace(/_fe0f/g,''); return; } f.innerHTML='<span>'+e+'</span>'; };
+  f.appendChild(img); document.body.appendChild(f);
+  var dx=(Math.random()*60-30);
+  f.animate([{transform:'scale(.2) translateY(0)',opacity:0},{transform:'scale(1.25) translateY(-20px)',opacity:1,offset:.18},{transform:'scale(1) translateY(-60px) translateX('+dx/2+'px)',opacity:1,offset:.65},{transform:'scale(.8) translateY(-140px) translateX('+dx+'px)',opacity:0}],{duration:2600,easing:'cubic-bezier(.2,.8,.3,1)'}).onfinish=function(){ f.remove(); };
+  try{ navigator.vibrate&&navigator.vibrate(12); }catch(x){} }
+function showReacts(){ var rs=G.reacts||{}; Object.keys(rs).forEach(function(uid){ if(uid===G.me) return; var t=new Date(rs[uid].at).getTime(); if(!(seenReact[uid]>=t)){ seenReact[uid]=t; flyReact(uid,rs[uid].e); } }); }
 function render(){
   var g=G, body='';
   if(g.kind==='ttt') body=renderTTT(); else if(g.kind==='checkers') body=renderCk(); else if(g.kind==='chess') body=renderChess(); else body=renderSea();
   var stakeHint=g.status==='invite'&&g.stake?'<div class="hint">Каждый игрок ставит '+lum(g.stake)+'. Победитель забирает '+lum(g.stake*2)+', при ничьей ставки возвращаются.</div>':'';
-  $('#app').innerHTML=head()+'<div class="board-wrap">'+body+'</div>'+result()+stakeHint+actions();
-  $('#gX').onclick=close; var d=$('#gDone'); if(d) d.onclick=close;
+  var leftB=G.opp_left_ms!=null&&G.status==='active'?'<div class="leftb"><span style="flex:1">Соперник вышел из игры. Часы стоят. Не вернётся — победа ваша через</span><b id="gLeft">'+fmtClock(G.opp_left_ms)+'</b></div>':'';
+  $('#app').innerHTML=head()+leftB+'<div class="board-wrap">'+body+'</div>'+result()+stakeHint+actions();
+  $('#gX').onclick=closeOrMin; var d=$('#gDone'); if(d) d.onclick=close;
+  postInfo();
+  var rb=$('#gR'); if(rb) rb.onclick=reactPick;
+  G._recv=Date.now(); tickClocks(); showReacts();
   [].forEach.call(document.querySelectorAll('[data-a]'),function(b){ b.onclick=function(){ var a=b.dataset.a;
     if(a==='resign') return ask('Сдаться?',G.stake?'Ставка уйдёт сопернику.':'Победа достанется сопернику.','Сдаться',function(){ act({action:'resign'}); });
     if(a==='draw_offer') return ask('Предложить ничью?','Если соперник согласится, партия закончится вничью'+(G.stake?' и ставки вернутся.':'.'),'Предложить',function(){ act({action:'draw_offer'}); });
