@@ -156,7 +156,7 @@ public sealed class ChatView : Grid
         Children.Add(overlay);
 
         var f = new KeyboardAccelerator { Key = VirtualKey.F, Modifiers = VirtualKeyModifiers.Control };
-        f.Invoked += (_, e) => { e.Handled = true; _ = Dialogs.SearchInChat(win, this); };
+        f.Invoked += (s, e) => { e.Handled = true; _ = Dialogs.SearchInChat(win, this); };
         KeyboardAccelerators.Add(f);
 
         Store.MessagesChanged += OnMessages;
