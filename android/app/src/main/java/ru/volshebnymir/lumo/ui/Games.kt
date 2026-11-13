@@ -56,11 +56,12 @@ import ru.volshebnymir.lumo.core.*
 // ================= Мини-игры: броски в чате и игры вдвоём =================
 
 object LumoGames {
-    val titles = mapOf("ttt" to "Крестики-нолики", "checkers" to "Шашки", "sea" to "Морской бой")
-    val descs = mapOf("ttt" to "Три в ряд на поле 3×3", "checkers" to "Русские шашки, взятие обязательно", "sea" to "Флот 10 кораблей, поле 10×10")
+    val titles = mapOf("ttt" to "Крестики-нолики", "checkers" to "Шашки", "sea" to "Морской бой", "chess" to "Шахматы")
+    val descs = mapOf("ttt" to "Три в ряд на поле 3×3", "checkers" to "Русские шашки, взятие обязательно", "sea" to "Флот 10 кораблей, поле 10×10",
+        "chess" to "Классические шахматы по всем правилам")
     val throws = listOf("dice" to "Кубик", "darts" to "Дартс", "basket" to "Баскетбол", "football" to "Футбол", "coin" to "Монетка")
     val colors = mapOf("ttt" to listOf(Color(0xFF22C1FF), Color(0xFF3A7BFF)), "checkers" to listOf(Color(0xFFA7743F), Color(0xFF6B4426)),
-        "sea" to listOf(Color(0xFF2BB3FF), Color(0xFF1460C8)))
+        "sea" to listOf(Color(0xFF2BB3FF), Color(0xFF1460C8)), "chess" to listOf(Color(0xFF4A4F5C), Color(0xFF16181D)))
     fun label(k: String, v: Int) = when (k) {
         "dice" -> "Выпало $v"
         "darts" -> if (v == 6) "В яблочко!" else if (v == 1) "Мимо" else "Очков: $v"
@@ -218,6 +219,20 @@ fun GameIcon(kind: String, size: Int = 46) {
                 drawCircle(Color(0xFF2A1A10), s / 2, Offset(s / 2, s / 2 + s * .1f)); drawCircle(Color(0xFFF4EAD6), s / 2, Offset(s / 2, s / 2))
                 drawCircle(Color(0xFFC9A46A), s * .28f, Offset(s / 2, s / 2), style = Stroke(s * .05f))
             }
+            "chess" -> Canvas(Modifier.size((size * .62f).dp)) {
+                // силуэт шахматного коня
+                val s = this.size.minDimension / 19f
+                fun x(v: Float) = (v - 4f) * s; fun y(v: Float) = (v - 3f) * s
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(x(7f), y(20f)); cubicTo(x(7f), y(16f), x(8.5f), y(14f), x(11f), y(12f))
+                    cubicTo(x(9.4f), y(12f), x(8f), y(12.8f), x(7f), y(14f)); lineTo(x(5f), y(12.4f))
+                    cubicTo(x(4.5f), y(11.7f), x(4.5f), y(10.9f), x(5f), y(10.2f)); cubicTo(x(6.8f), y(7.4f), x(9.3f), y(5.2f), x(12.3f), y(4.4f))
+                    lineTo(x(13f), y(3f)); lineTo(x(14.2f), y(5.3f)); cubicTo(x(17f), y(6.9f), x(18.7f), y(10.1f), x(18.7f), y(14.3f))
+                    cubicTo(x(18.7f), y(16.3f), x(18.4f), y(17.9f), x(17.9f), y(20f)); close()
+                }
+                drawPath(path, Color.White)
+                drawRoundRect(Color.White, Offset(x(5f), y(20.4f)), androidx.compose.ui.geometry.Size(14f * s, 1.6f * s), androidx.compose.ui.geometry.CornerRadius(s, s))
+            }
             else -> Icon(Icons.Filled.DirectionsBoat, null, tint = Color.White, modifier = Modifier.size((size * .5f).dp))
         }
     }
@@ -305,7 +320,7 @@ fun GamesDialog(chatId: String, onClose: () -> Unit) {
                     }
                 }
                 hdr("ИГРАТЬ ВДВОЁМ")
-                listOf("ttt", "checkers", "sea").forEach { k ->
+                listOf("chess", "ttt", "checkers", "sea").forEach { k ->
                     Row(Modifier.padding(bottom = 8.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.panel2)
                         .border(2.dp, if (game == k) p.a1 else Color.Transparent, RoundedCornerShape(16.dp)).clickable { game = k }.padding(10.dp),
                         verticalAlignment = Alignment.CenterVertically) {

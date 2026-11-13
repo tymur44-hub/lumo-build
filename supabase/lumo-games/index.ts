@@ -1,5 +1,6 @@
 // Lumo: игры вдвоём в чате — крестики-нолики, шашки, морской бой; ставки люменами
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { chessStart, play as chessPlay, verdict as chessVerdict, clientMoves as chessMoves, inCheck as chessInCheck, type Color } from "./chess.ts";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const CORS: Record<string, string> = {
@@ -11,7 +12,7 @@ const json = (d: unknown, status = 200) => new Response(JSON.stringify(d), { sta
 class Err extends Error {}
 const fail = (m: string): never => { throw new Err(m); };
 
-export const TITLES: Record<string, string> = { ttt: "Крестики-нолики", checkers: "Шашки", sea: "Морской бой" };
+export const TITLES: Record<string, string> = { ttt: "Крестики-нолики", checkers: "Шашки", sea: "Морской бой", chess: "Шахматы" };
 
 // ---------- крестики-нолики ----------
 const LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
@@ -202,6 +203,13 @@ async function view(g: Game, me: string) {
     // корабли соперника показываем только после конца игры
     if (g.status === "done") { const opp = (sec || []).find((s: Game) => s.user_id !== me); out.oppShips = opp?.data?.ships || null; }
   }
+  if (g.kind === "chess" && g.status === "active") {
+    const side: Color = g.turn === g.p1 ? "w" : "b";
+    out.moves = chessMoves(g.state, side);
+    // король под шахом — подсветим его клетку
+    out.check = chessInCheck(g.state.board, side) ? g.state.board.indexOf(side === "w" ? "K" : "k") : -1;
+  }
+  if (g.kind === "chess" && g.state) { const st = { ...g.state }; delete st.hist; out.state = st; }
   if (g.kind === "checkers" && g.status === "active") {
     const side = g.turn === g.p1 ? "w" : "b";
     out.moves = checkersMoves(g.state.board, side).map((m) => m.path);
@@ -224,7 +232,8 @@ async function handle(me: string, b: Game) {
     const { count } = await db.from("lm_games").select("id", { count: "exact", head: true }).eq("p1", me).eq("status", "invite");
     if ((count || 0) >= 5) fail("У вас уже 5 непринятых приглашений — отмените старые");
     await debit(me, stake, chat);
-    const state = kind === "ttt" ? { board: "........." } : kind === "checkers" ? { board: checkersStart(), quiet: 0, last: null } : { shots: {}, ready: {} };
+    const state = kind === "ttt" ? { board: "........." } : kind === "checkers" ? { board: checkersStart(), quiet: 0, last: null }
+      : kind === "chess" ? chessStart() : { shots: {}, ready: {} };
     const { data: g, error } = await db.from("lm_games").insert({ chat_id: chat, kind, p1: me, stake, state }).select("*").single();
     if (error) { await credit(me, stake, chat, "game_refund"); fail(error.message); }
     const { data: m, error: me2 } = await db.from("lm_messages").insert({ chat_id: chat, sender_id: me, kind: "game", body: TITLES[kind], meta: { game: g.id, g: kind, stake, st: "invite" } }).select("id").single();
@@ -297,6 +306,20 @@ async function handle(me: string, b: Game) {
     return await view(ng, me);
   }
 
+  // ---------- шахматы: предложение ничьей ----------
+  if (g.kind === "chess" && (action === "draw_offer" || action === "draw_accept" || action === "draw_decline")) {
+    if (g.status !== "active") fail("Игра не идёт");
+    if (action === "draw_offer") {
+      if (g.state.draw) fail(g.state.draw === me ? "Вы уже предложили ничью" : "Соперник уже предлагает ничью");
+      return await view(await save(g, { state: { ...g.state, draw: me } }), me);
+    }
+    if (!g.state.draw || g.state.draw === me) fail("Ничью вам не предлагали");
+    if (action === "draw_decline") return await view(await save(g, { state: { ...g.state, draw: null } }), me);
+    const ng = await finish(g, { state: { ...g.state, draw: null } }, null, "agreed");
+    await syncMsg(ng);
+    return await view(ng, me);
+  }
+
   if (action !== "move") fail("Неизвестное действие");
   if (g.status !== "active") fail("Игра не идёт");
   if (g.turn !== me) fail("Сейчас ход соперника");
@@ -312,6 +335,22 @@ async function handle(me: string, b: Game) {
     if (w) ng = await finish(g, { state: { board: nb, last: i } }, w === "draw" ? null : me, w === "draw" ? "draw" : "line");
     else ng = await save(g, { state: { board: nb, last: i }, turn: opp });
     if (w) await syncMsg(ng);
+    return await view(ng, me);
+  }
+
+  if (g.kind === "chess") {
+    const side: Color = me === g.p1 ? "w" : "b";
+    const from = Math.floor(Number(b.from)), to = Math.floor(Number(b.to));
+    const promo = ["q", "r", "b", "n"].includes(String(b.promo)) ? String(b.promo) : "q";
+    if (!(from >= 0 && from < 64 && to >= 0 && to < 64)) fail("Так ходить нельзя");
+    const ns = chessPlay(g.state, side, from, to, promo);
+    if (!ns) fail(chessInCheck(g.state.board, side) ? "Шах — нужно защитить короля" : "Так ходить нельзя");
+    const foe: Color = side === "w" ? "b" : "w";
+    const v = chessVerdict(ns!, foe);
+    let ng: Game;
+    if (v.over) ng = await finish(g, { state: ns }, v.winner ? (v.winner === "w" ? g.p1 : g.p2) : null, v.result);
+    else ng = await save(g, { state: ns, turn: opp });
+    if (ng.status === "done") await syncMsg(ng);
     return await view(ng, me);
   }
 

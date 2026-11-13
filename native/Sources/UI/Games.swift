@@ -4,13 +4,15 @@ import WebKit
 // MARK: - Мини-игры: броски в чате и игры вдвоём
 
 enum LumoGames {
-    static let titles = ["ttt": "Крестики-нолики", "checkers": "Шашки", "sea": "Морской бой"]
-    static let descs = ["ttt": "Три в ряд на поле 3×3", "checkers": "Русские шашки, взятие обязательно", "sea": "Флот 10 кораблей, поле 10×10"]
+    static let titles = ["ttt": "Крестики-нолики", "checkers": "Шашки", "sea": "Морской бой", "chess": "Шахматы"]
+    static let descs = ["ttt": "Три в ряд на поле 3×3", "checkers": "Русские шашки, взятие обязательно", "sea": "Флот 10 кораблей, поле 10×10",
+                        "chess": "Классические шахматы по всем правилам"]
     static let throwsList: [(String, String)] = [("dice", "Кубик"), ("darts", "Дартс"), ("basket", "Баскетбол"), ("football", "Футбол"), ("coin", "Монетка")]
     static let colors: [String: [Color]] = [
         "ttt": [Color(hex: 0x22c1ff), Color(hex: 0x3a7bff)],
         "checkers": [Color(hex: 0xa7743f), Color(hex: 0x6b4426)],
         "sea": [Color(hex: 0x2bb3ff), Color(hex: 0x1460c8)],
+        "chess": [Color(hex: 0x4a4f5c), Color(hex: 0x16181d)],
     ]
     static func label(_ k: String, _ v: Int) -> String {
         switch k {
@@ -235,11 +237,37 @@ struct GameIcon: View {
                     Circle().fill(Color(hex: 0xf4ead6)).frame(width: size * 0.6)
                     Circle().stroke(Color(hex: 0xc9a46a), lineWidth: 1.5).frame(width: size * 0.34)
                 }
+            case "chess":
+                KnightShape().fill(LinearGradient(colors: [.white, Color(hex: 0xd9cfb8)], startPoint: .top, endPoint: .bottom))
+                    .frame(width: size * 0.56, height: size * 0.62)
+                    .shadow(color: .black.opacity(0.35), radius: 1.5, y: 1)
             default:
                 Image(systemName: "ferry.fill").font(.system(size: size * 0.42, weight: .bold)).foregroundColor(.white)
             }
         }
         .frame(width: size, height: size)
+    }
+}
+
+/// Силуэт шахматного коня (значок игры «Шахматы»)
+struct KnightShape: Shape {
+    func path(in r: CGRect) -> Path {
+        let sx = r.width / 15, sy = r.height / 19
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: r.minX + (x - 4.2) * sx, y: r.minY + (y - 3) * sy) }
+        var a = Path()
+        a.move(to: p(7, 20))
+        a.addCurve(to: p(11, 12), control1: p(7, 16), control2: p(8.5, 14))
+        a.addCurve(to: p(7, 14), control1: p(9.4, 12), control2: p(8, 12.8))
+        a.addLine(to: p(5, 12.4))
+        a.addCurve(to: p(5, 10.2), control1: p(4.5, 11.7), control2: p(4.5, 10.9))
+        a.addCurve(to: p(12.3, 4.4), control1: p(6.8, 7.4), control2: p(9.3, 5.2))
+        a.addLine(to: p(13, 3))
+        a.addLine(to: p(14.2, 5.3))
+        a.addCurve(to: p(18.7, 14.3), control1: p(17, 6.9), control2: p(18.7, 10.1))
+        a.addCurve(to: p(17.9, 20), control1: p(18.7, 16.3), control2: p(18.4, 17.9))
+        a.closeSubpath()
+        a.addRoundedRect(in: CGRect(origin: p(5, 20.3), size: CGSize(width: 14 * sx, height: 1.7 * sy)), cornerSize: CGSize(width: sx, height: sx))
+        return a
     }
 }
 
@@ -345,7 +373,7 @@ struct GamesSheet: View {
                     }
                     header("ИГРАТЬ ВДВОЁМ")
                     VStack(spacing: 8) {
-                        ForEach(["ttt", "checkers", "sea"], id: \.self) { k in
+                        ForEach(["chess", "ttt", "checkers", "sea"], id: \.self) { k in
                             Button { withAnimation(.easeOut(duration: 0.15)) { game = k } } label: {
                                 HStack(spacing: 12) {
                                     GameIcon(kind: k, size: 44)
