@@ -19,7 +19,13 @@ jobs:
         run: |
           $p = Start-Process -FilePath .\Lumo.exe -PassThru
           Start-Sleep -Seconds 12
-          if ($p.HasExited) { Write-Host "Lumo exited with code $($p.ExitCode)"; Get-Content "$env:LOCALAPPDATA\Lumo\log.txt" -ErrorAction SilentlyContinue; exit 1 }
+          if ($p.HasExited) {
+            Write-Host "Lumo exited with code $($p.ExitCode)"
+            Get-Content "$env:LOCALAPPDATA\Lumo\log.txt" -ErrorAction SilentlyContinue
+            Get-ChildItem -Name | Where-Object { $_ -match '\.(pri|xbf|exe|json)$' -or $_ -match '^Microsoft\.(UI|Windows)' } | Select-Object -First 60
+            Get-WinEvent -LogName Application -MaxEvents 15 | Where-Object { $_.LevelDisplayName -eq 'Error' } | Format-List TimeCreated,ProviderName,Message
+            exit 1
+          }
           Write-Host "SMOKE-OK"
           Get-Content "$env:LOCALAPPDATA\Lumo\log.txt" -ErrorAction SilentlyContinue
           Stop-Process -Id $p.Id -Force
