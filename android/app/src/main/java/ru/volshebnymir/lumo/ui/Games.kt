@@ -222,7 +222,8 @@ fun GameIcon(kind: String, size: Int = 46) {
             "chess" -> Canvas(Modifier.size((size * .62f).dp)) {
                 // силуэт шахматного коня
                 val s = this.size.minDimension / 19f
-                fun x(v: Float) = (v - 4f) * s; fun y(v: Float) = (v - 3f) * s
+                val x = { v: Float -> (v - 4f) * s }
+                val y = { v: Float -> (v - 3f) * s }
                 val path = androidx.compose.ui.graphics.Path().apply {
                     moveTo(x(7f), y(20f)); cubicTo(x(7f), y(16f), x(8.5f), y(14f), x(11f), y(12f))
                     cubicTo(x(9.4f), y(12f), x(8f), y(12.8f), x(7f), y(14f)); lineTo(x(5f), y(12.4f))
