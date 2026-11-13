@@ -41,6 +41,9 @@ struct ChatInfoView: View {
     @State private var showBub = false
     @State private var showWall = false
     @State private var heroExpanded = false
+    @State private var chatStyle: ChatStyle?
+    @State private var descExpanded = false
+    @State private var showChatStyle = false
     @ObservedObject private var prot = ProtStore.shared
     @EnvironmentObject var look: Appearance
 
@@ -52,7 +55,9 @@ struct ChatInfoView: View {
         ScrollView {
             VStack(spacing: 16) {
                 GeometryReader { g in Color.clear.preference(key: ProfileScrollKey.self, value: g.frame(in: .named("pscroll")).minY) }.frame(height: 0)
-                if chat?.isPrivate == true, !saved { peerHero } else { hero; actions }
+                if chat?.isPrivate == true, !saved { peerHero }
+                else if chat?.isPrivate == false { chatHero }
+                else { hero; actions }
                 if let c = chat {
                     if c.isPrivate { privateSections(c) } else { groupSections(c) }
                     PremiumChatRows(chat: c)
@@ -96,7 +101,7 @@ struct ChatInfoView: View {
             if model.demo == "qr" { try? await Task.sleep(nanoseconds: 800_000_000); showQR = true }
             if model.demo == "contact" { try? await Task.sleep(nanoseconds: 1_200_000_000); aliasEdit = true }
             if model.demo != nil { return }
-            if let c = chat, !c.isPrivate { members = await model.members(c.id) }
+            if let c = chat, !c.isPrivate { chatStyle = await model.chatStyle(c.id); members = await model.members(c.id) }
             if let p = chat?.peerId { await model.refreshProfile(p) }
         }
         .sheet(isPresented: $aliasEdit) {
@@ -104,6 +109,9 @@ struct ChatInfoView: View {
         }
         .sheet(item: $report) { t in ReportView(target: t).environmentObject(model) }
         .sheet(isPresented: $showBub) { BubbleColorSheet(chatId: chatId) }
+        .sheet(isPresented: $showChatStyle, onDismiss: { Task { chatStyle = await model.chatStyle(chatId) } }) {
+            NavigationStack { ProfileStyleView(chatId: chatId) }.environmentObject(model)
+        }
         .sheet(isPresented: $showWall) {
             ChatWallSheet(chatId: chatId, peerName: chat?.peerName, isPrivate: chat?.isPrivate == true).environmentObject(model).environmentObject(look)
         }
@@ -122,7 +130,7 @@ struct ChatInfoView: View {
         .fullScreenCover(item: $avatarFull) { ImageScreen(url: $0.url) }
         .sheet(isPresented: $showQR) {
             if let c = chat {
-                UserQRSheet(name: c.displayName, username: c.peerUsername ?? "", avatar: c.displayAvatar, color: c.displayColor)
+                UserQRSheet(name: c.displayName, username: (c.isPrivate ? c.peerUsername : c.username) ?? "", avatar: c.displayAvatar, color: c.displayColor)
                     .environmentObject(model)
             }
         }
@@ -237,7 +245,51 @@ struct ChatInfoView: View {
     }
 
     /// у собеседника выбран цвет профиля — текст в шапке белый
-    private var styled: Bool { chat?.isPrivate == true && !saved && peer?.profileBg != nil }
+    private var styled: Bool {
+        (chat?.isPrivate == true && !saved && peer?.profileBg != nil) || (chat?.isPrivate == false && chatStyle?.bg != nil)
+    }
+
+    /// канал или группа: цветная шапка с узором (настраивает администратор), как в Telegram
+    private var chatHero: some View {
+        let c = chat
+        let n = c?.membersCount ?? 0
+        let sub = (c?.isChannel == true) ? "\(n) " + plural(n, "подписчик", "подписчика", "подписчиков") : "\(n) " + plural(n, "участник", "участника", "участников")
+        return ProfileTopHero(name: c?.displayName ?? "", avatarURL: c?.displayAvatar, color: c?.displayColor ?? 0,
+                              status: chatStyle?.status, premiumStar: false, verified: chatStyle?.verified == true,
+                              verifiedKind: c?.isChannel == true ? "канал" : "группа",
+                              subtitle: model.typingText(chatId) ?? sub,
+                              bg: chatStyle?.bg, pattern: chatStyle?.pattern, storyUid: nil,
+                              expanded: $heroExpanded,
+                              onAvatar: {
+                                  if heroExpanded, let u = c?.displayAvatar.flatMap(URL.init(string:)) { avatarFull = IdentifiedURL(url: u) }
+                                  else if c?.displayAvatar != nil { heroExpanded = true }
+                              },
+                              top: { EmptyView() },
+                              bottom: { chatActions.padding(.top, 8) })
+    }
+
+    /// трансляция/звонок, звук, чат (обсуждение) или поиск, ещё
+    private var chatActions: some View {
+        HStack(spacing: 8) {
+            if let c = chat {
+                if c.isChannel ? c.isAdmin : true {
+                    actionButton(c.isChannel ? "waveform" : "phone.fill", c.isChannel ? "трансляция" : "звонок") {
+                        Task { await GroupCalls.shared.start(c.id, video: false) }
+                    }
+                }
+                actionButton(c.muted ? "bell.slash.fill" : "bell.fill", c.muted ? "без звука" : "звук") {
+                    Task { await model.setMuted(c.id, !c.muted) }
+                }
+                if let lid = chatStyle?.linked, model.chat(lid) != nil {
+                    actionButton("bubble.left.fill", "чат") { dismiss(); model.open(lid) }
+                } else {
+                    actionButton("magnifyingglass", "поиск") { dismiss(); onSearch() }
+                }
+                Menu { moreMenu(c) } label: { actionLabel("ellipsis", "ещё") }
+            }
+        }
+        .padding(.horizontal, 14)
+    }
 
     // MARK: кнопки: звонок, видео, звук, поиск, ещё
 
@@ -397,92 +449,116 @@ struct ChatInfoView: View {
     }
 
     @ViewBuilder private func groupSections(_ c: ChatItem) -> some View {
-        if let d = c.description, !d.isEmpty {
+        // ссылка и описание — одной карточкой, как в Telegram
+        let d = c.description ?? ""
+        let u = c.username ?? ""
+        if !d.isEmpty || !u.isEmpty {
             SettingsGroup {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Описание").font(.caption.weight(.bold)).foregroundColor(Theme.muted)
-                    Text(d).foregroundColor(Theme.text)
+                if !u.isEmpty {
+                    HStack(spacing: 10) {
+                        Button {
+                            UIPasteboard.general.string = "https://lumomess.ru/#@" + u
+                            model.say("Ссылка скопирована")
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("ссылка").font(.system(size: 14)).foregroundColor(Theme.text)
+                                Text("https://lumomess.ru/#@" + u).font(.system(size: 17)).foregroundColor(Theme.a2).lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(BouncyButtonStyle())
+                        Button { showQR = true } label: {
+                            Image(systemName: "qrcode").font(.system(size: 24)).foregroundColor(Theme.a2)
+                        }
+                    }
+                    .padding(.vertical, 10).padding(.horizontal, 4)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 8).padding(.horizontal, 4)
+                if !u.isEmpty && !d.isEmpty { Divider().overlay(Theme.line) }
+                if !d.isEmpty {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("описание").font(.system(size: 14)).foregroundColor(Theme.text)
+                        Text(d).font(.system(size: 17)).foregroundColor(Theme.text)
+                            .lineLimit(descExpanded ? nil : 3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if !descExpanded && (d.count > 110 || d.split(separator: "\n").count > 3) {
+                            HStack { Spacer(); Button("ещё") { withAnimation { descExpanded = true } }.font(.system(size: 17)).foregroundColor(Theme.a2) }
+                        }
+                    }
+                    .padding(.vertical, 10).padding(.horizontal, 4)
+                    .textSelection(.enabled)
+                }
             }
         }
-        if let u = c.username, !u.isEmpty {
-            SettingsGroup {
-                Button {
-                    UIPasteboard.general.string = "@" + u
-                    model.say("Ссылка скопирована")
-                } label: { SettingsRow(icon: "link", color: Theme.a2, title: "@" + u, subtitle: "Нажмите, чтобы скопировать", chevron: false) }
+        // администраторы, подписчики, оформление, настройки
+        let admins = members.filter { $0.role == "owner" || $0.role == "admin" }
+        SettingsGroup {
+            NavigationLink {
+                MembersPage(title: "Администраторы") { membersList(c, only: admins) }
+            } label: { countRow("checkmark.shield.fill", Color(hex: 0x34c759), "Администраторы", admins.count) }
+            .buttonStyle(RowButtonStyle())
+            if c.isChannel {
+                Divider().overlay(Theme.line).padding(.leading, 52)
+                NavigationLink {
+                    MembersPage(title: "Подписчики") { membersList(c, only: nil) }
+                } label: { countRow("person.2.fill", Color(hex: 0x3a8bff), "Подписчики", max(c.membersCount, members.count)) }
+                .buttonStyle(RowButtonStyle())
             }
-        }
-        if c.isAdmin {
-            SettingsGroup {
-                Button { editChat = true } label: { SettingsRow(icon: "pencil", color: Theme.a1, title: "Изменить название и описание") }
-                Divider().overlay(Theme.line)
-                Button { if (chat?.avatarURL ?? "").isEmpty { pickPhoto = true } else { photoMenu = true } } label: {
-                    SettingsRow(icon: "photo", color: Color(hex: 0x22a6ff), title: (chat?.avatarURL ?? "").isEmpty ? "Установить фото" : "Сменить фото")
-                }
-                .photosPicker(isPresented: $pickPhoto, selection: $avatarPick, matching: .images)
-                .confirmationDialog("Фото " + (c.isChannel ? "канала" : "группы"), isPresented: $photoMenu, titleVisibility: .visible) {
-                    Button("Выбрать новое фото") { pickPhoto = true }
-                    Button("Удалить фото", role: .destructive) { Task { await model.removeChatAvatar(c.id) } }
-                    Button("Отмена", role: .cancel) {}
-                }
-                Divider().overlay(Theme.line)
-                Button { addMembers = true } label: {
-                    SettingsRow(icon: "person.badge.plus", color: Color(hex: 0x2bd67b), title: c.isChannel ? "Добавить подписчиков" : "Добавить участников")
-                }
-                Divider().overlay(Theme.line)
+            if c.isAdmin {
+                Divider().overlay(Theme.line).padding(.leading, 52)
+                Button { showChatStyle = true } label: { countRow("paintpalette.fill", Color(hex: 0xb06bff), "Оформление", nil) }
+                    .buttonStyle(RowButtonStyle())
+                Divider().overlay(Theme.line).padding(.leading, 52)
+                Button { editChat = true } label: { countRow("slider.horizontal.3", Color(hex: 0xffa43a), c.isChannel ? "Настройки канала" : "Настройки группы", nil) }
+                    .buttonStyle(RowButtonStyle())
+                Divider().overlay(Theme.line).padding(.leading, 52)
                 Button {
                     Task {
                         if let code = await model.inviteCode(c.id) {
-                            let l = "https://lumomess.ru/#+" + code
-                            UIPasteboard.general.string = l
+                            UIPasteboard.general.string = "https://lumomess.ru/#+" + code
                             model.say("Ссылка-приглашение скопирована")
                         }
                     }
-                } label: { SettingsRow(icon: "link.badge.plus", color: Color(hex: 0x3a7bff), title: "Ссылка-приглашение", subtitle: "Нажмите, чтобы скопировать", chevron: false) }
-                Divider().overlay(Theme.line)
-                Button { showRequests = true } label: { SettingsRow(icon: "person.crop.circle.badge.questionmark", color: Color(hex: 0xff8a3d), title: "Заявки на вступление") }
+                } label: { countRow("link.badge.plus", Color(hex: 0x3a7bff), "Ссылка-приглашение", nil) }
+                .buttonStyle(RowButtonStyle())
+                Divider().overlay(Theme.line).padding(.leading, 52)
+                Button { showRequests = true } label: { countRow("person.crop.circle.badge.questionmark", Color(hex: 0xff8a3d), "Заявки на вступление", nil) }
+                    .buttonStyle(RowButtonStyle())
                 if !c.isChannel {
-                    Divider().overlay(Theme.line)
-                    Button { showGcSettings = true } label: { SettingsRow(icon: "phone.fill", color: Color(hex: 0x2bd67b), title: "Групповые звонки", subtitle: "Кто может начинать звонок") }
+                    Divider().overlay(Theme.line).padding(.leading, 52)
+                    Button { showGcSettings = true } label: { countRow("phone.fill", Color(hex: 0x2bd67b), "Групповые звонки", nil) }
+                        .buttonStyle(RowButtonStyle())
                 }
             }
         }
-        if !c.isChannel || c.isAdmin {
-            SectionTitle(text: (c.isChannel ? "Подписчики" : "Участники") + " · \(members.count)")
+        // обсуждение канала
+        if let lid = chatStyle?.linked, let lc = model.chat(lid) {
             SettingsGroup {
-                ForEach(members) { m in
+                Button { dismiss(); model.open(lid) } label: {
                     HStack(spacing: 12) {
-                        AvatarView(name: model.displayName(m.userId), url: model.profiles[m.userId]?.avatarURL,
-                                   color: model.profiles[m.userId]?.color ?? 0, size: 42, online: model.isOnline(m.userId))
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(m.userId == model.myId ? "Вы" : model.displayName(m.userId)).font(.system(size: 15.5, weight: .bold))
-                            Text(model.lastSeenText(m.userId)).font(.caption).foregroundColor(model.isOnline(m.userId) ? Theme.a2 : Theme.muted)
-                        }
-                        Spacer()
-                        if m.role == "owner" || m.role == "admin" {
-                            Text(m.role == "owner" ? "владелец" : "админ").font(.caption.weight(.bold)).foregroundColor(Theme.a1)
+                        AvatarView(name: lc.displayName, url: lc.displayAvatar, color: lc.displayColor, size: 58)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text(lc.displayName).font(.system(size: 17, weight: .bold)).foregroundColor(Theme.text).lineLimit(1)
+                                Text("ОБСУЖДЕНИЕ").font(.system(size: 11, weight: .bold)).foregroundColor(Theme.muted)
+                                    .padding(.horizontal, 6).padding(.vertical, 2).background(Theme.panel2, in: RoundedRectangle(cornerRadius: 6))
+                                Spacer(minLength: 0)
+                            }
+                            Text(lc.lastSenderName ?? "").font(.system(size: 15)).foregroundColor(Theme.text).lineLimit(1)
+                            Text(lc.preview(myId: model.myId)).font(.system(size: 15)).foregroundColor(Theme.muted).lineLimit(1)
                         }
                     }
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-                    .contextMenu {
-                        if m.userId != model.myId {
-                            Button { dismiss(); Task { await model.openDM(m.userId) } } label: { Label("Написать", systemImage: "bubble.left") }
-                            if c.role == "owner" && m.role != "owner" {
-                                Button { Task { await model.setRole(c.id, m.userId, m.role == "admin" ? "member" : "admin"); members = await model.members(c.id) } } label: {
-                                    Label(m.role == "admin" ? "Снять админа" : "Сделать админом", systemImage: "star")
-                                }
-                            }
-                            if c.isAdmin && m.role != "owner" {
-                                Button(role: .destructive) { Task { await model.removeMember(c.id, m.userId); members = await model.members(c.id) } } label: {
-                                    Label("Исключить", systemImage: "person.badge.minus")
-                                }
-                            }
-                        }
-                    }
+                    .padding(.vertical, 6).contentShape(Rectangle())
+                }
+                .buttonStyle(RowButtonStyle())
+            }
+        }
+        if !c.isChannel {
+            SectionTitle(text: "Участники · \(members.count)")
+            membersList(c, only: nil)
+            if c.isAdmin {
+                SettingsGroup {
+                    Button { addMembers = true } label: { SettingsRow(icon: "person.badge.plus", color: Color(hex: 0x2bd67b), title: "Добавить участников") }
                 }
             }
         }
@@ -500,6 +576,55 @@ struct ChatInfoView: View {
                             title: c.deleteTitle, titleColor: Theme.danger, chevron: false)
             }
         }
+    }
+
+    private func countRow(_ icon: String, _ color: Color, _ title: String, _ n: Int?) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon).font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
+                .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(color))
+            Text(title).font(.system(size: 17)).foregroundColor(Theme.text)
+            Spacer()
+            if let n { Text("\(n)").font(.system(size: 17)).foregroundColor(Theme.muted) }
+            Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.muted.opacity(0.6))
+        }
+        .padding(.vertical, 8).contentShape(Rectangle())
+    }
+
+    @ViewBuilder private func membersList(_ c: ChatItem, only: [Member]?) -> some View {
+            SettingsGroup {
+            ForEach(only ?? members) { m in
+                HStack(spacing: 12) {
+                    AvatarView(name: model.displayName(m.userId), url: model.profiles[m.userId]?.avatarURL,
+                               color: model.profiles[m.userId]?.color ?? 0, size: 42, online: model.isOnline(m.userId))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(m.userId == model.myId ? "Вы" : model.displayName(m.userId)).font(.system(size: 15.5, weight: .bold))
+                        Text(model.lastSeenText(m.userId)).font(.caption).foregroundColor(model.isOnline(m.userId) ? Theme.a2 : Theme.muted)
+                    }
+                    Spacer()
+                    if m.role == "owner" || m.role == "admin" {
+                        Text(m.role == "owner" ? "владелец" : "админ").font(.caption.weight(.bold)).foregroundColor(Theme.a1)
+                    }
+                }
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+                .contextMenu {
+                    if m.userId != model.myId {
+                        Button { dismiss(); Task { await model.openDM(m.userId) } } label: { Label("Написать", systemImage: "bubble.left") }
+                        if c.role == "owner" && m.role != "owner" {
+                            Button { Task { await model.setRole(c.id, m.userId, m.role == "admin" ? "member" : "admin"); members = await model.members(c.id) } } label: {
+                                Label(m.role == "admin" ? "Снять админа" : "Сделать админом", systemImage: "star")
+                            }
+                        }
+                        if c.isAdmin && m.role != "owner" {
+                            Button(role: .destructive) { Task { await model.removeMember(c.id, m.userId); members = await model.members(c.id) } } label: {
+                                Label("Исключить", systemImage: "person.badge.minus")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
     }
 }
 
@@ -1699,5 +1824,26 @@ struct JoinRequestsSheet: View {
     private func decide(_ id: String, _ ok: Bool) {
         ids.removeAll { $0 == id }
         Task { _ = try? await API.shared.rpc("lm_request_decide", ["p_chat": chatId, "p_user": id, "p_ok": ok]) }
+    }
+}
+
+
+/// Оформление канала/группы и связанный чат обсуждения
+struct ChatStyle {
+    var bg: Int?
+    var pattern: String?
+    var status: String?
+    var linked: String?
+    var verified: Bool
+}
+
+/// Отдельная страница со списком (администраторы, подписчики)
+struct MembersPage<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: () -> Content
+    var body: some View {
+        ScrollView { VStack(spacing: 12) { content() }.padding(.vertical, 12) }
+            .background(Theme.bg.ignoresSafeArea())
+            .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
     }
 }

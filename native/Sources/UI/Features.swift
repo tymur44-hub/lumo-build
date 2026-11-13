@@ -1660,28 +1660,37 @@ struct HeroGlassButton: View {
 struct ProfileStyleView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    /// оформление канала или группы (вместо своего профиля)
+    var chatId: String? = nil
     @State private var bg: Int?
     @State private var pattern: String?
+    @State private var status: String?
     @State private var loaded = false
     @State private var busy = false
     @State private var showPremium = false
+    @State private var pickStatus = false
+
+    private var chat: ChatItem? { chatId.flatMap { model.chat($0) } }
 
     var body: some View {
         let me = model.me
-        let premium = me?.premium == true
+        let premium = chatId != nil || me?.premium == true
+        let previewName = chat?.displayName ?? me?.name ?? ""
+        let previewStatus = chatId != nil ? status : (premium ? me?.emojiStatus : nil)
         ScrollView {
             VStack(spacing: 16) {
                 // превью
                 ZStack {
-                    ProfileStyleBackground(bg: bg, pattern: pattern, status: me?.emojiStatus, avatarCenterY: 92)
+                    ProfileStyleBackground(bg: bg, pattern: pattern, status: previewStatus, avatarCenterY: 92)
                     VStack(spacing: 8) {
-                        AvatarView(name: me?.name ?? "", url: me?.avatarURL, color: me?.color ?? 0, size: 96)
+                        AvatarView(name: previewName, url: chat?.displayAvatar ?? me?.avatarURL, color: chat?.displayColor ?? me?.color ?? 0, size: 96)
                             .overlay(Circle().stroke(Color.white.opacity(bg == nil ? 0 : 0.6), lineWidth: 3))
                         HStack(spacing: 6) {
-                            Text(me?.name ?? "").font(.system(size: 22, weight: .bold)).foregroundColor(bg == nil ? Theme.text : .white)
-                            if premium, let e = me?.emojiStatus, !e.isEmpty { StatusEmojiView(s: e, size: 20) }
+                            Text(previewName).font(.system(size: 22, weight: .bold)).foregroundColor(bg == nil ? Theme.text : .white).lineLimit(1)
+                            if let e = previewStatus, !e.isEmpty { StatusEmojiView(s: e, size: 20) }
                         }
-                        Text("в сети").font(.system(size: 14)).foregroundColor(bg == nil ? Theme.a2 : .white.opacity(0.8))
+                        Text(chat.map { "\($0.membersCount) " + ($0.isChannel ? plural($0.membersCount, "подписчик", "подписчика", "подписчиков") : plural($0.membersCount, "участник", "участника", "участников")) } ?? "в сети")
+                            .font(.system(size: 14)).foregroundColor(bg == nil ? Theme.a2 : .white.opacity(0.8))
                     }
                     .padding(.top, 44)
                 }
@@ -1693,7 +1702,25 @@ struct ProfileStyleView: View {
                 .animation(.easeInOut(duration: 0.25), value: bg)
                 .animation(.easeInOut(duration: 0.25), value: pattern)
 
-                section("ЦВЕТ ПРОФИЛЯ") {
+                if chatId != nil {
+                    section("ЭМОДЗИ-СТАТУС") {
+                        Button { pickStatus = true } label: {
+                            HStack(spacing: 12) {
+                                if let e = status, !e.isEmpty { StatusEmojiView(s: e, size: 26) }
+                                else { Image(systemName: "face.smiling").font(.system(size: 20)).foregroundColor(Theme.muted) }
+                                Text(status?.isEmpty == false ? "Сменить значок рядом с названием" : "Значок рядом с названием").foregroundColor(Theme.text)
+                                Spacer()
+                                if status?.isEmpty == false {
+                                    Button { status = nil; if pattern == "@status" { pattern = nil } } label: { Image(systemName: "xmark.circle.fill").foregroundColor(Theme.muted) }
+                                }
+                            }
+                            .padding(14).background(Theme.panel, in: RoundedRectangle(cornerRadius: 18))
+                        }
+                        .buttonStyle(BouncyButtonStyle())
+                    }
+                }
+
+                section(chatId == nil ? "ЦВЕТ ПРОФИЛЯ" : "ЦВЕТ ШАПКИ") {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
                         Button { bg = nil } label: {
                             ZStack {
@@ -1725,7 +1752,7 @@ struct ProfileStyleView: View {
                             }
                             .overlay(Circle().stroke(pattern == nil ? Theme.text : .clear, lineWidth: 2.5).frame(width: 47, height: 47))
                         }.buttonStyle(BouncyButtonStyle())
-                        if let e = me?.emojiStatus, !e.isEmpty {
+                        if let e = previewStatus ?? me?.emojiStatus, !e.isEmpty {
                             Button { if premium { pattern = "@status" } else { showPremium = true } } label: {
                                 ZStack {
                                     Circle().fill(Theme.panel2).frame(width: 40, height: 40)
@@ -1756,7 +1783,12 @@ struct ProfileStyleView: View {
                 }
                 Button {
                     busy = true
-                    Task { if await model.setProfileStyle(bg: bg, pattern: pattern) { model.say("Оформление сохранено"); dismiss() }; busy = false }
+                    Task {
+                        let ok = chatId != nil ? await model.setChatStyle(chatId!, bg: bg, pattern: pattern, status: status)
+                                               : await model.setProfileStyle(bg: bg, pattern: pattern)
+                        if ok { model.say("Оформление сохранено"); dismiss() }
+                        busy = false
+                    }
                 } label: {
                     HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Сохранить") }
                         .font(.system(size: 17, weight: .bold)).foregroundColor(.white)
@@ -1768,8 +1800,15 @@ struct ProfileStyleView: View {
             .padding(.vertical, 16)
         }
         .background(Theme.bg.ignoresSafeArea())
-        .navigationTitle("Оформление профиля").navigationBarTitleDisplayMode(.inline)
-        .onAppear { if !loaded { loaded = true; bg = model.me?.profileBg; pattern = model.me?.profilePattern } }
+        .navigationTitle(chatId == nil ? "Оформление профиля" : (chat?.isChannel == true ? "Оформление канала" : "Оформление группы")).navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if loaded { return }
+            loaded = true
+            if let cid = chatId {
+                Task { if let st = await model.chatStyle(cid) { bg = st.bg; pattern = st.pattern; status = st.status } }
+            } else { bg = model.me?.profileBg; pattern = model.me?.profilePattern }
+        }
+        .sheet(isPresented: $pickStatus) { EmojiStatusSheet(onPick: { e in status = e.isEmpty ? nil : e }).environmentObject(model) }
         .alert("Lumo Premium", isPresented: $showPremium) {
             Button("Понятно", role: .cancel) {}
         } message: { Text("Узоры профиля доступны с подпиской Lumo Premium. Оформить её можно в настройках.") }

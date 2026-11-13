@@ -571,6 +571,21 @@ final class AppModel: ObservableObject {
         } catch { say(error.localizedDescription); return false }
     }
 
+    /// оформление канала или группы (цвет шапки, узор, эмодзи-статус) и обсуждение
+    func chatStyle(_ chatId: String) async -> ChatStyle? {
+        guard let r = try? await API.shared.select("lm_chats", ["select": "profile_bg,profile_pattern,emoji_status,linked_chat_id,verified", "id": "eq." + chatId]).first else { return nil }
+        return ChatStyle(bg: r.int("profile_bg"), pattern: r.str("profile_pattern"), status: r.str("emoji_status"),
+                         linked: r.str("linked_chat_id"), verified: r.bool("verified"))
+    }
+
+    func setChatStyle(_ chatId: String, bg: Int?, pattern: String?, status: String?) async -> Bool {
+        do {
+            _ = try await API.shared.rpc("lm_set_chat_style", ["p_chat": chatId, "p_bg": bg as Any? ?? NSNull(),
+                                                               "p_pattern": pattern as Any? ?? NSNull(), "p_status": status as Any? ?? NSNull()])
+            return true
+        } catch { say((error as? APIError)?.message ?? error.localizedDescription); return false }
+    }
+
     func setColor(_ c: Int) async {
         guard let id = myId else { return }
         try? await API.shared.update("lm_profiles", match: ["id": id], ["color": c])

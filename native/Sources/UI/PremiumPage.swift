@@ -29,23 +29,27 @@ struct StatusEmojiView: View {
 struct EmojiStatusSheet: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    /// выбор значка для канала/группы: не сохраняет в профиль, а отдаёт выбранное
+    var onPick: ((String) -> Void)? = nil
+
+    private func choose(_ e: String) { if let f = onPick { f(e); dismiss() } else { Task { await model.setEmojiStatus(e); dismiss() } } }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Значок показывается рядом с вашим именем. Анимированные двигаются у всех, кто пользуется Lumo.")
+                    Text(onPick != nil ? "Значок показывается рядом с названием." : "Значок показывается рядом с вашим именем. Анимированные двигаются у всех, кто пользуется Lumo.")
                         .font(.footnote).foregroundColor(Theme.muted)
                     Text("Анимированные").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.muted)
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 10) {
                         ForEach(animEmoji, id: \.0) { e in
-                            Button { Task { await model.setEmojiStatus("a:" + e.0); dismiss() } } label: {
+                            Button { choose("a:" + e.0) } label: {
                                 StatusEmojiView(s: "a:" + e.0, size: 32).frame(maxWidth: .infinity).frame(height: 58)
                                     .background(Theme.panel, in: RoundedRectangle(cornerRadius: 14))
                             }
                         }
                     }
-                    Button("Убрать статус", role: .destructive) { Task { await model.setEmojiStatus(""); dismiss() } }
+                    Button("Убрать статус", role: .destructive) { choose("") }
                         .padding(.top, 8)
                 }
                 .padding(16)
