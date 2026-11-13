@@ -477,9 +477,12 @@ fun ChatScreen(chatId: String) {
         }
         note?.let { ns -> VideoNoteRecorder(chatId, ns, { val r = reply?.id; reply = null; r }) { if (note === ns) note = null } }
         forwarding?.let { f ->
-            ForwardPicker(onClose = { forwarding = null }) { to ->
+            ForwardPicker(onClose = { forwarding = null }) { targets, hide ->
                 forwarding = null; selected.clear()
-                scope.launch { for (m in f) AppModel.forward(m, to); AppModel.say("Переслано") }
+                scope.launch {
+                    for (t in targets) for (m in f) AppModel.forward(m, t, hide)
+                    AppModel.say(if (targets.size > 1) "Переслано в ${targets.size} чата" else "Переслано")
+                }
             }
         }
         deleting?.let { d ->
@@ -1147,22 +1150,37 @@ fun whenText(d: java.util.Date): String {
 }
 
 @Composable
-private fun ForwardPicker(onClose: () -> Unit, onPick: (String) -> Unit) {
+private fun ForwardPicker(onClose: () -> Unit, onPick: (List<String>, Boolean) -> Unit) {
     val p = P
     BackHandler { onClose() }
     var q by remember { mutableStateOf("") }
+    val picked = remember { mutableStateListOf<String>() }
+    var hide by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(remember { MutableInteractionSource() }, null) { onClose() }, contentAlignment = Alignment.BottomCenter) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(0.75f).clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).background(p.bg)
+        Column(Modifier.fillMaxWidth().fillMaxHeight(0.8f).clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).background(p.bg)
             .clickable(remember { MutableInteractionSource() }, null) {}.navigationBarsPadding()) {
-            Text("Переслать в…", color = p.text, fontWeight = FontWeight.Black, fontSize = 20.sp, modifier = Modifier.padding(18.dp))
+            Text(if (picked.isEmpty()) "Переслать в…" else "Выбрано: ${picked.size}", color = p.text, fontWeight = FontWeight.Black, fontSize = 20.sp, modifier = Modifier.padding(18.dp))
             SearchBox(q, { q = it }, Modifier.padding(horizontal = 14.dp).fillMaxWidth())
-            LazyColumn(Modifier.fillMaxSize()) {
+            LazyColumn(Modifier.weight(1f)) {
                 items(AppModel.chats.filter { it.canPost && (q.isBlank() || it.displayName.contains(q, true)) }, key = { it.id }) { c ->
                     val saved = c.isPrivate && c.peerId == AppModel.myId
-                    Row(Modifier.fillMaxWidth().bouncy { onPick(c.id) }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val on = c.id in picked
+                    Row(Modifier.fillMaxWidth().clickable { if (on) picked.remove(c.id) else picked.add(c.id) }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(c.displayName, c.displayAvatar, c.displayColor, 44.dp)
                         Spacer(Modifier.width(12.dp))
-                        Text(if (saved) "Избранное" else c.displayName, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                        Text(if (saved) "Избранное" else c.displayName, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Icon(if (on) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, tint = if (on) p.a1 else p.muted.copy(alpha = 0.5f), modifier = Modifier.size(24.dp))
+                    }
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(picked.isNotEmpty()) {
+                Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                    Row(Modifier.fillMaxWidth().clickable { hide = !hide }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Скрыть автора", color = p.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        androidx.compose.material3.Switch(hide, { hide = it })
+                    }
+                    Box(Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(16.dp)).background(p.accent).bouncy { onPick(picked.toList(), hide) }, contentAlignment = Alignment.Center) {
+                        Text(if (picked.size == 1) "Переслать" else "Переслать в ${picked.size} чата", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
                     }
                 }
             }

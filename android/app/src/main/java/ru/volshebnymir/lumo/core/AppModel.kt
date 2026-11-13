@@ -954,7 +954,9 @@ object AppModel {
         finally { bigProgress.remove(m.id) }
     }
 
-    suspend fun forward(m: Message, to: String) {
+    suspend fun forward(m: Message, to: String, hideAuthor: Boolean = false) {
+        // без подписи «Переслано от…» — как своё сообщение
+        if (hideAuthor) { send(to, m.kind, m.body, m.mediaUrl, m.meta); return }
         val from = m.forwardedFrom?.takeIf { it.isNotEmpty() } ?: chat(m.chatId)?.takeIf { it.isChannel }?.displayName ?: displayName(m.senderId)
         send(to, m.kind, m.body, m.mediaUrl, m.meta, forwardedFrom = from)
     }

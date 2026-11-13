@@ -484,18 +484,20 @@ fun ChatListScreen() {
                     Pill(if (n > 0) "$t  $n" else t, folder == k) { folder = k }
                 }
             }
-            val list = AppModel.chats.filter {
+            val archivedList = AppModel.chats.filter { ChatArchive.has(it.id) }
+            val list = AppModel.chats.filter { !ChatArchive.has(it.id) }.filter {
                 when (folder) { "private" -> it.isPrivate; "group" -> it.type == "group"; "channel" -> it.isChannel; "unread" -> it.unread > 0; else -> true }
             }
             androidx.compose.animation.AnimatedVisibility(storiesOpen && ru.volshebnymir.lumo.core.RemoteConfig.on("stories"), enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
                 exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()) { StoriesBar() }
             if (folder == "all") AnnounceCard()
-            val pinnedList = AppModel.chats.filter { it.pinned }
+            val pinnedList = AppModel.chats.filter { it.pinned && !ChatArchive.has(it.id) }
             val pinRow = folder == "all" && pinnedList.isNotEmpty()
             // нажали «Чаты» на панели — наверх списка
             LaunchedEffect(AppModel.chatsTopTick) { if (AppModel.chatsTopTick > 0) listState.animateScrollToItem(0) }
             LazyColumn(Modifier.fillMaxSize().nestedScroll(pull), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 110.dp)) {
                 if (folder == "all" && Reminders.list.isNotEmpty()) item(key = "reminders") { RemindersBar() }
+                if (folder == "all" && archivedList.isNotEmpty()) item(key = "archive") { ArchiveRow(archivedList) }
                 if (pinRow) item(key = "pinned") { PinnedRow(pinnedList) }
                 if (!AppModel.chatsLoaded) items(8) { i -> SkeletonChatRow(i) }
                 items(if (pinRow) list.filter { !it.pinned } else list, key = { it.id }) { c -> ChatRow(c, Modifier.animateItem()) }
@@ -644,6 +646,8 @@ fun ChatPreviewMenu(c: ChatItem, onClose: () -> Unit) {
                     }
                     if (c.unread > 0) row(Icons.Filled.MarkChatRead, "Прочитано") { scope.launch { AppModel.loadMessages(c.id); AppModel.markRead(c.id) } }
                     row(Icons.Filled.PushPin, if (c.pinned) "Открепить" else "Закрепить") { scope.launch { AppModel.setPinned(c.id, !c.pinned) } }
+                    val arch = ChatArchive.has(c.id)
+                    row(if (arch) Icons.Filled.Unarchive else Icons.Filled.Archive, if (arch) "Вернуть из архива" else "В архив") { ChatArchive.set(c.id, !arch) }
                     row(if (c.muted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff, if (c.muted) "Включить уведомления" else "Выключить уведомления") { scope.launch { AppModel.setMuted(c.id, !c.muted) } }
                     if (c.isPrivate) row(Icons.Filled.Delete, "Очистить историю") { scope.launch { AppModel.clearChat(c.id) } }
                     row(if (c.isPrivate || c.role == "owner") Icons.Filled.Delete else Icons.AutoMirrored.Filled.ExitToApp, chatDeleteTitle(c), danger = true, close = false) { deleteTarget = c }
@@ -795,6 +799,53 @@ fun SkeletonChatRow(i: Int) {
             Box(Modifier.width(140.dp).height(12.dp).clip(CircleShape).background(p.text.copy(alpha = 0.08f)))
             Spacer(Modifier.height(9.dp))
             Box(Modifier.width(220.dp).height(10.dp).clip(CircleShape).background(p.text.copy(alpha = 0.06f)))
+        }
+    }
+}
+
+
+/** Архив чатов: хранится на телефоне, отдельно для каждого аккаунта */
+object ChatArchive {
+    private val ids = androidx.compose.runtime.mutableStateListOf<String>()
+    private var uid = ""
+    private val prefs get() = AppModel.ctx.getSharedPreferences("lumo_archive", android.content.Context.MODE_PRIVATE)
+    private fun sync() {
+        val me = AppModel.myId ?: return
+        if (me == uid) return
+        uid = me; ids.clear(); ids.addAll(prefs.getStringSet("a_$me", emptySet()) ?: emptySet())
+    }
+    fun has(id: String): Boolean { sync(); return id in ids }
+    fun set(id: String, on: Boolean) {
+        sync()
+        if (on) { if (id !in ids) ids.add(id) } else ids.remove(id)
+        prefs.edit().putStringSet("a_$uid", ids.toSet()).apply()
+        AppModel.say(if (on) "Чат перенесён в архив" else "Чат возвращён из архива")
+    }
+}
+
+/** Строка «Архив» над списком; нажатие раскрывает архивные чаты */
+@Composable
+fun ArchiveRow(list: List<ChatItem>) {
+    val p = P
+    var open by remember { mutableStateOf(false) }
+    Column {
+        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(56.dp).clip(CircleShape).background(Color(0xFF8E93A6)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Archive, null, tint = Color.White, modifier = Modifier.size(26.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Архив", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.5.sp)
+                Text(list.take(4).joinToString(", ") { it.displayName }, color = p.muted, fontSize = 14.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            val n = list.sumOf { if (it.muted) 0 else it.unread }
+            if (n > 0) Box(Modifier.clip(CircleShape).background(Color(0xFFA3A6B8)).padding(horizontal = 7.dp, vertical = 2.dp)) {
+                Text("$n", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+            Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = p.muted)
+        }
+        androidx.compose.animation.AnimatedVisibility(open) {
+            Column { list.forEach { ChatRow(it) } }
         }
     }
 }
