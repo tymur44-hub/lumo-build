@@ -18,6 +18,12 @@ struct ChatListView: View {
     @State private var results: [SearchResult] = []
     @State private var searching = false
     @State private var folder: ChatFolder = .all
+    /// выбранная своя папка (если есть — главнее встроенной)
+    @State private var customFolder: String?
+    @ObservedObject private var fstore = FolderStore.shared
+    @State private var editFolder: FolderStore.Folder?
+    @State private var newFolder = false
+    @State private var showArchive = false
     @State private var showNew = false
     @State private var deleting: ChatItem?
     @State private var swipeOpen: String?
@@ -39,13 +45,18 @@ struct ChatListView: View {
     var sidebar = false
 
     private var filtered: [ChatItem] {
+        if let id = customFolder, let f = fstore.folders.first(where: { $0.id == id }) {
+            return model.chats.filter { f.chats.contains($0.id) }
+        }
+        let base = model.chats.filter { !fstore.archived.contains($0.id) }
         switch folder {
-        case .all: return model.chats
-        case .privateChats: return model.chats.filter { $0.isPrivate }
-        case .groups: return model.chats.filter { $0.type == "group" }
-        case .channels: return model.chats.filter { $0.isChannel }
+        case .all: return base
+        case .privateChats: return base.filter { $0.isPrivate }
+        case .groups: return base.filter { $0.type == "group" }
+        case .channels: return base.filter { $0.isChannel }
         }
     }
+    private var archivedChats: [ChatItem] { model.chats.filter { fstore.archived.contains($0.id) } }
 
     /// число непрочитанных чатов в папке и есть ли среди них не заглушённые (тогда значок синий, иначе серый)
     private func count(_ f: ChatFolder) -> (Int, Bool) {
@@ -121,6 +132,8 @@ struct ChatListView: View {
             .animation(.spring(response: 0.4, dampingFraction: 0.82), value: storiesOpen)
             .background(Theme.bg.ignoresSafeArea())
             .onChange(of: query) { q in runSearch(q) }
+            .onAppear { fstore.use(model.myId) }
+            .onChange(of: model.myId) { fstore.use($0) }
             .sheet(isPresented: $showNew) { NewChatView().environmentObject(model) }
             .fullScreenCover(item: Binding(get: { storyStart.map { IdentifiedString(value: $0) } }, set: { storyStart = $0?.value })) { s in
                 StoryViewer(startUser: s.value).environmentObject(model)
@@ -219,8 +232,8 @@ struct ChatListView: View {
 
     // MARK: закреплённые — кружками в одну строку
 
-    private var pinnedChats: [ChatItem] { model.chats.filter { $0.pinned } }
-    private var showPinnedRow: Bool { folder == .all && !sidebar && !pinnedChats.isEmpty }
+    private var pinnedChats: [ChatItem] { model.chats.filter { $0.pinned && !fstore.archived.contains($0.id) } }
+    private var showPinnedRow: Bool { folder == .all && customFolder == nil && !sidebar && !pinnedChats.isEmpty }
 
     private var pinnedRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -251,34 +264,110 @@ struct ChatListView: View {
     }
 
     private var folders: some View {
-        HStack(spacing: 2) {
-            ForEach(ChatFolder.allCases, id: \.self) { f in
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { folder = f }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(f.title).font(.system(size: 15, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
-                        let (n, loud) = count(f)
-                        if n > 0 {
-                            Text(n > 999 ? "999+" : "\(n)").font(.system(size: 11.5, weight: .bold)).foregroundColor(.white)
-                                .padding(.horizontal, 6).frame(minWidth: 20, minHeight: 20)
-                                .background(Capsule().fill(loud ? Theme.a1 : Color(hex: 0xa3a6b8)))
+        Group {
+            if fstore.folders.isEmpty {
+                HStack(spacing: 2) { builtinChips; addFolderChip }
+                    .padding(4)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 2) {
+                        builtinChips
+                        ForEach(fstore.folders) { f in
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { customFolder = f.id }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: f.icon).font(.system(size: 13, weight: .semibold))
+                                    Text(f.name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                                    let n = model.chats.filter { f.chats.contains($0.id) && $0.unread > 0 }.count
+                                    if n > 0 {
+                                        Text("\(n)").font(.system(size: 11.5, weight: .bold)).foregroundColor(.white)
+                                            .padding(.horizontal, 6).frame(minWidth: 20, minHeight: 20)
+                                            .background(Capsule().fill(Theme.a1))
+                                    }
+                                }
+                                .padding(.horizontal, 14).frame(height: 38)
+                                .foregroundColor(Theme.text)
+                                .background { if customFolder == f.id { Capsule().fill(Theme.text.opacity(0.08)).matchedGeometryEffect(id: "fold", in: foldNS) } }
+                                .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button { editFolder = f } label: { Label("Изменить папку", systemImage: "pencil") }
+                                Button(role: .destructive) { if customFolder == f.id { customFolder = nil }; fstore.delete(f.id) } label: { Label("Удалить папку", systemImage: "trash") }
+                            }
                         }
+                        addFolderChip
                     }
-                    .frame(maxWidth: .infinity).frame(height: 38)
-                    .foregroundColor(Theme.text)
-                    .background {
-                        if folder == f { Capsule().fill(Theme.text.opacity(0.08)).matchedGeometryEffect(id: "fold", in: foldNS) }
-                    }
-                    .contentShape(Capsule())
+                    .padding(4)
                 }
-                .buttonStyle(.plain)
             }
         }
-        .padding(4)
         .lumoGlass(Capsule())
         .padding(.horizontal, 14)
         .padding(.bottom, 6)
+        .sheet(isPresented: $newFolder) {
+            FolderEditor(folder: .init(id: UUID().uuidString, name: "", icon: "folder.fill", chats: []), isNew: true).environmentObject(model)
+        }
+        .sheet(item: $editFolder) { f in FolderEditor(folder: f, isNew: false).environmentObject(model) }
+    }
+
+    private var addFolderChip: some View {
+        Button { newFolder = true } label: {
+            Image(systemName: "plus").font(.system(size: 15, weight: .bold)).foregroundColor(Theme.muted)
+                .frame(width: 38, height: 38).contentShape(Circle())
+        }
+        .buttonStyle(BouncyButtonStyle())
+    }
+
+    @ViewBuilder private var builtinChips: some View {
+        ForEach(ChatFolder.allCases, id: \.self) { f in
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { folder = f; customFolder = nil }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(f.title).font(.system(size: 15, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                    let (n, loud) = count(f)
+                    if n > 0 {
+                        Text(n > 999 ? "999+" : "\(n)").font(.system(size: 11.5, weight: .bold)).foregroundColor(.white)
+                            .padding(.horizontal, 6).frame(minWidth: 20, minHeight: 20)
+                            .background(Capsule().fill(loud ? Theme.a1 : Color(hex: 0xa3a6b8)))
+                    }
+                }
+                .frame(maxWidth: fstore.folders.isEmpty ? .infinity : nil).frame(height: 38)
+                .padding(.horizontal, fstore.folders.isEmpty ? 0 : 14)
+                .foregroundColor(Theme.text)
+                .background {
+                    if folder == f && customFolder == nil { Capsule().fill(Theme.text.opacity(0.08)).matchedGeometryEffect(id: "fold", in: foldNS) }
+                }
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// строка «Архив» над списком
+    private var archiveRow: some View {
+        Button { showArchive = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "archivebox.fill").font(.system(size: 22, weight: .semibold)).foregroundColor(.white)
+                    .frame(width: 54, height: 54).background(Circle().fill(Color(hex: 0x8e93a6)))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Архив").font(.system(size: 16.5, weight: .bold)).foregroundColor(Theme.text)
+                    Text(archivedChats.prefix(4).map { $0.displayName }.joined(separator: ", ")).font(.system(size: 14.5)).foregroundColor(Theme.muted).lineLimit(1)
+                }
+                Spacer()
+                let n = archivedChats.reduce(0) { $0 + ($1.muted ? 0 : $1.unread) }
+                if n > 0 {
+                    Text("\(n)").font(.system(size: 13, weight: .bold)).foregroundColor(.white)
+                        .padding(.horizontal, 7).frame(minWidth: 22, minHeight: 22).background(Capsule().fill(Color(hex: 0xa3a6b8)))
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(RowButtonStyle())
+        .sheet(isPresented: $showArchive) { ArchiveView().environmentObject(model) }
     }
 
     private var chatList: some View {
@@ -288,6 +377,7 @@ struct ChatListView: View {
             GeometryReader { g in Color.clear.preference(key: ProfileScrollKey.self, value: g.frame(in: .named("clist")).minY) }.frame(height: 0)
             LazyVStack(spacing: 0) {
                 if folder == .all { RemindersBar() }
+                if folder == .all, customFolder == nil, !archivedChats.isEmpty { archiveRow }
                 if showPinnedRow { pinnedRow }
                 if !model.chatsLoaded {
                     ForEach(0..<8, id: \.self) { i in SkeletonChatRow(delay: Double(i) * 0.08) }
@@ -352,7 +442,7 @@ struct ChatListView: View {
                     let j = g.translation.width < 0 ? i + 1 : i - 1
                     guard all.indices.contains(j) else { return }
                     UISelectionFeedbackGenerator().selectionChanged()
-                    withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { folder = all[j] }
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { folder = all[j]; customFolder = nil }
                 }
         )
         .onPull { y in
@@ -393,6 +483,11 @@ struct ChatListView: View {
         [
             SwipeAction(icon: c.muted ? "speaker.wave.2.fill" : "speaker.slash.fill", title: c.muted ? "Вкл. звук" : "Убрать звук", color: Color(hex: 0xFF9F0A)) {
                 Task { await model.setMuted(c.id, !c.muted) }
+            },
+            SwipeAction(icon: fstore.archived.contains(c.id) ? "tray.and.arrow.up.fill" : "archivebox.fill",
+                        title: fstore.archived.contains(c.id) ? "Вернуть" : "В архив", color: Color(hex: 0x8e93a6)) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { fstore.setArchived(c.id, !fstore.archived.contains(c.id)) }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
             },
             SwipeAction(icon: "trash.fill", title: "Удалить", color: Color(hex: 0xFF3B30)) { deleting = c },
         ]

@@ -866,6 +866,13 @@ struct ForwardView: View {
     @Environment(\.dismiss) private var dismiss
     let messages: [Message]
     @State private var q = ""
+    /// можно выбрать сразу несколько чатов
+    @State private var picked: [String] = []
+    @State private var hideAuthor = false
+
+    private var list: [ChatItem] {
+        model.chats.filter { $0.canPost && (q.isEmpty || $0.displayName.lowercased().contains(q.lowercased())) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -873,26 +880,65 @@ struct ForwardView: View {
                 SearchField(placeholder: "Кому переслать?", text: $q).padding(.horizontal, 14)
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(model.chats.filter { $0.canPost && (q.isEmpty || $0.displayName.lowercased().contains(q.lowercased())) }) { c in
+                        ForEach(list) { c in
                             Button {
-                                dismiss()
-                                let list = messages
-                                Task {
-                                    for m in list { await model.forward(m, to: c.id, quiet: true) }
-                                    model.say(list.count > 1 ? "Сообщения пересланы" : "Сообщение переслано")
+                                UISelectionFeedbackGenerator().selectionChanged()
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                    if let k = picked.firstIndex(of: c.id) { picked.remove(at: k) } else { picked.append(c.id) }
                                 }
-                            } label: { ChatRow(chat: c) }
+                            } label: {
+                                HStack(spacing: 0) {
+                                    ChatRow(chat: c)
+                                    Image(systemName: picked.contains(c.id) ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 23)).foregroundColor(picked.contains(c.id) ? Theme.a1 : Theme.muted.opacity(0.5))
+                                        .padding(.trailing, 12)
+                                        .scaleEffect(picked.contains(c.id) ? 1.08 : 1)
+                                }
+                            }
                             .buttonStyle(RowButtonStyle())
                         }
                     }
                     .padding(.horizontal, 8)
+                    .padding(.bottom, 110)
                 }
             }
             .padding(.top, 8)
             .background(Theme.bg.ignoresSafeArea())
-            .navigationTitle("Переслать")
+            .overlay(alignment: .bottom) {
+                if !picked.isEmpty {
+                    VStack(spacing: 10) {
+                        Toggle(isOn: $hideAuthor) {
+                            Label("Скрыть автора", systemImage: "person.crop.circle.badge.xmark").font(.system(size: 15, weight: .medium))
+                        }
+                        .tint(Theme.a1)
+                        Button { send() } label: {
+                            Text(picked.count == 1 ? "Переслать" : "Переслать в \(picked.count) чата")
+                                .font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                                .frame(maxWidth: .infinity).frame(height: 50)
+                                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
+                        .buttonStyle(BouncyButtonStyle())
+                    }
+                    .padding(14)
+                    .lumoGlass(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .padding(.horizontal, 10).padding(.bottom, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.32, dampingFraction: 0.85), value: picked.isEmpty)
+            .navigationTitle(picked.isEmpty ? "Переслать" : "Выбрано: \(picked.count)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
+        }
+    }
+
+    private func send() {
+        let targets = picked, msgs = messages, hide = hideAuthor
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        dismiss()
+        Task {
+            for t in targets { for m in msgs { await model.forward(m, to: t, quiet: true, hideAuthor: hide) } }
+            model.say(targets.count > 1 ? "Переслано в \(targets.count) чата" : (msgs.count > 1 ? "Сообщения пересланы" : "Сообщение переслано"))
         }
     }
 }

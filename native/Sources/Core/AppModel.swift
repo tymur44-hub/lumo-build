@@ -1609,7 +1609,13 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func forward(_ m: Message, to chatId: String, quiet: Bool = false) async {
+    func forward(_ m: Message, to chatId: String, quiet: Bool = false, hideAuthor: Bool = false) async {
+        if hideAuthor {
+            // без подписи «Переслано от…» — как своё сообщение
+            let ok = await send(chatId: chatId, kind: m.kind, body: m.body, media: m.mediaURL, meta: m.meta)
+            if ok && !quiet { say("Сообщение переслано") }
+            return
+        }
         let from: String
         if let f = m.forwardedFrom, !f.isEmpty { from = f }
         else if let c = chat(m.chatId), c.isChannel { from = c.displayName }
