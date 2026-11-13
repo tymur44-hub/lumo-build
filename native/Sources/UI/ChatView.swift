@@ -52,6 +52,7 @@ struct ChatView: View {
     @State private var deleteList: [Message] = []
     @State private var confirmDelete = false
     @State private var atBottom = true
+    @State private var translateText: String?
     /// плавающая дата и упоминания — отдельный объект, чтобы прокрутка не перерисовывала весь чат
     @State private var scrollInfo = ChatScrollInfo()
     @State private var sendMenu = false
@@ -262,6 +263,7 @@ struct ChatView: View {
             })
         }
         .sheet(item: $forwarding) { b in ForwardView(messages: b.messages).environmentObject(model) }
+        .modifier(TranslateHost(text: $translateText))
         .sheet(item: $reporting) { t in ReportView(target: t).environmentObject(model) }
         .sheet(item: $remindFor) { m in RemindPickerSheet(message: m) }
         .sheet(isPresented: $streakOpen) { StreakSheet(chatId: chatId) }
@@ -474,6 +476,9 @@ struct ChatView: View {
         }
         if let b = m.body, !b.isEmpty, !isProt {
             a.append(MsgAction(title: "Копировать", icon: "doc.on.doc") { UIPasteboard.general.string = b; model.say("Скопировано") })
+        }
+        if m.kind == "text", let b = m.body, !b.isEmpty, b != E2E.locked, TranslateHost.available {
+            a.append(MsgAction(title: "Перевести", icon: "character.bubble") { translateText = b })
         }
         if ["voice", "video_note"].contains(m.kind), let u = m.mediaURL {
             a.append(MsgAction(title: "Расшифровать", icon: "text.quote") {
