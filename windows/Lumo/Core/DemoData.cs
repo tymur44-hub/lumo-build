@@ -47,8 +47,20 @@ public static class DemoData
             M("c2", null, "system", "Олег закрепил сообщение", 49),
             M("c2", "me", "text", "Я тоже, возьму колонку", 40),
             M("c2", "u2", "text", "Репетиция в 18:00", 15, fwd: "Волшебный мир"),
+            M("c2", "u2", "game", null, 12, new JsonObject { ["g"] = "chess", ["st"] = "active", ["p1"] = "u2", ["p2"] = "me", ["p1n"] = "Олег", ["p2n"] = "Тимур", ["game"] = "demo", ["stake"] = 50 }),
+            M("c2", "me", "dice", null, 10, new JsonObject { ["g"] = "dice", ["v"] = 5 }),
         };
-        Store.Messages["c3"] = new List<Message> { M("c3", "me", "text", "Вышло приложение для Windows", 60) };
+        Store.Messages["c3"] = new List<Message>
+        {
+            M("c3", "me", "text", "Вышло приложение для Windows", 60),
+            M("c3", "u2", "text", "Выберите, что показать:", 55, new JsonObject { ["buttons"] = JsonNode.Parse("[[{\"text\":\"Новости\",\"data\":\"news\"},{\"text\":\"Сайт\",\"url\":\"https://lumomess.ru\"}],[{\"text\":\"Открыть приложение\",\"web_app\":\"https://lumomess.ru\"}]]") }),
+        };
+        Store.Stories = new List<StoryGroup>
+        {
+            new("me", "Тимур", null, 2, new() { new StoryItem(1, "me", "Тимур", null, 2, "image", "", "", DateTimeOffset.UtcNow.AddHours(-1), true, 12, null) }, false, DateTimeOffset.UtcNow.AddHours(-1)),
+            new("u1", "Анна Смирнова", null, 5, new() { new StoryItem(2, "u1", "Анна Смирнова", null, 5, "image", "", "На репетиции", DateTimeOffset.UtcNow.AddMinutes(-30), false, 3, null) }, true, DateTimeOffset.UtcNow.AddMinutes(-30)),
+            new("u2", "Олег", null, 0, new() { new StoryItem(3, "u2", "Олег", null, 0, "image", "", "", DateTimeOffset.UtcNow.AddHours(-5), true, 7, null) }, false, DateTimeOffset.UtcNow.AddHours(-5)),
+        };
         Store.Messages["c4"] = new List<Message> { M("c4", "me", "text", "Список покупок: хлеб, молоко, кофе", 300) };
         foreach (var k in Store.Messages.Keys) Store.HasMore[k] = false;
     }

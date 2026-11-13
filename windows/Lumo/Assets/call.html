@@ -33,6 +33,17 @@ html,body{height:100%;background:transparent;color:var(--text);font-family:"Sego
 #min{position:absolute;left:18px;top:18px;width:40px;height:40px}
 #min svg{width:20px;height:20px}
 #call.vid #min{left:auto;right:250px}
+#grid{position:absolute;inset:70px 24px 130px 24px;display:none;gap:12px;grid-auto-rows:1fr}
+#call.grp #grid{display:grid}
+#call.grp #who,#call.grp #rv,#call.grp #lv{display:none!important}
+.tile{position:relative;border-radius:18px;overflow:hidden;background:#1a1c36;display:flex;align-items:center;justify-content:center;border:2px solid transparent;transition:border-color .2s}
+.tile.sp{border-color:var(--ok)}
+.tile video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.tile .ta{width:86px;height:86px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;color:#fff;background-size:cover;background-position:center}
+.tile .tn{position:absolute;left:10px;bottom:8px;font-size:13px;background:rgba(0,0,0,.45);padding:3px 9px;border-radius:99px;display:flex;gap:6px;align-items:center}
+.tile .tn svg{width:13px;height:13px}
+#gtitle{position:absolute;left:0;right:0;top:22px;text-align:center;font-size:17px;font-weight:600;display:none}
+#call.grp #gtitle{display:block}
 #code{position:absolute;left:50%;transform:translateX(-50%);top:18px;font-size:12px;color:var(--muted);background:rgba(0,0,0,.3);padding:5px 12px;border-radius:99px;display:none}
 </style>
 </head>
@@ -44,6 +55,8 @@ html,body{height:100%;background:transparent;color:var(--text);font-family:"Sego
   <button class="b" id="min" title="Свернуть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg></button>
   <div id="code"></div>
   <div id="who"><div id="av"></div><div id="name"></div><div id="status"></div></div>
+  <div id="gtitle"></div>
+  <div id="grid"></div>
   <div id="bar"></div>
 </div>
 <script>
@@ -85,7 +98,8 @@ window.LC={cmd(m){
     case 'start': startCall(m); break;
     case 'accept': acceptCall(); break;
     case 'reject': rejectCall(); break;
-    case 'hangup': hangup(); break;
+    case 'hangup': if(G) gend(); else hangup(); break;
+    case 'gstart': gstart(m); break;
   }
 }};
 
@@ -233,7 +247,7 @@ async function toggleCam(){
 function btn(id,cls,icon,label,fn){ return `<div class="bw"><button class="b ${cls}" id="${id}" title="${esc(label)}">${icon}</button><div class="lab">${esc(label)}</div></div>`; }
 function callUI(){
   const box=$('#call');
-  if(!C.st){ box.className=''; post({op:'hide'}); return; }
+  if(!C.st){ if(G){ gUI(); return; } box.className=''; post({op:'hide'}); return; }
   box.className='on';
   const av=$('#av'); const c=AV[((C.peerColor||0)%8+8)%8];
   av.style.background=C.peerAvatar?`url("${C.peerAvatar}") center/cover`:`linear-gradient(135deg,${c[0]},${c[1]})`;
@@ -267,6 +281,68 @@ function callUI(){
     on('rej',rejectCall); on('acc',acceptCall); on('mute',toggleMute); on('cam',toggleCam); on('hang',hangup); }
   post({op:'state',st:C.st,t:C.t0?Math.round((Date.now()-C.t0)/1000):0,name:C.peerName});
 }
+// ---------- групповой звонок (LiveKit, как в приложениях) ----------
+let G=null, LKP=null;
+function loadLK(){ if(window.LivekitClient) return Promise.resolve(true); if(LKP) return LKP;
+  LKP=new Promise(r=>{ const add=src=>{ const sc=document.createElement('script'); sc.src=src; sc.onload=()=>r(true); sc.onerror=()=>{ if(src.includes('jsdelivr')) add('https://unpkg.com/livekit-client@2.18.10/dist/livekit-client.umd.js'); else r(false); }; document.head.appendChild(sc); };
+    add('https://cdn.jsdelivr.net/npm/livekit-client@2.18.10/dist/livekit-client.umd.js'); }); return LKP; }
+async function gstart(m){
+  if(C.st||G) return toast('Вы уже в звонке');
+  if(!(await loadLK())){ toast('Не удалось загрузить модуль групповых звонков'); return; }
+  const L=window.LivekitClient, E=L.RoomEvent;
+  const room=new L.Room({adaptiveStream:true,dynacast:true,audioCaptureDefaults:AUD_C});
+  G={room,title:m.title||'Групповой звонок',t0:Date.now(),muted:false,tiles:new Map()};
+  const up=()=>gUI();
+  [E.ParticipantConnected,E.ParticipantDisconnected,E.TrackSubscribed,E.TrackUnsubscribed,E.TrackMuted,E.TrackUnmuted,E.ActiveSpeakersChanged,E.LocalTrackPublished,E.LocalTrackUnpublished].forEach(ev=>room.on(ev,up));
+  room.on(E.Disconnected,()=>{ if(G&&G.room===room) gend(true); });
+  try{ await room.connect(m.url,m.token); }catch(e){ G=null; toast('Не удалось подключиться к звонку'); return; }
+  try{ await room.localParticipant.setMicrophoneEnabled(true); }catch{ toast('Нет доступа к микрофону'); G.muted=true; }
+  if(m.video) try{ await room.localParticipant.setCameraEnabled(true); }catch{}
+  post({op:'show'});
+  clearInterval(G.timer); G.timer=setInterval(()=>{ if(G) post({op:'state',st:'active',t:Math.round((Date.now()-G.t0)/1000),name:G.title}); },1000);
+  gUI();
+}
+function gend(remote){
+  if(!G) return; const g=G; G=null; clearInterval(g.timer);
+  try{ g.room.disconnect(); }catch{}
+  $('#grid').innerHTML=''; $('#call').classList.remove('grp');
+  if(remote) toast('Звонок завершён');
+  callUI();
+}
+function pMeta(p){ try{ return JSON.parse(p.metadata||'{}'); }catch{ return {}; } }
+function gUI(){
+  if(!G){ return; }
+  const box=$('#call'); box.className='on grp';
+  $('#gtitle').textContent=G.title+' · '+(G.room.remoteParticipants.size+1)+' '+(((G.room.remoteParticipants.size+1)%10===1&&(G.room.remoteParticipants.size+1)%100!==11)?'участник':'участника');
+  const L=window.LivekitClient;
+  const ps=[G.room.localParticipant,...G.room.remoteParticipants.values()];
+  const grid=$('#grid'); const n=ps.length; const cols=n<=1?1:n<=4?2:n<=9?3:4;
+  grid.style.gridTemplateColumns=`repeat(${cols},1fr)`;
+  const keep=new Set();
+  ps.forEach(p=>{
+    keep.add(p.identity);
+    let t=G.tiles.get(p.identity);
+    if(!t){ t=document.createElement('div'); t.className='tile'; t.innerHTML='<div class="ta"></div><div class="tn"></div>'; grid.appendChild(t); G.tiles.set(p.identity,t); }
+    const md=pMeta(p), c=AV[((md.color||0)%8+8)%8], ta=t.querySelector('.ta');
+    ta.style.background=md.avatar?`url("${md.avatar}") center/cover`:`linear-gradient(135deg,${c[0]},${c[1]})`; ta.textContent=md.avatar?'':initials(p.name);
+    const mic=p.isMicrophoneEnabled;
+    t.querySelector('.tn').innerHTML=(mic?'':I.micOff)+esc(p===G.room.localParticipant?'Вы':(p.name||'Участник'));
+    t.classList.toggle('sp',!!p.isSpeaking);
+    const pub=p.getTrackPublication(L.Track.Source.Camera); const vt=pub&&pub.track&&!pub.isMuted?pub.track:null;
+    let v=t.querySelector('video');
+    if(vt){ if(!v||v._sid!==vt.sid){ if(v) v.remove(); v=vt.attach(); v._sid=vt.sid; v.muted=true; t.prepend(v); } if(p===G.room.localParticipant) v.style.transform='scaleX(-1)'; }
+    else if(v){ v.remove(); }
+    if(p!==G.room.localParticipant){ const ap=p.getTrackPublication(L.Track.Source.Microphone); if(ap&&ap.track&&!ap._att){ ap._att=1; const a=ap.track.attach(); a.style.display='none'; document.body.appendChild(a); } }
+  });
+  for(const [k,t] of G.tiles) if(!keep.has(k)){ t.remove(); G.tiles.delete(k); }
+  const lp=G.room.localParticipant, camOn=lp.isCameraEnabled, micOn=lp.isMicrophoneEnabled;
+  const h=btn('gmute',micOn?'':'off',micOn?I.mic:I.micOff,micOn?'Микрофон':'Включить звук')+btn('gcam',camOn?'off':'',camOn?I.cam:I.camOff,'Камера')+btn('gleave','red',I.end,'Выйти');
+  const bar=$('#bar'); if(bar.dataset.h!==h){ bar.innerHTML=h; bar.dataset.h=h;
+    document.getElementById('gmute').onclick=async()=>{ try{ await lp.setMicrophoneEnabled(!lp.isMicrophoneEnabled); }catch{ toast('Нет доступа к микрофону'); } gUI(); };
+    document.getElementById('gcam').onclick=async()=>{ try{ await lp.setCameraEnabled(!lp.isCameraEnabled); }catch{ toast('Нет доступа к камере'); } gUI(); };
+    document.getElementById('gleave').onclick=()=>gend(); }
+}
+
 $('#min').onclick=()=>post({op:'minimize'});
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') post({op:'minimize'}); });
 post({op:'ready'});

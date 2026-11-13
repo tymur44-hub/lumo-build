@@ -56,6 +56,7 @@ public static class Store
         await LoadMe();
         await E2E.Setup(id);
         await LoadChats();
+        _ = LoadStories();
         Realtime.Connect();
         var db = Realtime.Get("lm-db", new JsonArray(
             J.O(("event", "INSERT"), ("schema", "public"), ("table", "lm_messages")),
@@ -70,6 +71,8 @@ public static class Store
             if (OpenChatId != null) await LoadMessages(OpenChatId);
         };
         Realtime.OnState = on => NetState?.Invoke(on);
+        var sch = Realtime.Get("lm-stories");
+        sch.OnBroadcast = async (_, _) => { await Task.Delay(350); await LoadStories(); };
         var oc = Realtime.Get("lm-online", presenceKey: id);
         oc.OnPresenceState = st => { Online.Clear(); foreach (var k in st) Online.Add(k.Key); OnlineChanged?.Invoke(); };
         oc.OnPresenceDiff = (joins, leaves) =>
@@ -107,7 +110,7 @@ public static class Store
         loops?.Cancel();
         Realtime.Disconnect();
         Started = false; Me = null;
-        Chats = new(); ChatPreview.Clear(); Messages.Clear(); Reactions.Clear(); ReplyCache.Clear(); Profiles.Clear(); Online.Clear(); Typing.Clear();
+        Chats = new(); Stories = new(); ChatPreview.Clear(); Messages.Clear(); Reactions.Clear(); ReplyCache.Clear(); Profiles.Clear(); Online.Clear(); Typing.Clear();
         HasMore.Clear(); hidden.Clear(); cleared.Clear(); notified.Clear(); typingChannels.Clear(); OpenChatId = null; contacts = null;
         E2E.Forget();
     }
@@ -192,6 +195,33 @@ public static class Store
             return null;
         }
         catch (Exception e) { return e.Message; }
+    }
+
+    // ---------- истории ----------
+
+    public static List<StoryGroup> Stories { get; internal set; } = new();
+    public static event Action? StoriesChanged;
+
+    public static async Task LoadStories()
+    {
+        if (Demo || MyId == null) return;
+        try
+        {
+            var rows = (await Api.Rpc("lm_stories_feed")).Objects().Select(StoryItem.From).ToList();
+            Stories = rows.GroupBy(r => r.UserId).Select(g =>
+            {
+                var items = g.OrderBy(x => x.CreatedAt).ToList(); var f = items[0];
+                return new StoryGroup(g.Key, f.Name, f.AvatarUrl, f.Color, items, g.Key != MyId && items.Any(x => !x.Seen), items[^1].CreatedAt);
+            }).OrderByDescending(x => x.UserId == MyId).ThenByDescending(x => x.Unseen).ThenByDescending(x => x.Last).ToList();
+            StoriesChanged?.Invoke();
+        }
+        catch { }
+    }
+
+    public static async Task ViewStory(StoryItem s)
+    {
+        if (s.Seen || s.UserId == MyId) return;
+        try { await Api.Rpc("lm_story_view", J.O(("p_id", s.Id))); } catch { }
     }
 
     // ---------- чаты ----------

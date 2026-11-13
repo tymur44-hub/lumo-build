@@ -79,6 +79,8 @@ public sealed class ChatView : Grid
             tools.Children.Add(T.IconButton("\uE717", "Аудиозвонок", () => { var c = Store.Chat(ChatId); if (c != null) CallHost.I?.Start(c, false); }));
             tools.Children.Add(T.IconButton("\uE714", "Видеозвонок", () => { var c = Store.Chat(ChatId); if (c != null) CallHost.I?.Start(c, true); }));
         }
+        if (cc != null && cc.Type == "group")
+            tools.Children.Add(T.IconButton("\uE717", "Групповой звонок", () => { var c = Store.Chat(ChatId); if (c != null) CallHost.I?.StartGroup(c); }));
         tools.Children.Add(T.IconButton("\uE721", "Поиск по чату (Ctrl+F)", () => _ = Dialogs.SearchInChat(win, this)));
         tools.Children.Add(T.IconButton("\uE946", "Информация", ShowInfo));
         var more = T.IconButton("\uE712", "Ещё", () => { });
@@ -149,7 +151,14 @@ public sealed class ChatView : Grid
         composer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         composer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         composer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var attach = T.IconButton("\uE723", "Прикрепить файл", async () => await PickFiles(), 40, 18);
+        var attach = T.IconButton("\uE723", "Прикрепить", () => { }, 40, 18);
+        attach.Click += (_, _) =>
+        {
+            var fl = new MenuFlyout();
+            fl.Items.Add(Item("Файл, фото или видео", "\uE8E5", async () => await PickFiles()));
+            fl.Items.Add(Item("Игры", "\uE7FC", async () => await Dialogs.Games(win, ChatId)));
+            fl.ShowAt(attach);
+        };
         attach.VerticalAlignment = VerticalAlignment.Bottom;
         composer.Children.Add(attach);
         Grid.SetColumn(input, 1); composer.Children.Add(input);

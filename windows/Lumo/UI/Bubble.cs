@@ -42,7 +42,7 @@ public sealed class BubbleView : Grid
 
         var col = new StackPanel { HorizontalAlignment = mine ? HorizontalAlignment.Right : HorizontalAlignment.Left, MaxWidth = 520 };
         var big = m.Kind == "text" && IsEmojiOnly(m.Body);
-        var bare = m.Kind is "sticker" or "video_note" || big;
+        var bare = m.Kind is "sticker" or "video_note" or "game" or "dice" || big;
         var inner = new StackPanel { Spacing = 4 };
 
         if (showName && !mine && chat != null && !chat.IsPrivate && !chat.IsChannel && m.SenderId != null)
@@ -55,6 +55,8 @@ public sealed class BubbleView : Grid
         if (m.ReplyTo is int rid) inner.Children.Add(ReplyQuote(rid));
 
         inner.Children.Add(Content(m, big));
+        var btns = BotButtons(m);
+        if (btns != null) inner.Children.Add(btns);
 
         // время и галочки
         var foot = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right };
@@ -150,6 +152,8 @@ public sealed class BubbleView : Grid
                 return g;
             }
             case "voice": return new VoiceView(m, mine);
+            case "game": return GameCard(m);
+            case "dice": return ThrowCard(m);
             case "file": return FileView(m, fg);
             case "call":
             {
@@ -180,6 +184,125 @@ public sealed class BubbleView : Grid
                 return sp;
             }
         }
+    }
+
+    static readonly Dictionary<string, string> gameTitles = new() { ["ttt"] = "Крестики-нолики", ["checkers"] = "Шашки", ["sea"] = "Морской бой", ["chess"] = "Шахматы" };
+    static readonly Dictionary<string, (uint, uint)> gameColors = new() { ["ttt"] = (0xFF22C1FF, 0xFF3A7BFF), ["checkers"] = (0xFFA7743F, 0xFF6B4426), ["sea"] = (0xFF2BB3FF, 0xFF1460C8), ["chess"] = (0xFF4A4F5C, 0xFF16181D) };
+    static readonly Dictionary<string, string> gameGlyphs = new() { ["ttt"] = "\uE711", ["checkers"] = "\uEA3A", ["sea"] = "\uE804", ["chess"] = "\uE7FC" };
+
+    public static FrameworkElement GameIcon(string k, double size = 46)
+    {
+        var c = gameColors.GetValueOrDefault(k, (0xFF7C5CFF, 0xFF22C1FF));
+        var g = new Grid { Width = size, Height = size, CornerRadius = new CornerRadius(size * 0.3), Background = T.Grad(c.Item1, c.Item2) };
+        var ic = T.Icon(gameGlyphs.GetValueOrDefault(k, "\uE7FC"), size * 0.46, T.White); ic.HorizontalAlignment = HorizontalAlignment.Center; ic.VerticalAlignment = VerticalAlignment.Center;
+        g.Children.Add(ic);
+        return g;
+    }
+
+    /// <summary>Карточка игры вдвоём (как на телефонах)</summary>
+    FrameworkElement GameCard(Message m)
+    {
+        var mt = m.Meta; var k = mt.Str("g") ?? "ttt"; var st = mt.Str("st") ?? "invite"; var me = Store.MyId;
+        var p1 = mt.Str("p1"); var p2 = mt.Str("p2");
+        var player = me != null && (me == p1 || me == p2);
+        var btn = st switch
+        {
+            "invite" => p1 != me && m.SenderId != me ? "Принять" : "Открыть",
+            "active" or "setup" => player ? "Играть" : "Смотреть",
+            _ => "Посмотреть",
+        };
+        var status = st switch
+        {
+            "invite" => p1 == me ? "Ждём соперника" : "Приглашение сыграть",
+            "setup" => "Расстановка кораблей",
+            "active" => "Идёт игра",
+            "declined" => "Приглашение отклонено",
+            "canceled" => "Игра отменена",
+            _ => mt.Str("winner") is { } w ? (w == me ? "Вы победили" : "Победил(а) " + (mt.Str("wn") ?? "")) : "Ничья",
+        };
+        var fg = mine ? T.White : T.Text;
+        var card = new StackPanel { Width = 280, Spacing = 8, Padding = new Thickness(12), CornerRadius = new CornerRadius(18), Background = mine ? T.Out : T.Bubble };
+        var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 11 };
+        top.Children.Add(GameIcon(k));
+        var tt = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        tt.Children.Add(T.Txt(gameTitles.GetValueOrDefault(k, "Игра"), 15.5, fg, bold: true));
+        tt.Children.Add(T.Txt(status, 13, mine ? T.OutMuted : T.Muted));
+        top.Children.Add(tt);
+        card.Children.Add(top);
+        var vs = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        vs.Children.Add(T.Txt(mt.Str("p1n") ?? Store.DisplayName(m.SenderId), 13.5, fg, bold: true, lines: 1));
+        vs.Children.Add(T.Txt("VS", 11, mine ? T.OutMuted : T.Muted, bold: true));
+        vs.Children.Add(T.Txt(p2 == null ? "ждём соперника" : mt.Str("p2n") ?? "", 13.5, fg, bold: p2 != null, lines: 1));
+        var stake = mt.Int("stake") ?? 0;
+        if (stake > 0) vs.Children.Add(T.Txt("  " + stake + " люм.", 13, T.B(0xFFF5B942), bold: true));
+        card.Children.Add(vs);
+        var b = new Button { Content = new TextBlock { Text = btn, FontWeight = Microsoft.UI.Text.FontWeights.Bold, Foreground = btn == "Посмотреть" && !mine ? T.Text : T.White },
+            HorizontalAlignment = HorizontalAlignment.Stretch, Height = 40, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(0) };
+        T.Fill(b, mine ? T.B(0x2EFFFFFF) : btn == "Посмотреть" ? T.Panel2 : T.Accent);
+        b.Click += (_, _) => { var id = mt.Str("game"); if (id != null) WebOverlay.I?.OpenGame(id); };
+        card.Children.Add(b);
+        return card;
+    }
+
+    /// <summary>Бросок в чат: кубик, дартс, баскетбол, футбол, монетка</summary>
+    FrameworkElement ThrowCard(Message m)
+    {
+        var k = m.Meta.Str("g") ?? "dice"; var v = m.Meta.Int("v") ?? 1;
+        var (name, label) = k switch
+        {
+            "dice" => ("Кубик", "Выпало " + v),
+            "darts" => ("Дартс", v == 6 ? "В яблочко!" : v == 1 ? "Мимо" : "Очков: " + v),
+            "basket" => ("Баскетбол", v >= 4 ? "Попал!" : "Мимо"),
+            "football" => ("Футбол", v >= 3 ? "Гол!" : "Мимо"),
+            _ => ("Монетка", v == 1 ? "Орёл" : "Решка"),
+        };
+        var card = new StackPanel { Width = 170, Spacing = 6, Padding = new Thickness(12), CornerRadius = new CornerRadius(18), Background = mine ? T.Out : T.Bubble, HorizontalAlignment = HorizontalAlignment.Left };
+        var face = new Grid { Width = 64, Height = 64, CornerRadius = new CornerRadius(16), Background = T.Grad(0xFFFFFFFF, 0xFFDCD8F4), HorizontalAlignment = HorizontalAlignment.Center };
+        var num = new TextBlock { Text = k == "dice" ? v.ToString() : k == "coin" ? (v == 1 ? "О" : "Р") : v.ToString(), FontSize = 30, FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+            Foreground = T.B(0xFF25264A), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        face.Children.Add(num);
+        card.Children.Add(face);
+        var l1 = T.Txt(name, 12.5, mine ? T.OutMuted : T.Muted); l1.HorizontalAlignment = HorizontalAlignment.Center; card.Children.Add(l1);
+        var l2 = T.Txt(label, 15, mine ? T.White : T.Text, bold: true); l2.HorizontalAlignment = HorizontalAlignment.Center; card.Children.Add(l2);
+        return card;
+    }
+
+    /// <summary>Кнопки под сообщением бота: строки по [текст, data | url | web_app]</summary>
+    FrameworkElement? BotButtons(Message m)
+    {
+        if (m.Meta.Arr("buttons") is not { Count: > 0 } rows) return null;
+        var sp = new StackPanel { Spacing = 4, Margin = new Thickness(0, 4, 0, 0) };
+        foreach (var row in rows.OfType<System.Text.Json.Nodes.JsonArray>())
+        {
+            var g = new Grid { ColumnSpacing = 4 };
+            int i = 0;
+            foreach (var b in row.OfType<System.Text.Json.Nodes.JsonObject>())
+            {
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                var text = b.Str("text") ?? ""; var data = b.Str("data"); var url = b.Str("url"); var web = b.Str("web_app");
+                var sp2 = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+                if (url != null || web != null) sp2.Children.Add(T.Icon(web != null ? "\uE8A7" : "\uE71B", 11, mine ? T.White : T.A2));
+                sp2.Children.Add(new TextBlock { Text = text, FontSize = 13, Foreground = mine ? T.White : T.Text, TextTrimming = TextTrimming.CharacterEllipsis });
+                var btn = new Button { Content = sp2, HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(0) };
+                T.Fill(btn, mine ? T.B(0x2EFFFFFF) : T.B(0x22FFFFFF), mine ? T.B(0x44FFFFFF) : T.B(0x33FFFFFF));
+                btn.Click += async (_, _) =>
+                {
+                    if (web != null && m.SenderId != null) { WebOverlay.I?.OpenMini(m.SenderId, web); return; }
+                    if (url != null) { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch { } return; }
+                    if (data == null) return;
+                    try
+                    {
+                        var r = await Api.Raw("POST", "/functions/v1/lumo-bots/cb", body: J.O(("message_id", m.Id), ("data", data)));
+                        var t = r.Str("toast"); if (t != null) Store.Say(t);
+                    }
+                    catch { Store.Say("Не удалось выполнить действие"); }
+                };
+                Grid.SetColumn(btn, i++);
+                g.Children.Add(btn);
+            }
+            sp.Children.Add(g);
+        }
+        return sp;
     }
 
     static readonly Regex linkRx = new(@"(https?://[^\s<>""]+)|(\*\*(.+?)\*\*)|(@[A-Za-z0-9_]{3,32})", RegexOptions.Compiled);

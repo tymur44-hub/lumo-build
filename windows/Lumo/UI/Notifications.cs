@@ -29,8 +29,10 @@ public static class Notifications
 
     public static void Show(string chatId, string title, string body)
     {
-        if (win != null) Flash(win.Hwnd);
+        if (!Lumo.Core.Prefs.GetBool("notify_on", true)) return;
+        if (win != null && Lumo.Core.Prefs.GetBool("notify_flash", true)) Flash(win.Hwnd);
         if (!ok) return;
+        if (!Lumo.Core.Prefs.GetBool("notify_preview", true) && chatId != "call") body = "Новое сообщение";
         try
         {
             var n = new AppNotificationBuilder()

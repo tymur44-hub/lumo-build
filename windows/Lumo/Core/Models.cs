@@ -167,3 +167,13 @@ public record SearchResult(string Id, string Kind, string Name, string? Username
     public static SearchResult From(JsonObject j) => new(j.Str("id") ?? "", j.Str("kind") ?? "user", j.Str("name") ?? "", j.Str("username"),
         j.Str("avatar_url"), j.Int("color") ?? 0, j.Str("extra"));
 }
+
+public record StoryItem(int Id, string UserId, string Name, string? AvatarUrl, int Color, string Kind, string MediaUrl, string Caption,
+    DateTimeOffset CreatedAt, bool Seen, int Views, string? Thumb)
+{
+    public static StoryItem From(JsonObject j) => new(j.Int("id") ?? 0, j.Str("user_id") ?? "", j.Str("name") ?? "", j.Str("avatar_url"), j.Int("color") ?? 0,
+        j.Str("kind") ?? "image", j.Str("media_url") ?? "", j.Str("caption") ?? "", j.Date("created_at") ?? DateTimeOffset.UtcNow, j.Bool("seen"), j.Int("views") ?? 0,
+        j.Obj("meta").Str("thumb"));
+}
+
+public record StoryGroup(string UserId, string Name, string? AvatarUrl, int Color, List<StoryItem> Items, bool Unseen, DateTimeOffset Last);

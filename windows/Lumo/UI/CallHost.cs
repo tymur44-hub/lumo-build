@@ -41,19 +41,9 @@ public sealed class CallHost
     {
         try
         {
-            var opts = new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required" };
-            var env = await CoreWebView2Environment.CreateWithOptionsAsync(null, Path.Combine(Prefs.Dir, "webview"), opts);
-            await web.EnsureCoreWebView2Async(env);
+            await WebEnv.Setup(web);
             var cw = web.CoreWebView2;
-            cw.SetVirtualHostNameToFolderMapping("lumo.app.local", Path.Combine(AppContext.BaseDirectory, "Assets"), CoreWebView2HostResourceAccessKind.Allow);
-            cw.PermissionRequested += (_, e) =>
-            {
-                if (e.PermissionKind is CoreWebView2PermissionKind.Microphone or CoreWebView2PermissionKind.Camera or CoreWebView2PermissionKind.Autoplay)
-                    e.State = CoreWebView2PermissionState.Allow;
-            };
-            cw.Settings.AreDevToolsEnabled = false;
             cw.Settings.AreDefaultContextMenusEnabled = false;
-            cw.Settings.IsStatusBarEnabled = false;
             cw.WebMessageReceived += (_, e) => OnMessage(e.WebMessageAsJson);
             web.Source = new Uri("https://lumo.app.local/call.html");
         }
@@ -73,6 +63,7 @@ public sealed class CallHost
         outCh.Clear();
         myCh = Realtime.Get("lm-call-" + id);
         myCh.OnBroadcast = (ev, p) => { if (ev == "sig") Send(new JsonObject { ["op"] = "sig", ["payload"] = p.DeepClone() }); };
+        AttachGroupInvites(id);
         if (ready) _ = SendInit();
     }
 
@@ -119,6 +110,37 @@ public sealed class CallHost
             ["op"] = "start", ["peer"] = c.PeerId, ["chatId"] = c.Id, ["video"] = video,
             ["name"] = c.DisplayName, ["avatar"] = Net.Px(c.DisplayAvatar), ["color"] = c.DisplayColor,
         });
+    }
+
+    /// <summary>Групповой звонок в группе: начать или присоединиться</summary>
+    public async void StartGroup(ChatItem c, bool video = false, string action = "start")
+    {
+        if (failed) { Store.Say("Звонки недоступны: нет компонента Microsoft Edge WebView2"); return; }
+        if (State != null) { Store.Say("Вы уже в звонке"); Expand(); return; }
+        try
+        {
+            var r = await Api.Raw("POST", "/functions/v1/lumo-lk", body: J.O(("chat_id", c.Id), ("action", action))) as JsonObject;
+            if (r == null || r.Str("token") == null) { Store.Say(r?.Str("error") ?? "Не удалось начать звонок"); return; }
+            Send(new JsonObject { ["op"] = "gstart", ["url"] = r.Str("url"), ["token"] = r.Str("token"), ["title"] = c.DisplayName, ["video"] = video });
+        }
+        catch (Exception e) { Store.Say(e.Message); }
+    }
+
+    /// <summary>Приглашения в групповые звонки (канал lm-gc-{id})</summary>
+    void AttachGroupInvites(string id)
+    {
+        var ch = Realtime.Get("lm-gc-" + id);
+        ch.OnBroadcast = async (ev, p) =>
+        {
+            if (ev != "invite") return;
+            var chatId = p.Str("chat_id"); if (chatId == null || State != null) return;
+            var title = p.Str("title") ?? "Группа";
+            if (!Store.WindowActive) Notifications.Show(chatId, title, "Групповой звонок · " + (p.Str("from") ?? "участник") + " приглашает вас");
+            var c = Store.Chat(chatId);
+            if (c == null) return;
+            if (await Dialogs.Confirm(win, (p.Str("from") ?? "Участник") + " приглашает в групповой звонок «" + title + "»", "Присоединиться", "Звонок уже идёт — присоединяйтесь, когда удобно."))
+                StartGroup(c, false, "join");
+        };
     }
 
     async void OnMessage(string json)

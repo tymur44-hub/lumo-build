@@ -16,6 +16,9 @@ public sealed class MainWindow : Window
     readonly Grid host = new();
     readonly Grid layer = new() { Visibility = Visibility.Collapsed };
     readonly Grid callLayer = new();
+    readonly Grid gameLayer = new();
+    readonly Border gameBar;
+    readonly TextBlock gameBarText = new() { Foreground = T.Text, FontSize = 13 };
     readonly Border callBar;
     readonly TextBlock callBarText = new() { Foreground = T.White, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
     readonly Border toast;
@@ -49,6 +52,17 @@ public sealed class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 90),
             MaxWidth = 460, Child = toastText, Visibility = Visibility.Collapsed, IsHitTestVisible = false,
         };
+        Grid.SetRow(gameLayer, 1);
+        root.Children.Add(gameLayer);
+        gameBar = new Border
+        {
+            Background = T.Panel2, CornerRadius = new CornerRadius(18), Padding = new Thickness(14, 8, 14, 8), BorderBrush = T.Line, BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 70),
+            Child = gameBarText, Visibility = Visibility.Collapsed,
+        };
+        gameBar.Tapped += (_, _) => WebOverlay.I?.Expand();
+        Grid.SetRow(gameBar, 1);
+        root.Children.Add(gameBar);
         Grid.SetRowSpan(callLayer, 2);
         root.Children.Add(callLayer);
         callBar = new Border
@@ -88,6 +102,12 @@ public sealed class MainWindow : Window
             callBarText.Text = "Звонок · " + calls.PeerName + (calls.Seconds > 0 ? " · " + Fmt.Duration(calls.Seconds) : "") + " — вернуться";
         };
         Store.OnlineChanged += () => calls.SyncOnline();
+        var games = new WebOverlay(this, gameLayer);
+        games.Changed += () =>
+        {
+            gameBar.Visibility = games.Mode == "game" && games.Minimized ? Visibility.Visible : Visibility.Collapsed;
+            gameBarText.Text = games.BarTitle + (games.BarStatus.Length > 0 ? " · " + games.BarStatus : "") + " — вернуться к игре";
+        };
         Activated += (_, e) =>
         {
             Store.WindowActive = e.WindowActivationState != WindowActivationState.Deactivated;
@@ -178,6 +198,19 @@ public sealed class MainWindow : Window
     /// <summary>Дополнительные экраны демо (этапы 2–3)</summary>
     async Task DemoExtra(string dir)
     {
+        if (Store.Chats.Count > 2) OpenChat(Store.Chats[2].Id);
+        await Task.Delay(2000);
+        await Capture(Path.Combine(dir, "6-bot.png"));
+        if (Store.Chats.Count > 1) _ = Dialogs.Games(this, Store.Chats[1].Id);
+        await Task.Delay(1500);
+        await Capture(Path.Combine(dir, "7-games.png"));
+        Sheet.CloseTop();
+        await Task.Delay(500);
+        _ = Dialogs.Settings(this);
+        await Task.Delay(1500);
+        await Capture(Path.Combine(dir, "8-settings.png"));
+        Sheet.CloseTop();
+        await Task.Delay(500);
         CallHost.I?.DemoRing();
         await Task.Delay(2500);
         if (CallHost.I != null) await CallHost.I.Snapshot(Path.Combine(dir, "5-call.png"));
@@ -202,7 +235,7 @@ public sealed class MainWindow : Window
         catch (Exception e) { App.Log("capture: " + e.Message); }
     }
 
-    public void OpenChat(string chatId) => shell?.Open(chatId);
+    public void OpenChat(string chatId) { if (chatId != "call") shell?.Open(chatId); }
 
     public void BringToFront()
     {

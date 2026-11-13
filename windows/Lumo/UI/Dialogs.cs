@@ -25,9 +25,9 @@ public static class Dialogs
         catch (Exception e) { App.Log("sheet: " + e.Message); return ContentDialogResult.None; }
     }
 
-    public static async Task<bool> Confirm(MainWindow w, string text, string yes)
+    public static async Task<bool> Confirm(MainWindow w, string text, string yes, string? sub = null)
     {
-        var d = Make(w, text, T.Txt("Это действие нельзя отменить.", 13, T.Muted), yes, "Отмена");
+        var d = Make(w, text, T.Txt(sub ?? "Это действие нельзя отменить.", 13, T.Muted), yes, "Отмена");
         return await Show(d) == ContentDialogResult.Primary;
     }
 
@@ -37,7 +37,7 @@ public static class Dialogs
     {
         var me = Store.Me;
         if (me == null) { await Store.LoadMe(); me = Store.Me; if (me == null) return; }
-        var sp = new StackPanel { Spacing = 10, Width = 400 };
+        var sp = new StackPanel { Spacing = 10 };
         var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
         var av = new AvatarView(84); av.Set(me.Name, me.AvatarUrl, me.Color);
         top.Children.Add(av);
@@ -66,8 +66,43 @@ public static class Dialogs
         sp.Children.Add(first); sp.Children.Add(last); sp.Children.Add(user); sp.Children.Add(bio);
         var enc = E2E.Status == E2E.State.Ready ? "Сквозное шифрование включено: ключ сохранён на этом компьютере" : "Ключ шифрования не восстановлен — личные чаты не читаются";
         sp.Children.Add(T.Txt(enc, 12, E2E.Status == E2E.State.Ready ? T.Muted : T.Danger));
-        sp.Children.Add(T.Txt("Lumo для Windows 1.0 · звонки, голосовые, каналы и игры — в следующих обновлениях", 12, T.Muted));
-        var d = Make(w, "Мой профиль", sp, "Сохранить", "Закрыть", "Выйти из аккаунта", true);
+        sp.Children.Add(T.Txt("Lumo для Windows 1.0", 12, T.Muted));
+
+        // разделы настроек
+        var root = new StackPanel { Spacing = 14, Width = 460 };
+        var seg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        var host = new Grid { MinHeight = 420 };
+        var sections = new (string name, Func<Task<UIElement>> make)[]
+        {
+            ("Профиль", () => Task.FromResult<UIElement>(sp)),
+            ("Приватность", () => PrivacyPanel()),
+            ("Устройства", () => DevicesPanel()),
+            ("Люмены", () => WalletPanel()),
+            ("Уведомления", () => Task.FromResult(NotifyPanel())),
+        };
+        var segBtns = new List<Button>();
+        async Task Select(int i)
+        {
+            for (int k = 0; k < segBtns.Count; k++) { T.Fill(segBtns[k], k == i ? T.Accent : T.Panel2, k == i ? T.Accent : T.B(0xFF24264A)); ((TextBlock)segBtns[k].Content).Foreground = k == i ? T.White : T.Muted; }
+            host.Children.Clear();
+            host.Children.Add(new ProgressRing { IsActive = true, Width = 26, Height = 26, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 30, 0, 0) });
+            UIElement el;
+            try { el = await sections[i].make(); } catch (Exception ex) { el = T.Txt(ex.Message, 13, T.Danger); }
+            host.Children.Clear();
+            if (el is FrameworkElement fe && fe.Parent is Panel pp) pp.Children.Remove(fe);
+            host.Children.Add(el);
+        }
+        for (int i = 0; i < sections.Length; i++)
+        {
+            var b = new Button { Content = new TextBlock { Text = sections[i].name, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }, Height = 32, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(0) };
+            var idx = i;
+            b.Click += async (_, _) => await Select(idx);
+            segBtns.Add(b); seg.Children.Add(b);
+        }
+        root.Children.Add(new ScrollViewer { Content = seg, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollMode = ScrollMode.Disabled });
+        root.Children.Add(host);
+        _ = Select(0);
+        var d = Make(w, "Настройки", root, "Сохранить", "Закрыть", "Выйти из аккаунта", true);
         var r = await Show(d);
         if (r == ContentDialogResult.Primary)
         {
@@ -78,6 +113,144 @@ public static class Dialogs
         {
             if (await Confirm(w, "Выйти из аккаунта на этом компьютере?", "Выйти")) await Api.SignOut();
         }
+    }
+
+
+    static string PrivName(string v) => v switch { "contacts" => "Мои контакты", "none" => "Никто", _ => "Все" };
+
+    static async Task<UIElement> PrivacyPanel()
+    {
+        await Store.LoadMe();
+        var me = Store.Me!;
+        var sp = new StackPanel { Spacing = 12 };
+        sp.Children.Add(T.Txt("Кто может видеть и делать", 12, T.Muted, bold: true));
+        var keys = new[] { ("seen", "Время захода и «в сети»"), ("calls", "Звонить мне"), ("birthday", "День рождения"), ("phone", "Номер телефона") };
+        foreach (var (k, label) in keys)
+        {
+            var cur = me.Privacy.Str(k) ?? (k == "seen" ? (me.ShowSeen ? "all" : "none") : k == "phone" ? "contacts" : "all");
+            var cb = new ComboBox { Header = label, HorizontalAlignment = HorizontalAlignment.Stretch };
+            var vals = new[] { "all", "contacts", "none" };
+            foreach (var v in vals) cb.Items.Add(PrivName(v));
+            cb.SelectedIndex = Math.Max(0, Array.IndexOf(vals, cur));
+            var key = k;
+            cb.SelectionChanged += async (_, _) =>
+            {
+                try { await Api.Rpc("lm_set_privacy", J.O(("p_key", key), ("p_value", vals[cb.SelectedIndex]))); await Store.LoadMe(); }
+                catch (Exception e) { Store.Say(e.Message); }
+            };
+            sp.Children.Add(cb);
+        }
+        sp.Children.Add(T.Txt("Чёрный список", 12, T.Muted, bold: true));
+        var blocked = new StackPanel { Spacing = 6 };
+        sp.Children.Add(blocked);
+        try
+        {
+            var j = await Api.Rpc("lm_my_blocks");
+            var ids = j.Arr("mine")?.Select(x => x is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var s2) ? s2 : null).Where(x => x != null).Select(x => x!).ToList() ?? new();
+            await Store.LoadProfiles(ids);
+            if (ids.Count == 0) blocked.Children.Add(T.Txt("Никого нет", 13, T.Muted));
+            foreach (var id in ids)
+            {
+                var row = new Grid { ColumnSpacing = 10 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var n = T.Txt(Store.DisplayName(id), 14, lines: 1); n.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(n);
+                var ub = new HyperlinkButton { Content = "Разблокировать" };
+                var uid = id;
+                ub.Click += async (_, _) => { try { await Api.Rpc("lm_block", J.O(("p_user", uid), ("p_on", false))); blocked.Children.Remove(row); } catch (Exception e) { Store.Say(e.Message); } };
+                Grid.SetColumn(ub, 1); row.Children.Add(ub);
+                blocked.Children.Add(row);
+            }
+        }
+        catch { blocked.Children.Add(T.Txt("Не удалось загрузить", 13, T.Muted)); }
+        return sp;
+    }
+
+    static async Task<UIElement> DevicesPanel()
+    {
+        var sp = new StackPanel { Spacing = 8 };
+        sp.Children.Add(T.Txt("Где выполнен вход в ваш аккаунт", 12, T.Muted, bold: true));
+        var mine = Prefs.Get("device_id");
+        List<System.Text.Json.Nodes.JsonObject> rows;
+        try { rows = await Api.Select("lm_sessions", Api.Q(("select", "id,device_id,name,platform,app_version,last_active,revoked"), ("order", "last_active.desc"))); }
+        catch (Exception e) { sp.Children.Add(T.Txt(e.Message, 13, T.Danger)); return sp; }
+        foreach (var r in rows.Where(x => !x.Bool("revoked")))
+        {
+            var g = new Grid { ColumnSpacing = 12, Padding = new Thickness(12, 10, 12, 10), CornerRadius = new CornerRadius(14), Background = T.Panel2 };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var plat = r.Str("platform") ?? "";
+            var ic = T.Icon(plat switch { "windows" or "web" or "desktop" => "\uE7F8", _ => "\uE8EA" }, 20, T.A2); ic.VerticalAlignment = VerticalAlignment.Center;
+            g.Children.Add(ic);
+            var tx = new StackPanel();
+            var current = r.Str("device_id") == mine;
+            tx.Children.Add(T.Txt((r.Str("name") ?? plat) + (current ? " · это устройство" : ""), 14, bold: true, lines: 1));
+            tx.Children.Add(T.Txt(plat + " " + (r.Str("app_version") ?? "") + " · " + Fmt.ListTime(r.Date("last_active")), 12, T.Muted, lines: 1));
+            Grid.SetColumn(tx, 1); g.Children.Add(tx);
+            if (!current)
+            {
+                var kill = new HyperlinkButton { Content = "Завершить", VerticalAlignment = VerticalAlignment.Center, Foreground = T.Danger };
+                var sid = r.Str("id");
+                kill.Click += async (_, _) => { try { await Api.Rpc("lm_session_kill", J.O(("p_id", sid))); sp.Children.Remove(g); Store.Say("Сеанс завершён"); } catch (Exception e) { Store.Say(e.Message); } };
+                Grid.SetColumn(kill, 2); g.Children.Add(kill);
+            }
+            sp.Children.Add(g);
+        }
+        return sp;
+    }
+
+    static async Task<UIElement> WalletPanel()
+    {
+        var sp = new StackPanel { Spacing = 12 };
+        var me = Store.Me;
+        var prem = new Border { CornerRadius = new CornerRadius(16), Padding = new Thickness(16), Background = me?.Premium == true ? T.Grad(0xFF7C5CFF, 0xFFFF5B8A) : T.Panel2 };
+        var ps = new StackPanel { Spacing = 4 };
+        ps.Children.Add(T.Txt("Lumo Premium", 16, T.White, bold: true));
+        ps.Children.Add(T.Txt(me?.Premium == true ? "Подписка активна: 3 реакции, файлы до 200 МБ, эксклюзивные цвета и многое другое" : "Оформить подписку можно в приложении Lumo на телефоне", 12.5, me?.Premium == true ? T.White : T.Muted));
+        prem.Child = ps;
+        sp.Children.Add(prem);
+        try
+        {
+            var j = await Api.Rpc("lm_wallet_me");
+            var bal = j.Long("balance") ?? 0; var streak = j.Int("streak") ?? 0; var can = j.Bool("can_claim");
+            var card = new Border { CornerRadius = new CornerRadius(16), Padding = new Thickness(16), Background = T.Panel2 };
+            var cs = new StackPanel { Spacing = 6 };
+            cs.Children.Add(T.Txt("Люмены", 13, T.Muted));
+            var balT = T.Txt(bal.ToString("N0", new System.Globalization.CultureInfo("ru-RU")), 30, T.B(0xFFF5B942), bold: true);
+            cs.Children.Add(balT);
+            cs.Children.Add(T.Txt("Серия ежедневных бонусов: " + streak + " " + Fmt.Plural(streak, "день", "дня", "дней"), 12.5, T.Muted));
+            if (can)
+            {
+                var b = T.Primary("Получить ежедневный бонус", () => { });
+                b.Click += async (_, _) =>
+                {
+                    try { var r = await Api.Rpc("lm_wallet_daily"); Store.Say("Получено люменов: " + (r.Int("amount") ?? 0)); b.Visibility = Visibility.Collapsed;
+                        var j2 = await Api.Rpc("lm_wallet_me"); balT.Text = (j2.Long("balance") ?? bal).ToString("N0", new System.Globalization.CultureInfo("ru-RU")); }
+                    catch (Exception e) { Store.Say(e.Message); }
+                };
+                cs.Children.Add(b);
+            }
+            card.Child = cs;
+            sp.Children.Add(card);
+            sp.Children.Add(T.Txt("Люмены можно дарить за посты, ставить в играх и получать за приглашённых друзей.", 12, T.Muted));
+        }
+        catch { sp.Children.Add(T.Txt("Не удалось загрузить кошелёк", 13, T.Muted)); }
+        return sp;
+    }
+
+    static UIElement NotifyPanel()
+    {
+        var sp = new StackPanel { Spacing = 10 };
+        var on = new ToggleSwitch { Header = "Уведомления о новых сообщениях", IsOn = Prefs.GetBool("notify_on", true), OnContent = "Включены", OffContent = "Выключены" };
+        on.Toggled += (_, _) => Prefs.Set("notify_on", on.IsOn);
+        var prev = new ToggleSwitch { Header = "Показывать текст сообщения", IsOn = Prefs.GetBool("notify_preview", true), OnContent = "Да", OffContent = "Нет" };
+        prev.Toggled += (_, _) => Prefs.Set("notify_preview", prev.IsOn);
+        var flash = new ToggleSwitch { Header = "Мигать кнопкой на панели задач", IsOn = Prefs.GetBool("notify_flash", true), OnContent = "Да", OffContent = "Нет" };
+        flash.Toggled += (_, _) => Prefs.Set("notify_flash", flash.IsOn);
+        sp.Children.Add(on); sp.Children.Add(prev); sp.Children.Add(flash);
+        sp.Children.Add(T.Txt("Звук и «Не беспокоить» настраиваются в Параметрах Windows → Система → Уведомления.", 12, T.Muted));
+        return sp;
     }
 
     // ---------- сведения о чате ----------
@@ -411,5 +584,80 @@ public static class Dialogs
         if (t.Length == 0) { Store.Say("Введите название"); return null; }
         var members = Picked(lv).Select(id => Store.Chat(id)?.PeerId).Where(x => x != null).Select(x => x!).ToList();
         return await Store.CreateChat(type, t, desc.Text.Trim(), members, uname?.Text, photo);
+    }
+
+    // ---------- игры ----------
+
+    public static async Task Games(MainWindow w, string chatId)
+    {
+        var sp = new StackPanel { Spacing = 12, Width = 460 };
+        Sheet? sheet = null;
+        sp.Children.Add(T.Txt("БРОСИТЬ В ЧАТ", 12, T.Muted, bold: true));
+        var tg = new Grid { ColumnSpacing = 8 };
+        var throws = new[] { ("dice", "Кубик", "\uE8EC"), ("darts", "Дартс", "\uE879"), ("basket", "Баскетбол", "\uE805"), ("football", "Футбол", "\uEA8F"), ("coin", "Монетка", "\uE8C7") };
+        for (int i = 0; i < throws.Length; i++)
+        {
+            var (k, name, glyph) = throws[i];
+            tg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var c = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+            var ic = T.Icon(glyph, 22, T.A2); ic.HorizontalAlignment = HorizontalAlignment.Center; c.Children.Add(ic);
+            c.Children.Add(new TextBlock { Text = name, FontSize = 12, Foreground = T.Text, HorizontalAlignment = HorizontalAlignment.Center });
+            var b = new Button { Content = c, HorizontalAlignment = HorizontalAlignment.Stretch, Height = 72, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(0) };
+            T.Fill(b, T.Panel2, T.B(0xFF24264A));
+            var kind = k;
+            b.Click += async (_, _) =>
+            {
+                sheet?.Hide();
+                try { await Api.Rpc("lm_throw", J.O(("p_chat", chatId), ("p_kind", kind))); } catch (Exception e) { Store.Say(e.Message); }
+            };
+            Grid.SetColumn(b, i); tg.Children.Add(b);
+        }
+        sp.Children.Add(tg);
+
+        sp.Children.Add(T.Txt("СЫГРАТЬ ВДВОЁМ", 12, T.Muted, bold: true));
+        var game = "ttt";
+        var gl = new StackPanel { Spacing = 6 };
+        var games = new[] { ("ttt", "Крестики-нолики", "Три в ряд на поле 3×3"), ("checkers", "Шашки", "Русские шашки, взятие обязательно"), ("sea", "Морской бой", "Флот 10 кораблей, поле 10×10"), ("chess", "Шахматы", "Классические шахматы по всем правилам") };
+        var clockRow = new StackPanel { Spacing = 6 };
+        var gButtons = new List<(string, Button)>();
+        void Mark() { foreach (var (k, b) in gButtons) T.Fill(b, k == game ? T.B(0x407C5CFF) : T.Panel2, k == game ? T.B(0x557C5CFF) : T.B(0xFF24264A)); clockRow.Visibility = game is "chess" or "checkers" ? Visibility.Visible : Visibility.Collapsed; }
+        foreach (var (k, name, desc) in games)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+            row.Children.Add(BubbleView.GameIcon(k, 40));
+            var tx = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            tx.Children.Add(T.Txt(name, 14.5, bold: true)); tx.Children.Add(T.Txt(desc, 12, T.Muted));
+            row.Children.Add(tx);
+            var b = new Button { Content = row, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(10), CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(0) };
+            var kk = k;
+            b.Click += (_, _) => { game = kk; Mark(); };
+            gButtons.Add((k, b));
+            gl.Children.Add(b);
+        }
+        sp.Children.Add(gl);
+        clockRow.Children.Add(T.Txt("Таймер партии", 12, T.Muted));
+        var clocks = new[] { (0, 0, "Без таймера"), (1, 0, "1 мин"), (3, 2, "3 + 2"), (5, 0, "5 мин"), (10, 0, "10 мин"), (15, 10, "15 + 10"), (30, 0, "30 мин") };
+        var clock = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        foreach (var c in clocks) clock.Items.Add(c.Item3);
+        clock.SelectedIndex = 0;
+        clockRow.Children.Add(clock);
+        sp.Children.Add(clockRow);
+        var stake = new NumberBox { Header = "Ставка в люменах (необязательно, до 1000)", Minimum = 0, Maximum = 1000, Value = 0, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
+        sp.Children.Add(stake);
+        sp.Children.Add(T.Txt("Ставку вносят оба игрока, победитель забирает обе. При ничьей ставки возвращаются.", 12, T.Muted));
+        Mark();
+        sheet = Make(w, "Игры", sp, "Пригласить", "Отмена");
+        if (await Show(sheet) != ContentDialogResult.Primary) return;
+        try
+        {
+            var req = J.O(("action", "new"), ("chat_id", chatId), ("kind", game), ("stake", (int)(double.IsNaN(stake.Value) ? 0 : stake.Value)));
+            var ci = clock.SelectedIndex;
+            if (game is "chess" or "checkers" && ci > 0) { req["clock_min"] = clocks[ci].Item1; req["clock_inc"] = clocks[ci].Item2; }
+            var g = await WebOverlay.GamesCall(req);
+            Store.Say("Приглашение отправлено");
+            var id = g.Str("id");
+            if (id != null) { await Task.Delay(300); WebOverlay.I?.OpenGame(id); }
+        }
+        catch (Exception e) { Store.Say(e.Message); }
     }
 }

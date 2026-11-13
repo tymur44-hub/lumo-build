@@ -21,6 +21,7 @@ public sealed class ShellView : Grid
     ChatView? chat;
     string? openId;
     string tab = "all";
+    readonly StoriesStrip stories = new();
     readonly StackPanel tabs = new() { Orientation = Orientation.Horizontal, Spacing = 4, Padding = new Thickness(10, 0, 10, 6) };
     readonly ScrollViewer tabsScroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollMode = ScrollMode.Disabled };
 
@@ -32,6 +33,7 @@ public sealed class ShellView : Grid
 
         // ----- левая колонка -----
         var left = new Grid { Background = T.Panel, BorderBrush = T.Line, BorderThickness = new Thickness(0, 0, 1, 0) };
+        left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -58,14 +60,16 @@ public sealed class ShellView : Grid
         search.Margin = new Thickness(12, 0, 12, 8);
         Grid.SetRow(search, 1); left.Children.Add(search);
 
+        Grid.SetRow(stories, 2); left.Children.Add(stories);
+        stories.Open += i => ShowStories(i);
         tabsScroll.Content = tabs;
-        Grid.SetRow(tabsScroll, 2); left.Children.Add(tabsScroll);
+        Grid.SetRow(tabsScroll, 3); left.Children.Add(tabsScroll);
 
         var listHost = new Grid();
         listHost.Children.Add(list); listHost.Children.Add(results);
         loading.HorizontalAlignment = HorizontalAlignment.Center; loading.VerticalAlignment = VerticalAlignment.Top;
         listHost.Children.Add(loading);
-        Grid.SetRow(listHost, 3); left.Children.Add(listHost);
+        Grid.SetRow(listHost, 4); left.Children.Add(listHost);
         Children.Add(left);
 
         // ----- правая колонка -----
@@ -105,6 +109,7 @@ public sealed class ShellView : Grid
         Store.ChatsChanged -= OnChats;
         Store.OnlineChanged -= OnChats;
         Folders.Changed -= OnFolders;
+        stories.Detach();
         Store.TypingChanged -= OnTyping;
         Store.MeChanged -= OnMe;
         chat?.Detach();
@@ -135,6 +140,15 @@ public sealed class ShellView : Grid
         foreach (var k in rows.Keys.Where(k => !seen.Contains(k)).ToList()) { list.Items.Remove(rows[k]); rows.Remove(k); }
         if (openId != null && rows.TryGetValue(openId, out var sel) && list.SelectedItem != sel) list.SelectedItem = sel;
         BuildTabs();
+    }
+
+    void ShowStories(int i)
+    {
+        if (Store.Stories.Count == 0) return;
+        var v = new StoryViewer(Store.Stories.ToList(), Math.Clamp(i, 0, Store.Stories.Count - 1));
+        Grid.SetColumnSpan(v, 2);
+        v.Closed += () => Children.Remove(v);
+        Children.Add(v);
     }
 
     bool foldersLoaded;
