@@ -435,7 +435,7 @@ fun GameOverlay() {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     addJavascriptInterface(object {
-                        @JavascriptInterface fun leave() { post { close() } }
+                        @JavascriptInterface fun leave() { this@apply.post { close() } }
                         @JavascriptInterface fun post(m: String) {
                             this@apply.post {
                                 if (m == "minimize") LumoGames.mini = true
