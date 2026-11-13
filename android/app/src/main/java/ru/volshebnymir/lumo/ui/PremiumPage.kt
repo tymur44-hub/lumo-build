@@ -113,9 +113,10 @@ fun StatusEmoji(s: String, size: TextUnit = 16.sp, modifier: Modifier = Modifier
 
 /** Выбор смайлик-статуса: анимированные и обычные */
 @Composable
-fun EmojiPickerDialog(onClose: () -> Unit) {
+fun EmojiPickerDialog(onPick: ((String) -> Unit)? = null, onClose: () -> Unit) {
     val p = P
     val scope = rememberCoroutineScope()
+    fun choose(e: String) { if (onPick != null) { onPick(e); onClose() } else scope.launch { AppModel.setEmojiStatus(e); onClose() } }
     Dialog(onDismissRequest = onClose) {
         Column(Modifier.clip(RoundedCornerShape(26.dp)).background(p.panel).padding(18.dp)) {
             Text("Смайлик-статус", color = p.text, fontWeight = FontWeight.Black, fontSize = 20.sp)
@@ -125,7 +126,7 @@ fun EmojiPickerDialog(onClose: () -> Unit) {
                 ANIM_EMOJI.chunked(4).forEach { row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         row.forEach { (k, _) ->
-                            Box(Modifier.size(60.dp).clip(RoundedCornerShape(16.dp)).bouncy { scope.launch { AppModel.setEmojiStatus("a:$k"); onClose() } }, contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(60.dp).clip(RoundedCornerShape(16.dp)).bouncy { choose("a:$k") }, contentAlignment = Alignment.Center) {
                                 StatusEmoji("a:$k", 32.sp)
                             }
                         }
@@ -133,7 +134,7 @@ fun EmojiPickerDialog(onClose: () -> Unit) {
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Убрать статус", color = p.danger, fontWeight = FontWeight.Bold, modifier = Modifier.bouncy { scope.launch { AppModel.setEmojiStatus(""); onClose() } }.padding(8.dp))
+                Text("Убрать статус", color = p.danger, fontWeight = FontWeight.Bold, modifier = Modifier.bouncy { choose("") }.padding(8.dp))
                 Text("Закрыть", color = p.a1, fontWeight = FontWeight.Bold, modifier = Modifier.bouncy { onClose() }.padding(8.dp))
             }
         }

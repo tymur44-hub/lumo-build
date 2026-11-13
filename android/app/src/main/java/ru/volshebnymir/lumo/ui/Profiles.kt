@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.AlertDialog
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -403,6 +405,13 @@ fun InfoScreen(chatId: String) {
     var memberMenu by remember { mutableStateOf<Pair<String, String>?>(null) }
     var gcSettings by remember { mutableStateOf(false) }
     var chatPhotoMenu by remember { mutableStateOf(false) }
+    var style by remember { mutableStateOf<AppModel.ChatStyle?>(null) }
+    var descOpen by remember { mutableStateOf(false) }
+    var styleDlg by remember { mutableStateOf(false) }
+    var showList by remember { mutableStateOf(false) }
+    var listOnlyAdmins by remember { mutableStateOf(false) }
+    LaunchedEffect(chatId, styleDlg) { if (!styleDlg) style = AppModel.chatStyle(chatId) }
+    if (styleDlg) ProfileStyleDialog(chatId) { styleDlg = false }
     if (gcSettings) GroupCallSettingsDialog(chatId) { gcSettings = false }
     suspend fun reload() { members = AppModel.members(chatId) }
     LaunchedEffect(chatId) { reload() }
@@ -419,27 +428,81 @@ fun InfoScreen(chatId: String) {
         onDelete = { scope.launch { AppModel.removeChatAvatar(chatId) } }) { chatPhotoMenu = false }
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            TopBar("", right = {
-                if (admin) Text("Изм.", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.bouncy { if (c?.isPrivate == false) AppModel.push(Screen.EditChat(chatId)) else edit = true }.padding(12.dp))
-                if (c != null && !c.isPrivate) ChatMenu(c)
-            })
-            ProfileHead(c?.displayName ?: "", c?.displayAvatar, c?.displayColor ?: 0,
-                if (c?.isChannel == true) "${c.membersCount} подписч." else "${c?.membersCount ?: 0} участн.", false) {
-                c?.displayAvatar?.let { viewer = avatarMsg(it) }
-            }
-            Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (c != null) ActionTile(if (c.muted) Icons.Filled.NotificationsActive else Icons.Filled.NotificationsOff, if (c.muted) "Звук" else "Без звука", Modifier.weight(1f)) {
-                    scope.launch { AppModel.setMuted(chatId, !c.muted) }
+            // шапка как в Telegram: цвет и узор (настраивает администратор), эмодзи-статус у названия
+            val n = c?.membersCount ?: 0
+            TgProfileHero(c?.displayName ?: "", c?.displayAvatar, c?.displayColor ?: 0, style?.status, false, style?.verified == true,
+                if (c?.isChannel == true) "$n ${plural(n, "подписчик", "подписчика", "подписчиков")}" else "$n ${plural(n, "участник", "участника", "участников")}",
+                false, style?.bg, style?.pattern, null,
+                onOpenPhoto = { c?.displayAvatar?.let { viewer = avatarMsg(it) } },
+                top = { light ->
+                    Box(Modifier.size(40.dp).clip(CircleShape).background(if (light) Color.White.copy(alpha = 0.2f) else p.panel).bouncy { AppModel.pop() }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = if (light) Color.White else p.text, modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (admin) Text("Изм.", color = if (light) Color.White else p.a1, fontWeight = FontWeight.Bold, fontSize = 17.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(if (light) Color.White.copy(alpha = 0.2f) else Color.Transparent)
+                            .bouncy { if (c?.isPrivate == false) AppModel.push(Screen.EditChat(chatId)) else edit = true }.padding(horizontal = 14.dp, vertical = 8.dp))
+                    if (c != null && !c.isPrivate) ChatMenu(c)
+                },
+                bottom = { light ->
+                    Row(Modifier.padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (c != null) GlassTile(if (c.muted) Icons.Filled.NotificationsOff else Icons.Filled.Notifications, if (c.muted) "без звука" else "звук", light, Modifier.weight(1f)) {
+                            scope.launch { AppModel.setMuted(chatId, !c.muted) }
+                        }
+                        val lid = style?.linked
+                        if (lid != null && AppModel.chat(lid) != null) GlassTile(Icons.AutoMirrored.Filled.Chat, "чат", light, Modifier.weight(1f)) { AppModel.open(lid) }
+                        else GlassTile(Icons.Filled.Search, "поиск", light, Modifier.weight(1f)) { AppModel.push(Screen.ChatSearch(chatId)) }
+                        GlassTile(Icons.Filled.CleaningServices, "очистить", light, Modifier.weight(1f)) { confirmClear = true }
+                        GlassTile(Icons.AutoMirrored.Filled.ExitToApp, c?.let { chatDeleteTitle(it).lowercase() } ?: "выйти", light, Modifier.weight(1f), danger = true) { confirmLeave = true }
+                    }
+                })
+            Spacer(Modifier.height(14.dp))
+            // ссылка и описание
+            val uname = c?.username.orEmpty(); val desc = c?.description.orEmpty()
+            if (desc.isNotEmpty() || uname.isNotEmpty()) {
+                Card {
+                    if (uname.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f).bouncy { copy(ctx, "https://lumomess.ru/#@$uname") }) {
+                            Text("ссылка", color = p.text, fontSize = 14.sp)
+                            Text("https://lumomess.ru/#@$uname", color = p.a2, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Icon(Icons.Filled.QrCode, null, tint = p.a2, modifier = Modifier.size(26.dp).bouncy { copy(ctx, "https://lumomess.ru/#@$uname") })
+                    }
+                    if (uname.isNotEmpty() && desc.isNotEmpty()) Divider()
+                    if (desc.isNotEmpty()) Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+                        Text("описание", color = p.text, fontSize = 14.sp)
+                        Text(desc, color = p.text, fontSize = 16.sp, maxLines = if (descOpen) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis)
+                        if (!descOpen && (desc.length > 110 || desc.lines().size > 3))
+                            Text("ещё", color = p.a2, fontSize = 16.sp, modifier = Modifier.align(Alignment.End).bouncy { descOpen = true })
+                    }
                 }
-                ActionTile(Icons.Filled.Search, "Поиск", Modifier.weight(1f)) { AppModel.push(Screen.ChatSearch(chatId)) }
-                ActionTile(Icons.Filled.CleaningServices, "Очистить", Modifier.weight(1f)) { confirmClear = true }
-                ActionTile(Icons.AutoMirrored.Filled.ExitToApp, c?.let { chatDeleteTitle(it) } ?: "Выйти", Modifier.weight(1f), danger = true) { confirmLeave = true }
+                Spacer(Modifier.height(14.dp))
+            }
+            // администраторы, подписчики, оформление, настройки
+            Card {
+                val admins = members.count { it.second == "owner" || it.second == "admin" }
+                SettingsRow(Icons.Filled.Shield, Color(0xFF34C759), "Администраторы", "$admins") { listOnlyAdmins = true; showList = true }
+                if (c?.isChannel == true) { Divider(); SettingsRow(Icons.Filled.Groups, Color(0xFF3A8BFF), "Подписчики", "${maxOf(c.membersCount, members.size)}") { listOnlyAdmins = false; showList = true } }
+                if (admin) {
+                    Divider(); SettingsRow(Icons.Filled.Palette, Color(0xFFB06BFF), "Оформление") { styleDlg = true }
+                    Divider(); SettingsRow(Icons.Filled.Tune, Color(0xFFFFA43A), if (c?.isChannel == true) "Настройки канала" else "Настройки группы") { AppModel.push(Screen.EditChat(chatId)) }
+                }
             }
             Spacer(Modifier.height(14.dp))
-            if (!c?.description.isNullOrEmpty() || !c?.username.isNullOrEmpty()) {
+            // обсуждение
+            style?.linked?.let { AppModel.chat(it) }?.let { lc ->
                 Card {
-                    if (!c?.description.isNullOrEmpty()) InfoLine(c!!.description!!, "Описание")
-                    if (!c?.username.isNullOrEmpty()) { if (!c?.description.isNullOrEmpty()) Divider(); InfoLine("@" + c!!.username, "Нажмите, чтобы скопировать") { copy(ctx, "@" + c.username) } }
+                    Row(Modifier.fillMaxWidth().bouncy { AppModel.open(lc.id) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(lc.displayName, lc.displayAvatar, lc.displayColor, 54.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(lc.displayName, color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                Text("ОБСУЖДЕНИЕ", color = p.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(6.dp)).background(p.panel2).padding(horizontal = 6.dp, vertical = 2.dp))
+                            }
+                            Text(lc.preview(AppModel.myId), color = p.muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                 }
                 Spacer(Modifier.height(14.dp))
             }
@@ -458,9 +521,9 @@ fun InfoScreen(chatId: String) {
             PremiumChatCard(c)
             SharedMediaSection(chatId)
             Spacer(Modifier.height(14.dp))
-            if (c?.isChannel != true || admin) Card {
-                Text("Участники", color = p.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
-                members.forEach { (uid, role) ->
+            if (c?.isChannel != true || showList) Card {
+                Text(if (showList && listOnlyAdmins) "Администраторы" else if (c?.isChannel == true) "Подписчики" else "Участники", color = p.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
+                members.filter { !(showList && listOnlyAdmins) || it.second == "owner" || it.second == "admin" }.forEach { (uid, role) ->
                     val pr = AppModel.profiles[uid]
                     Box {
                         Row(Modifier.fillMaxWidth().bouncy { if (uid != AppModel.myId) memberMenu = uid to role }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {

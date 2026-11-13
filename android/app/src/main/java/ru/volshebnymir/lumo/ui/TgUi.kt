@@ -298,21 +298,40 @@ fun ProfileMusicEditRow() {
 // ---------------- выбор оформления профиля ----------------
 
 @Composable
-fun ProfileStyleDialog(onClose: () -> Unit) {
+fun ProfileStyleDialog(chatId: String? = null, onClose: () -> Unit) {
     val p = P
     val scope = rememberCoroutineScope()
     val me = AppModel.me
-    var bg by remember { mutableStateOf(me?.profileBg) }
-    var pattern by remember { mutableStateOf(me?.profilePattern) }
+    val chat = chatId?.let { AppModel.chat(it) }
+    var bg by remember { mutableStateOf(if (chatId == null) me?.profileBg else null) }
+    var pattern by remember { mutableStateOf(if (chatId == null) me?.profilePattern else null) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var pickStatus by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    val free = chatId != null || AppModel.isPremium
+    LaunchedEffect(chatId) { if (chatId != null) AppModel.chatStyle(chatId)?.let { bg = it.bg; pattern = it.pattern; status = it.status } }
+    val shownStatus = if (chatId != null) status else me?.emojiStatus
+    if (pickStatus) EmojiPickerDialog(onPick = { status = it.ifEmpty { null } }) { pickStatus = false }
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.fillMaxWidth().padding(14.dp).clip(RoundedCornerShape(26.dp)).background(p.bg).verticalScroll(rememberScrollState())) {
             Box(Modifier.fillMaxWidth().height(230.dp)) {
-                ProfileStyleKt.Background(bg, pattern, me?.emojiStatus, 105.dp, Modifier.matchParentSize())
+                ProfileStyleKt.Background(bg, pattern, shownStatus, 105.dp, Modifier.matchParentSize())
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Avatar(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, 86.dp)
+                    Avatar(chat?.displayName ?: me?.name ?: "", chat?.displayAvatar ?: me?.avatarUrl, chat?.displayColor ?: me?.color ?: 0, 86.dp)
                     Spacer(Modifier.height(8.dp))
-                    Text(me?.name ?: "", color = if (bg != null) Color.White else p.text, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(chat?.displayName ?: me?.name ?: "", color = if (bg != null) Color.White else p.text, fontWeight = FontWeight.Black, fontSize = 20.sp, maxLines = 1)
+                        if (!shownStatus.isNullOrEmpty()) Box(Modifier.padding(start = 6.dp)) { StatusEmoji(shownStatus, 18.sp) }
+                    }
+                }
+            }
+            if (chatId != null) {
+                Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.panel).bouncy { pickStatus = true }.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    if (!status.isNullOrEmpty()) StatusEmoji(status!!, 22.sp) else Icon(Icons.Filled.Block, null, tint = p.muted, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(if (status.isNullOrEmpty()) "Значок рядом с названием" else "Сменить значок рядом с названием", color = p.text, modifier = Modifier.weight(1f))
+                    if (!status.isNullOrEmpty()) Text("Убрать", color = p.danger, modifier = Modifier.bouncy { status = null; if (pattern == "@status") pattern = null })
                 }
             }
             Text("ЦВЕТ", color = p.muted, fontSize = 12.5.sp, modifier = Modifier.padding(start = 18.dp, top = 12.dp, bottom = 6.dp))
@@ -324,17 +343,17 @@ fun ProfileStyleDialog(onClose: () -> Unit) {
                     Box(Modifier.size(40.dp).clip(CircleShape).background(ProfileStyleKt.brush(i)!!).border(if (bg == i) 3.dp else 0.dp, Color.White, CircleShape).bouncy { bg = i })
                 }
             }
-            Text("УЗОР · PREMIUM", color = p.muted, fontSize = 12.5.sp, modifier = Modifier.padding(start = 18.dp, top = 14.dp, bottom = 6.dp))
-            val opts = buildList { add(null); if (!me?.emojiStatus.isNullOrEmpty()) add("@status"); addAll(ProfileStyleKt.patterns.map { it.first }) }
+            Text(if (chatId != null) "УЗОР" else "УЗОР · PREMIUM", color = p.muted, fontSize = 12.5.sp, modifier = Modifier.padding(start = 18.dp, top = 14.dp, bottom = 6.dp))
+            val opts = buildList { add(null); if (!shownStatus.isNullOrEmpty()) add("@status"); addAll(ProfileStyleKt.patterns.map { it.first }) }
             opts.chunked(6).forEach { row ->
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEach { o ->
                         Box(Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(if (pattern == o) p.a1.copy(alpha = 0.2f) else p.panel2)
                             .border(if (pattern == o) 2.dp else 0.dp, p.a1, RoundedCornerShape(12.dp))
-                            .bouncy { if (o == null || AppModel.isPremium) pattern = o else AppModel.say("Узоры доступны в Lumo Premium") }, contentAlignment = Alignment.Center) {
+                            .bouncy { if (o == null || free) pattern = o else AppModel.say("Узоры доступны в Lumo Premium") }, contentAlignment = Alignment.Center) {
                             when (o) {
                                 null -> Icon(Icons.Filled.Block, null, tint = p.muted, modifier = Modifier.size(20.dp))
-                                "@status" -> StatusEmoji(me?.emojiStatus ?: "", 20.sp)
+                                "@status" -> StatusEmoji(shownStatus ?: "", 20.sp)
                                 else -> Icon(ProfileStyleKt.icon(o), null, tint = p.text, modifier = Modifier.size(22.dp))
                             }
                         }
@@ -345,7 +364,9 @@ fun ProfileStyleDialog(onClose: () -> Unit) {
             Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(24.dp)).background(p.panel2).bouncy(onClose), contentAlignment = Alignment.Center) { Text("Отмена", color = p.text, fontWeight = FontWeight.SemiBold) }
                 Box(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(24.dp)).background(p.accent).bouncy {
-                    if (!busy) { busy = true; scope.launch { if (AppModel.setProfileStyle(bg, pattern)) onClose(); busy = false } }
+                    if (!busy) { busy = true; scope.launch {
+                        val ok = if (chatId != null) AppModel.setChatStyle(chatId, bg, pattern, status) else AppModel.setProfileStyle(bg, pattern)
+                        if (ok) { AppModel.say("Оформление сохранено"); onClose() }; busy = false } }
                 }, contentAlignment = Alignment.Center) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text("Сохранить", color = Color.White, fontWeight = FontWeight.Bold) }
             }
         }

@@ -1435,6 +1435,22 @@ object AppModel {
         } else Api.rpc("lm_set_profile_music", jsonOf("p" to null))
         loadMe(); true
     } catch (e: Exception) { say(e.message ?: "Ошибка"); false }
+    /** Оформление канала/группы: цвет шапки, узор, эмодзи-статус; связанное обсуждение */
+    data class ChatStyle(val bg: Int?, val pattern: String?, val status: String?, val linked: String?, val verified: Boolean)
+
+    suspend fun chatStyle(chatId: String): ChatStyle? = try {
+        Api.select("lm_chats", mapOf("select" to "profile_bg,profile_pattern,emoji_status,linked_chat_id,verified", "id" to "eq.$chatId"))
+            .firstOrNull()?.let { r ->
+                ChatStyle(if (r.isNull("profile_bg")) null else r.optInt("profile_bg"), r.optString("profile_pattern").ifEmpty { null }.takeIf { !r.isNull("profile_pattern") },
+                    r.optString("emoji_status").ifEmpty { null }.takeIf { !r.isNull("emoji_status") },
+                    r.optString("linked_chat_id").ifEmpty { null }.takeIf { !r.isNull("linked_chat_id") }, r.optBoolean("verified"))
+            }
+    } catch (_: Exception) { null }
+
+    suspend fun setChatStyle(chatId: String, bg: Int?, pattern: String?, status: String?): Boolean = try {
+        Api.rpc("lm_set_chat_style", jsonOf("p_chat" to chatId, "p_bg" to bg, "p_pattern" to pattern, "p_status" to status)); true
+    } catch (e: Exception) { say(e.message ?: "Ошибка"); false }
+
     suspend fun setProfileStyle(bg: Int?, pattern: String?): Boolean = try {
         Api.rpc("lm_set_profile_style", jsonOf("p_bg" to bg, "p_pattern" to pattern)); loadMe(); true
     } catch (e: Exception) { say(e.message ?: "Ошибка"); false }
