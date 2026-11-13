@@ -26,6 +26,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +75,8 @@ fun SettingsScreen() {
     val me = AppModel.me
     var confirm by remember { mutableStateOf(false) }
     var emojiDlg by remember { mutableStateOf(false) }
+    var inviteDlg by remember { mutableStateOf(false) }
+    if (inviteDlg) InviteDialog { inviteDlg = false }
     LaunchedEffect(Unit) { AppModel.loadExtras() }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u == null) return@rememberLauncherForActivityResult
@@ -177,7 +183,7 @@ fun SettingsScreen() {
             SettingsRow(Icons.Filled.NotificationsActive, Color(0xFFFFA318), "Ждут ответа", if (Reminders.list.isEmpty()) "Нет напоминаний" else "${Reminders.list.size} — «Ответить позже»") { AppModel.push(Screen.Reminders) }
         }
         Card {
-            SettingsRow(Icons.Filled.PersonAdd, Color(0xFFFF5B8A), "Пригласить друзей", "Поделиться ссылкой на ваш профиль") { share(ctx, "Я в Lumo — напиши мне: " + AppModel.profileLink) }
+            SettingsRow(Icons.Filled.PersonAdd, Color(0xFFFF5B8A), "Пригласить друзей", "Вам и другу — по 25 люменов") { inviteDlg = true }
             Divider()
             SettingsRow(Icons.Filled.Info, Color(0xFF8E8EA8), "О Lumo") { AppModel.push(Screen.About) }
         }
@@ -539,4 +545,66 @@ private fun PaidPriceSection() {
         }
     }
     Text("Незнакомые люди смогут написать вам только за люмены, а вы получите оплату. Контакты и те, с кем вы уже переписываетесь, пишут бесплатно. Отключить для конкретного человека можно в его чате.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 30.dp))
+}
+
+
+/** Приглашение друзей: ссылка, сколько пришло, и «Кто вас пригласил?» для новичков */
+@Composable
+fun InviteDialog(onClose: () -> Unit) {
+    val p = P
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var invited by remember { mutableStateOf(0) }
+    var earned by remember { mutableStateOf(0) }
+    var invitedBy by remember { mutableStateOf<String?>(null) }
+    var canClaim by remember { mutableStateOf(false) }
+    var who by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    val link = "https://lumomess.ru/#ref=" + (AppModel.me?.username ?: "")
+    suspend fun load() {
+        val j = runCatching { ru.volshebnymir.lumo.core.Api.rpc("lm_my_referrals") as? org.json.JSONObject }.getOrNull() ?: return
+        invited = j.optInt("invited"); earned = j.optInt("earned")
+        invitedBy = if (j.isNull("invited_by")) null else j.optString("invited_by")
+        canClaim = j.optBoolean("can_claim")
+    }
+    LaunchedEffect(Unit) { load() }
+    AlertDialog(onDismissRequest = onClose, containerColor = p.panel,
+        title = { Text("Пригласить друзей", color = p.text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Text("Друг укажет вас как пригласившего — и вы оба получите по 25 люменов.", color = p.muted, fontSize = 14.sp)
+                Spacer(Modifier.height(12.dp))
+                Row {
+                    Column(Modifier.weight(1f)) { Text("$invited", color = p.text, fontSize = 22.sp, fontWeight = FontWeight.Bold); Text("пришло", color = p.muted, fontSize = 13.sp) }
+                    Column(Modifier.weight(1f)) { Text("$earned", color = p.text, fontSize = 22.sp, fontWeight = FontWeight.Bold); Text("люменов", color = p.muted, fontSize = 13.sp) }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(link, color = p.a1, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = { share(ctx, "Я в Lumo — переходи по ссылке и укажи меня как пригласившего, получим по 25 люменов: $link") },
+                    colors = ButtonDefaults.buttonColors(containerColor = p.a1), modifier = Modifier.fillMaxWidth()) { Text("Поделиться ссылкой", color = Color.White) }
+                if (invitedBy != null) {
+                    Spacer(Modifier.height(10.dp)); Text("Вас пригласил @$invitedBy", color = p.a1, fontWeight = FontWeight.SemiBold)
+                } else if (canClaim) {
+                    Spacer(Modifier.height(14.dp))
+                    Text("Кто вас пригласил?", color = p.text, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(who, { who = it }, placeholder = { Text("@юзернейм") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(6.dp))
+                    Button(onClick = {
+                        if (busy || who.isBlank()) return@Button
+                        busy = true
+                        scope.launch {
+                            val j = runCatching { ru.volshebnymir.lumo.core.Api.rpc("lm_claim_referral", org.json.JSONObject().put("p_username", who)) as? org.json.JSONObject }.getOrNull()
+                            busy = false
+                            if (j?.optBoolean("ok") == true) { AppModel.say("Готово! Вам начислено 25 люменов"); load() }
+                            else AppModel.say(j?.optString("error")?.takeIf { it.isNotEmpty() } ?: "Не получилось")
+                        }
+                    }, colors = ButtonDefaults.buttonColors(containerColor = p.panel2), modifier = Modifier.fillMaxWidth()) {
+                        Text(if (busy) "Проверяем…" else "Указать", color = p.text)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Закрыть", color = p.a1) } })
 }
