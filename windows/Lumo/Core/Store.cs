@@ -5,9 +5,11 @@ namespace Lumo.Core;
 /// <summary>Состояние приложения: профиль, чаты, сообщения, реакции, «в сети», «печатает». Меняется только на главном потоке.</summary>
 public static class Store
 {
-    public static string? MyId => Api.UserId;
-    public static Profile? Me { get; private set; }
-    public static List<ChatItem> Chats { get; private set; } = new();
+    /// <summary>Демо-режим без сети (LUMO_DEMO=1) — для проверки интерфейса при сборке</summary>
+    public static readonly bool Demo = Environment.GetEnvironmentVariable("LUMO_DEMO") == "1";
+    public static string? MyId => Demo ? "me" : Api.UserId;
+    public static Profile? Me { get; internal set; }
+    public static List<ChatItem> Chats { get; internal set; } = new();
     public static readonly Dictionary<string, string> ChatPreview = new();
     public static readonly Dictionary<string, List<Message>> Messages = new();
     public static readonly Dictionary<int, List<Reaction>> Reactions = new();
@@ -48,6 +50,7 @@ public static class Store
     {
         if (Started || MyId == null) return;
         Started = true;
+        if (Demo) { DemoData.Load(); ChatsChanged?.Invoke(); MeChanged?.Invoke(); return; }
         var id = MyId!;
         _ = Net.Pick();
         await LoadMe();
@@ -276,6 +279,7 @@ public static class Store
     public static async Task LoadMessages(string chatId, bool older = false)
     {
         var me = MyId; if (me == null) return;
+        if (Demo) { MessagesChanged?.Invoke(chatId); return; }
         await Prep(chatId);
         if (!cleared.ContainsKey(chatId))
         {

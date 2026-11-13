@@ -66,14 +66,26 @@ public static class T
         return b;
     }
 
+    /// <summary>Свой фон кнопки, который не заменяется системным при наведении и нажатии</summary>
+    public static T2 Fill<T2>(T2 b, Brush bg, Brush? hover = null) where T2 : Control
+    {
+        b.Background = bg;
+        foreach (var k in new[] { "ButtonBackground", "ButtonBackgroundPointerOver", "ButtonBackgroundPressed", "ButtonBackgroundDisabled" })
+            b.Resources[k] = k.EndsWith("PointerOver") && hover != null ? hover : bg;
+        b.Resources["ButtonBorderBrushPointerOver"] = Transparent;
+        b.Resources["ButtonBorderBrushPressed"] = Transparent;
+        return b;
+    }
+
     public static Button Primary(string text, Action click)
     {
         var b = new Button
         {
             Content = new TextBlock { Text = text, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = White },
-            Background = Accent, BorderThickness = new Thickness(0), CornerRadius = new CornerRadius(12), Height = 44,
+            BorderThickness = new Thickness(0), CornerRadius = new CornerRadius(12), Height = 44,
             HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center,
         };
+        Fill(b, Accent, Grad(0xFF8C70FF, 0xFF45CCFF));
         b.Click += (_, _) => click();
         return b;
     }

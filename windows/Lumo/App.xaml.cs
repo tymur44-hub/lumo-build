@@ -12,7 +12,7 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
-        UnhandledException += (_, e) => { e.Handled = true; Log("ui: " + e.Exception); };
+        UnhandledException += (_, e) => { e.Handled = true; Log("ui: " + e.Exception); try { Core.Store.Say("Ошибка: " + e.Message); } catch { } };
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Log("domain: " + e.ExceptionObject);
         TaskScheduler.UnobservedTaskException += (_, e) => { e.SetObserved(); Log("task: " + e.Exception); };
     }

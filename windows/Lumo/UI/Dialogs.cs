@@ -9,27 +9,20 @@ namespace Lumo.UI;
 /// <summary>Окна: настройки и профиль, сведения о чате, пересылка, подтверждения, поиск по чату, ключи шифрования</summary>
 public static class Dialogs
 {
-    static bool open;
-
-    static ContentDialog Make(MainWindow w, string title, object content, string? primary = null, string? close = "Закрыть", string? secondary = null)
+    
+    static Sheet Make(MainWindow w, string title, object content, string? primary = null, string? close = "Закрыть", string? secondary = null, bool danger = false)
     {
-        var d = new ContentDialog
-        {
-            XamlRoot = w.Root, Title = title, Content = content, RequestedTheme = ElementTheme.Dark,
-            CloseButtonText = close ?? "", DefaultButton = primary != null ? ContentDialogButton.Primary : ContentDialogButton.Close,
-        };
+        var d = new Sheet { Title = title, Content = content, CloseButtonText = close ?? "", DangerSecondary = danger };
         if (primary != null) d.PrimaryButtonText = primary;
         if (secondary != null) d.SecondaryButtonText = secondary;
+        if (content is FrameworkElement fe && fe.Width > 0 && !double.IsNaN(fe.Width)) d.Width = fe.Width + 46;
         return d;
     }
 
-    static async Task<ContentDialogResult> Show(ContentDialog d)
+    static async Task<ContentDialogResult> Show(Sheet d)
     {
-        if (open) return ContentDialogResult.None;
-        open = true;
         try { return await d.ShowAsync(); }
-        catch (Exception e) { App.Log("dialog: " + e.Message); return ContentDialogResult.None; }
-        finally { open = false; }
+        catch (Exception e) { App.Log("sheet: " + e.Message); return ContentDialogResult.None; }
     }
 
     public static async Task<bool> Confirm(MainWindow w, string text, string yes)
@@ -74,7 +67,7 @@ public static class Dialogs
         var enc = E2E.Status == E2E.State.Ready ? "Сквозное шифрование включено: ключ сохранён на этом компьютере" : "Ключ шифрования не восстановлен — личные чаты не читаются";
         sp.Children.Add(T.Txt(enc, 12, E2E.Status == E2E.State.Ready ? T.Muted : T.Danger));
         sp.Children.Add(T.Txt("Lumo для Windows 1.0 · звонки, голосовые, каналы и игры — в следующих обновлениях", 12, T.Muted));
-        var d = Make(w, "Мой профиль", new ScrollViewer { Content = sp, MaxHeight = 560 }, "Сохранить", "Закрыть", "Выйти из аккаунта");
+        var d = Make(w, "Мой профиль", sp, "Сохранить", "Закрыть", "Выйти из аккаунта", true);
         var r = await Show(d);
         if (r == ContentDialogResult.Primary)
         {
@@ -210,7 +203,7 @@ public static class Dialogs
         var box = new TextBox { PlaceholderText = "Текст для поиска" };
         var lv = new ListView { Height = 380, Width = 420, IsItemClickEnabled = true, SelectionMode = ListViewSelectionMode.None };
         var info = T.Txt("", 12, T.Muted);
-        ContentDialog? d = null;
+        Sheet? d = null;
         CancellationTokenSource? cts = null;
         box.TextChanged += async (_, _) =>
         {

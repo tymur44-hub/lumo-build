@@ -34,6 +34,16 @@ jobs:
           $bmp.Save("$env:GITHUB_WORKSPACE\screen.png")
           Get-Content "$env:LOCALAPPDATA\Lumo\log.txt" -ErrorAction SilentlyContinue
           Stop-Process -Id $p.Id -Force
+      - name: Демо-снимки интерфейса
+        shell: pwsh
+        working-directory: windows/out
+        run: |
+          $env:LUMO_DEMO = "1"
+          $p = Start-Process -FilePath .\Lumo.exe -PassThru
+          for ($i = 0; $i -lt 60 -and -not (Test-Path "$env:LOCALAPPDATA\Lumo\shots\done.txt"); $i++) { Start-Sleep -Seconds 1 }
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          Get-Content "$env:LOCALAPPDATA\Lumo\log.txt" -ErrorAction SilentlyContinue
+          Compress-Archive -Path "$env:LOCALAPPDATA\Lumo\shots\*" -DestinationPath "$env:GITHUB_WORKSPACE\shots.zip"
       - name: Архив и установщик
         shell: pwsh
         run: |
@@ -48,3 +58,4 @@ jobs:
             Lumo-Windows-x64.zip
             windows/dist/Lumo-Setup.exe
             screen.png
+            shots.zip

@@ -291,8 +291,9 @@ public sealed class BubbleView : Grid
             var b = new Button
             {
                 Padding = new Thickness(8, 2, 8, 2), MinHeight = 0, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(me ? 1.5 : 0),
-                BorderBrush = T.A2, Background = me ? T.B(0x407C5CFF) : T.B(0x22FFFFFF),
+                BorderBrush = T.A2,
             };
+            T.Fill(b, me ? T.B(0x407C5CFF) : T.B(0x22FFFFFF), me ? T.B(0x557C5CFF) : T.B(0x33FFFFFF));
             var sp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
             sp.Children.Add(new TextBlock { Text = g.Key, FontSize = 15 });
             sp.Children.Add(new TextBlock { Text = g.Count().ToString(), FontSize = 12.5, Foreground = T.Text, VerticalAlignment = VerticalAlignment.Center });
@@ -322,7 +323,8 @@ public sealed class VoiceView : Grid
         ColumnSpacing = 10;
         ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var btn = new Button { Width = 42, Height = 42, CornerRadius = new CornerRadius(21), Padding = new Thickness(0), BorderThickness = new Thickness(0), Background = mine ? T.B(0x33FFFFFF) : T.Accent };
+        var btn = new Button { Width = 42, Height = 42, CornerRadius = new CornerRadius(21), Padding = new Thickness(0), BorderThickness = new Thickness(0) };
+        T.Fill(btn, mine ? T.B(0x33FFFFFF) : T.Accent);
         icon = T.Icon("\uE768", 16, T.White);
         btn.Content = icon;
         btn.Click += (_, _) => Toggle();

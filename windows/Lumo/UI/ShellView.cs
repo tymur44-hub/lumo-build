@@ -70,6 +70,7 @@ public sealed class ShellView : Grid
         Children.Add(right);
 
         list.ItemClick += (_, e) => { if (e.ClickedItem is ChatRow r) Open(r.Id); };
+        list.SelectionChanged += (_, _) => { if (list.SelectedItem is ChatRow r && r.Id != openId) Open(r.Id); };
         results.ItemClick += (_, e) => { if (e.ClickedItem is FrameworkElement fe && fe.Tag is SearchResult s) OpenResult(s); };
         search.TextChanged += (_, _) => OnSearch();
         search.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Escape) search.Text = ""; };
@@ -129,13 +130,22 @@ public sealed class ShellView : Grid
         if (openId == chatId && chat != null) return;
         openId = chatId;
         if (rows.TryGetValue(chatId, out var r)) list.SelectedItem = r;
-        chat?.Detach();
-        right.Children.Clear();
-        chat = new ChatView(win, chatId);
-        right.Children.Add(chat);
-        Store.OpenChatId = chatId;
-        Notifications.ClearChat(chatId);
-        await chat.Load();
+        try
+        {
+            chat?.Detach();
+            right.Children.Clear();
+            chat = new ChatView(win, chatId);
+            right.Children.Add(chat);
+            Store.OpenChatId = chatId;
+            Notifications.ClearChat(chatId);
+            await chat.Load();
+        }
+        catch (Exception e)
+        {
+            App.Log("open chat: " + e);
+            Store.Say("Не удалось открыть чат: " + e.Message);
+            chat = null; openId = null;
+        }
     }
 
     public void CloseChat()

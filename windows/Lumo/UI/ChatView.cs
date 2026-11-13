@@ -139,7 +139,8 @@ public sealed class ChatView : Grid
         attach.VerticalAlignment = VerticalAlignment.Bottom;
         composer.Children.Add(attach);
         Grid.SetColumn(input, 1); composer.Children.Add(input);
-        var send = new Button { Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Padding = new Thickness(0), BorderThickness = new Thickness(0), Background = T.Accent, Content = T.Icon("\uE724", 16, T.White), VerticalAlignment = VerticalAlignment.Bottom };
+        var send = new Button { Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Padding = new Thickness(0), BorderThickness = new Thickness(0), Content = T.Icon("\uE724", 16, T.White), VerticalAlignment = VerticalAlignment.Bottom };
+        T.Fill(send, T.Accent, T.Grad(0xFF8C70FF, 0xFF45CCFF));
         ToolTipService.SetToolTip(send, "Отправить (Enter)");
         send.Click += (_, _) => SendText();
         Grid.SetColumn(send, 2); composer.Children.Add(send);

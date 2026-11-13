@@ -9,6 +9,86 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
+            <!-- Оформление всех стандартных элементов в цветах Lumo (а не системных Windows) -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <Color x:Key="SystemAccentColor">#FF7C5CFF</Color>
+                    <Color x:Key="SystemAccentColorLight1">#FF9479FF</Color>
+                    <Color x:Key="SystemAccentColorLight2">#FFAC97FF</Color>
+                    <Color x:Key="SystemAccentColorLight3">#FFC4B6FF</Color>
+                    <Color x:Key="SystemAccentColorDark1">#FF6A4CF5</Color>
+                    <Color x:Key="SystemAccentColorDark2">#FF5A3DDB</Color>
+                    <Color x:Key="SystemAccentColorDark3">#FF4A30BD</Color>
+
+                    <SolidColorBrush x:Key="TextControlBackground" Color="#FF1A1C36" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FF20223F" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FF1D1F3D" />
+                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="#FF15162C" />
+                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="#00000000" />
+                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#00000000" />
+                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#FF7C5CFF" />
+                    <SolidColorBrush x:Key="TextControlForeground" Color="#FFEEF0FF" />
+                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFEEF0FF" />
+                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFEEF0FF" />
+                    <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8D90B8" />
+                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8D90B8" />
+                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF6F7299" />
+                    <SolidColorBrush x:Key="TextControlHeaderForeground" Color="#FF8D90B8" />
+                    <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="#FF7C5CFF" />
+                    <SolidColorBrush x:Key="TextControlButtonForeground" Color="#FF8D90B8" />
+                    <SolidColorBrush x:Key="TextControlButtonForegroundPointerOver" Color="#FFEEF0FF" />
+                    <SolidColorBrush x:Key="TextControlButtonBackgroundPointerOver" Color="#1AFFFFFF" />
+                    <SolidColorBrush x:Key="TextControlButtonBackgroundPressed" Color="#2AFFFFFF" />
+                    <SolidColorBrush x:Key="TextControlElevationBorderBrush" Color="#00000000" />
+                    <SolidColorBrush x:Key="TextControlElevationBorderFocusedBrush" Color="#FF7C5CFF" />
+
+                    <SolidColorBrush x:Key="ButtonBackground" Color="#FF1A1C36" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF24264A" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF2C2F58" />
+                    <SolidColorBrush x:Key="ButtonForeground" Color="#FFEEF0FF" />
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#FFDADDFF" />
+                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="#00000000" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#00000000" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#00000000" />
+
+                    <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#12FFFFFF" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#1CFFFFFF" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#337C5CFF" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#407C5CFF" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#4A7C5CFF" />
+                    <SolidColorBrush x:Key="ListViewItemSelectionIndicatorBrush" Color="#FF7C5CFF" />
+
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FF1A1C36" />
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#22FFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="#1CFFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPressed" Color="#28FFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemForeground" Color="#FFEEF0FF" />
+                    <SolidColorBrush x:Key="MenuFlyoutSubItemBackgroundPointerOver" Color="#1CFFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutSubItemBackgroundSubMenuOpened" Color="#1CFFFFFF" />
+                    <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FF1A1C36" />
+                    <SolidColorBrush x:Key="FlyoutBorderThemeBrush" Color="#22FFFFFF" />
+
+                    <SolidColorBrush x:Key="ToolTipBackground" Color="#FF1A1C36" />
+                    <SolidColorBrush x:Key="ToolTipForeground" Color="#FFEEF0FF" />
+                    <SolidColorBrush x:Key="ToolTipBorderBrush" Color="#22FFFFFF" />
+
+                    <SolidColorBrush x:Key="HyperlinkButtonForeground" Color="#FF22C1FF" />
+                    <SolidColorBrush x:Key="HyperlinkButtonForegroundPointerOver" Color="#FF5BD0FF" />
+                    <SolidColorBrush x:Key="HyperlinkButtonBackgroundPointerOver" Color="#00000000" />
+                    <SolidColorBrush x:Key="HyperlinkButtonBackgroundPressed" Color="#00000000" />
+
+                    <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#FF7C5CFF" />
+                    <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#FF9479FF" />
+                    <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#FF1A1C36" />
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="#FF7C5CFF" />
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="#FF9479FF" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+            <CornerRadius x:Key="ControlCornerRadius">10</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">14</CornerRadius>
+            <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+            <Thickness x:Key="TextControlBorderThemeThicknessFocused">0,0,0,2</Thickness>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
