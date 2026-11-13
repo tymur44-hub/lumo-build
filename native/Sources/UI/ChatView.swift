@@ -1473,6 +1473,7 @@ struct ComposerView: View {
     private func sendText(silent: Bool = false) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.7)
         text = ""
         if let e = editing {
             editing = nil

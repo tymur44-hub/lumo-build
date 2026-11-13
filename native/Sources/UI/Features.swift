@@ -1596,8 +1596,18 @@ struct ProfileTopHero<Top: View, Bottom: View>: View {
                 .padding(.bottom, styled ? 22 : 6)
                 .frame(maxWidth: .infinity)
                 .background {
-                    ProfileStyleBackground(bg: bg, pattern: pattern, status: status, avatarCenterY: 308)
-                        .padding(.top, -200).padding(.horizontal, -40)
+                    ZStack {
+                        // без своего цвета профиля — мягкий фон из цветов аватарки
+                        if !styled, hasPhoto, let u = avatarURL, let link = URL(string: u) {
+                            CachedImage(url: link) { img in img.resizable().scaledToFill() } placeholder: { Color.clear }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .blur(radius: 70).opacity(0.42).clipped()
+                                .overlay(LinearGradient(colors: [.clear, Theme.bg.opacity(0.6), Theme.bg], startPoint: .top, endPoint: .bottom))
+                                .allowsHitTesting(false)
+                        }
+                        ProfileStyleBackground(bg: bg, pattern: pattern, status: status, avatarCenterY: 308)
+                    }
+                    .padding(.top, -200).padding(.horizontal, -40)
                 }
                 .transition(.opacity)
             }

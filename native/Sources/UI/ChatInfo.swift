@@ -321,8 +321,11 @@ struct ChatInfoView: View {
         }
         .foregroundColor(styled ? .white : Theme.a1)
         .frame(maxWidth: .infinity, minHeight: 66)
-        .background(styled ? Color.white.opacity(0.18) : Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(styled ? 0.22 : 0), lineWidth: 0.7))
+        .background {
+            if styled { RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.18)) }
+        }
+        .lumoGlass(RoundedRectangle(cornerRadius: 18, style: .continuous), interactive: true)
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.white.opacity(styled ? 0.22 : 0), lineWidth: 0.7))
     }
 
     private func actionButton(_ icon: String, _ title: String, _ action: @escaping () -> Void) -> some View {
