@@ -882,7 +882,7 @@ final class AppModel: ObservableObject {
 
     private var crashFlushed = false
     func loadChats() async {
-        if !crashFlushed, loggedIn { crashFlushed = true; Task.detached(priority: .background) { await CrashReporter.flush() }; Outbox.shared.restore() }
+        if !crashFlushed, loggedIn { crashFlushed = true; Outbox.shared.restore() }
         guard loggedIn else { return }
         do {
             let rows = try await API.shared.rpc("lm_chats_v2") as? [JSON] ?? []

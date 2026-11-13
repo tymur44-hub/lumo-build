@@ -13,8 +13,6 @@ struct LumoApp: App {
     @Environment(\.scenePhase) private var phase
     @AppStorage("lm_lang") private var lang = "ru"
 
-    init() { CrashReporter.install() }
-
     var body: some Scene {
         WindowGroup {
             RootView()

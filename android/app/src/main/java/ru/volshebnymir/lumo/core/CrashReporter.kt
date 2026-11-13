@@ -27,8 +27,10 @@ object CrashReporter {
         val text = runCatching { file.readText() }.getOrDefault("")
         if (text.isBlank()) { file.delete(); return }
         val ver = runCatching { c.packageManager.getPackageInfo(c.packageName, 0).let { "${it.versionName} (${it.longVersionCode})" } }.getOrDefault("?")
-        val row = JSONObject().put("platform", "android").put("app_version", ver).put("os_version", "Android ${Build.VERSION.RELEASE} (${Build.VERSION.SDK_INT})")
-            .put("device", "${Build.MANUFACTURER} ${Build.MODEL}").put("message", text.lineSequence().first().take(500)).put("stack", text)
+        // та же таблица, что и у iPhone: платформа, версия, система и текст отчёта
+        val row = JSONObject().put("platform", "android").put("app_version", ver)
+            .put("os", "Android ${Build.VERSION.RELEASE} (${Build.VERSION.SDK_INT}) ${Build.MANUFACTURER} ${Build.MODEL}")
+            .put("payload", text.take(190_000))
         if (runCatching { Api.insertQuiet("lm_crash_reports", row) }.isSuccess) file.delete()
     }
 }
