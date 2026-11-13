@@ -647,7 +647,7 @@ fun ChatPreviewMenu(c: ChatItem, onClose: () -> Unit) {
                     if (c.unread > 0) row(Icons.Filled.MarkChatRead, "Прочитано") { scope.launch { AppModel.loadMessages(c.id); AppModel.markRead(c.id) } }
                     row(Icons.Filled.PushPin, if (c.pinned) "Открепить" else "Закрепить") { scope.launch { AppModel.setPinned(c.id, !c.pinned) } }
                     val arch = ChatArchive.has(c.id)
-                    row(if (arch) Icons.Filled.Unarchive else Icons.Filled.Archive, if (arch) "Вернуть из архива" else "В архив") { ChatArchive.set(c.id, !arch) }
+                    row(if (arch) Icons.Filled.Archive else Icons.Filled.Archive, if (arch) "Вернуть из архива" else "В архив") { ChatArchive.set(c.id, !arch) }
                     row(if (c.muted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff, if (c.muted) "Включить уведомления" else "Выключить уведомления") { scope.launch { AppModel.setMuted(c.id, !c.muted) } }
                     if (c.isPrivate) row(Icons.Filled.Delete, "Очистить историю") { scope.launch { AppModel.clearChat(c.id) } }
                     row(if (c.isPrivate || c.role == "owner") Icons.Filled.Delete else Icons.AutoMirrored.Filled.ExitToApp, chatDeleteTitle(c), danger = true, close = false) { deleteTarget = c }
@@ -842,7 +842,7 @@ fun ArchiveRow(list: List<ChatItem>) {
             if (n > 0) Box(Modifier.clip(CircleShape).background(Color(0xFFA3A6B8)).padding(horizontal = 7.dp, vertical = 2.dp)) {
                 Text("$n", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
-            Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = p.muted)
+            Icon(if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, null, tint = p.muted)
         }
         androidx.compose.animation.AnimatedVisibility(open) {
             Column { list.forEach { ChatRow(it) } }
