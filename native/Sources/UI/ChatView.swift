@@ -52,6 +52,8 @@ struct ChatView: View {
     @State private var deleteList: [Message] = []
     @State private var confirmDelete = false
     @State private var atBottom = true
+    /// плавающая дата и упоминания — отдельный объект, чтобы прокрутка не перерисовывала весь чат
+    @State private var scrollInfo = ChatScrollInfo()
     @State private var sendMenu = false
     @State private var showBubSheet = false
     @State private var showWall = false
@@ -691,6 +693,8 @@ struct ChatView: View {
                         .rotationEffect(.degrees(180))
                         .scaleEffect(x: -1, y: 1)
                         .id(f.id)
+                        .onAppear { scrollInfo.appear(f.id, f.message.createdAt) }
+                        .onDisappear { scrollInfo.disappear(f.id) }
                         // новое сообщение «выезжает» снизу, удалённое быстро сжимается
                         .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity),
                                                 removal: .opacity.combined(with: .scale(scale: 0.85))))
@@ -708,14 +712,26 @@ struct ChatView: View {
             .scaleEffect(x: -1, y: 1)
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
+            .onAppear { refreshMentions() }
             .onChange(of: model.messages[chatId]?.last?.id) { _ in
+                refreshMentions()
                 if model.messages[chatId]?.last?.senderId == model.myId {
                     withAnimation(Motion.snappy) { proxy.scrollTo("bottom", anchor: .top) }
                 } else if !atBottom {
                     newBelow += 1
                 }
             }
-            // пролистали вверх — кнопка «вниз», к последним сообщениям
+            // плавающая дата сверху — видна, пока листаешь
+            .overlay(alignment: .top) { FloatingDayPill(info: scrollInfo).padding(.top, 6) }
+            // пролистали вверх — кнопка «вниз», к последним сообщениям; над ней — «к упоминанию»
+            .overlay(alignment: .bottomTrailing) {
+                MentionJumpButton(info: scrollInfo) { id in
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    highlight = id
+                }
+                .padding(.trailing, 12).padding(.bottom, atBottom ? 10 : 64)
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: atBottom)
+            }
             .overlay(alignment: .bottomTrailing) {
                 if !atBottom {
                     Button {
@@ -725,10 +741,9 @@ struct ChatView: View {
                         Image(systemName: "chevron.down")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(Theme.text)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(Theme.panel))
-                            .overlay(Circle().stroke(Theme.line))
-                            .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
+                            .frame(width: 46, height: 46)
+                            .lumoGlass(Circle(), interactive: true)
+                            .shadow(color: .black.opacity(0.14), radius: 8, y: 3)
                             .overlay(alignment: .top) {
                                 if newBelow > 0 {
                                     Text(newBelow > 99 ? "99+" : String(newBelow))
@@ -750,6 +765,19 @@ struct ChatView: View {
                 Task { try? await Task.sleep(nanoseconds: 1_600_000_000); if highlight == id { highlight = nil } }
             }
         }
+    }
+
+    /// непрочитанные сообщения, где упомянули меня (@юзернейм)
+    @State private var mentionsSince: Date?
+    private func refreshMentions() {
+        guard let me = model.myId, let u = model.me?.username, !u.isEmpty else { return }
+        if mentionsSince == nil { mentionsSince = chat?.lastReadAt ?? Date() }
+        let since = mentionsSince ?? Date()
+        let tag = "@" + u.lowercased()
+        let ids = (model.messages[chatId] ?? [])
+            .filter { $0.senderId != me && !$0.deleted && $0.createdAt > since && ($0.body ?? "").lowercased().contains(tag) }
+            .map { $0.id }
+        scrollInfo.setMentions(ids)
     }
 
     private func joinGroupCall(video: Bool) {
@@ -1089,6 +1117,9 @@ struct ComposerView: View {
     @State private var dragX: CGFloat = 0
     @State private var holding = false
     @State private var voiceLocked = false
+    @State private var dragY: CGFloat = 0
+    @State private var levels: [CGFloat] = []
+    @State private var bigEdit = false
     @FocusState private var focused: Bool
     @State private var kbRestore = false
 
@@ -1182,6 +1213,16 @@ struct ComposerView: View {
                                 .font(.system(size: 16))
                                 .padding(.leading, 16).padding(.vertical, 11)
                                 .onChange(of: text) { t in if !t.isEmpty { model.userTyping(chatId) } }
+                            if text.count > 160 || text.filter({ $0 == "\n" }).count >= 3 {
+                                // длинный текст — открыть на весь экран
+                                Button { bigEdit = true } label: {
+                                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                        .font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.muted)
+                                        .frame(width: 30, height: 44)
+                                }
+                                .transition(.scale.combined(with: .opacity))
+                                .sheet(isPresented: $bigEdit) { BigComposer(text: $text) }
+                            }
                             if canUrgent && editing == nil {
                                 Button {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -1307,7 +1348,15 @@ struct ComposerView: View {
             Circle().fill(Theme.danger).frame(width: 10, height: 10)
                 .opacity(Int(rec.elapsed * 2) % 2 == 0 ? 1 : 0.3)
             Text(Fmt.duration(rec.elapsed)).font(.body.monospacedDigit())
-            Spacer()
+            // живая волна звука
+            HStack(alignment: .center, spacing: 2) {
+                ForEach(Array(levels.suffix(28).enumerated()), id: \.offset) { _, l in
+                    Capsule().fill(Theme.a1.opacity(0.85)).frame(width: 2.5, height: max(3, 22 * l))
+                }
+            }
+            .frame(height: 24)
+            .animation(.easeOut(duration: 0.08), value: levels.count)
+            Spacer(minLength: 4)
             if voiceLocked {
                 Text("Запись без удержания").font(.subheadline).foregroundColor(Theme.muted)
             } else {
@@ -1321,7 +1370,12 @@ struct ComposerView: View {
         }
         .padding(.horizontal, 14)
         .frame(minHeight: 44)
-        .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 22))
+        .lumoGlass(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onChange(of: rec.level) { l in
+            levels.append(min(1, max(0.05, CGFloat(l) * 1.6)))
+            if levels.count > 60 { levels.removeFirst(levels.count - 60) }
+        }
+        .onAppear { levels = [] }
     }
 
     /// Нажатие — переключить голосовое/кружок; удержание — сразу запись (вверх — без удержания, влево — отмена)
@@ -1333,10 +1387,27 @@ struct ComposerView: View {
             .lumoGlass(Circle(), interactive: true, tint: rec.recording ? Theme.danger : Theme.a1)
             .scaleEffect(rec.recording ? 1 + CGFloat(rec.level) * 0.25 : 1)
             .animation(.easeOut(duration: 0.1), value: rec.level)
+            .overlay(alignment: .top) {
+                // замок над кнопкой: вести палец вверх — запись без удержания
+                if rec.recording && !voiceLocked {
+                    VStack(spacing: 4) {
+                        Image(systemName: dragY < -50 ? "lock.fill" : "lock.open.fill").font(.system(size: 15, weight: .semibold))
+                        Image(systemName: "chevron.up").font(.system(size: 11, weight: .bold)).opacity(0.6)
+                    }
+                    .foregroundColor(dragY < -50 ? Theme.a1 : Theme.text)
+                    .frame(width: 40, height: 66)
+                    .lumoGlass(Capsule())
+                    .offset(y: -86 + max(-30, min(0, dragY * 0.35)))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .allowsHitTesting(false)
+                }
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: rec.recording)
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { v in
                         dragX = v.translation.width
+                        dragY = v.translation.height
                         let note = NoteRec.shared
                         if note.active && !note.locked {
                             note.dragX = v.translation.width
@@ -1363,6 +1434,7 @@ struct ComposerView: View {
                         holding = false
                         let cancel = v.translation.width < -60
                         dragX = 0
+                        dragY = 0
                         let note = NoteRec.shared
                         if note.active {
                             if note.locked { return }
@@ -1641,4 +1713,105 @@ struct PaidBar: View {
 extension Notification.Name {
     static let lumoMenuOpen = Notification.Name("lumoMenuOpen")
     static let lumoMenuClose = Notification.Name("lumoMenuClose")
+}
+
+
+/// Длинный текст сообщения — на весь экран
+struct BigComposer: View {
+    @Binding var text: String
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var f: Bool
+    var body: some View {
+        NavigationStack {
+            TextEditor(text: $text)
+                .focused($f)
+                .font(.system(size: 17))
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 12)
+                .background(Theme.bg.ignoresSafeArea())
+                .navigationTitle("Сообщение").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
+                .onAppear { f = true }
+        }
+    }
+}
+
+
+/// Что сейчас видно в ленте: самая старая видимая дата (для плавающей плашки) и непросмотренные упоминания
+final class ChatScrollInfo: ObservableObject {
+    @Published var day: String?
+    @Published var showDay = false
+    @Published var mentions: [Int] = []
+    private var visible: [Int: Date] = [:]
+    private var seen = Set<Int>()
+    private var hide: DispatchWorkItem?
+    private let born = Date()
+
+    func appear(_ id: Int, _ d: Date) {
+        visible[id] = d
+        if mentions.contains(id) { seen.insert(id); mentions.removeAll { $0 == id } }
+        update()
+    }
+    func disappear(_ id: Int) { visible[id] = nil }
+
+    func setMentions(_ ids: [Int]) {
+        let n = ids.filter { !seen.contains($0) && visible[$0] == nil }.sorted()
+        if n != mentions { mentions = n }
+    }
+
+    private func update() {
+        // первые мгновения после открытия чата — без плашки
+        guard Date().timeIntervalSince(born) > 1, let d = visible.values.min() else { return }
+        let t = Fmt.day(d)
+        if t != day { day = t }
+        if !showDay { showDay = true }
+        hide?.cancel()
+        let w = DispatchWorkItem { [weak self] in self?.showDay = false }
+        hide = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3, execute: w)
+    }
+}
+
+struct FloatingDayPill: View {
+    @ObservedObject var info: ChatScrollInfo
+    var body: some View {
+        ZStack {
+            if info.showDay, let d = info.day {
+                Text(d)
+                    .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.text)
+                    .padding(.horizontal, 12).frame(height: 28)
+                    .lumoGlass(Capsule())
+                    .id(d)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+        }
+        .animation(.easeInOut(duration: 0.22), value: info.showDay)
+        .animation(.easeInOut(duration: 0.18), value: info.day)
+        .allowsHitTesting(false)
+    }
+}
+
+struct MentionJumpButton: View {
+    @ObservedObject var info: ChatScrollInfo
+    let jump: (Int) -> Void
+    var body: some View {
+        ZStack {
+            if let first = info.mentions.first {
+                Button { jump(first) } label: {
+                    Text("@").font(.system(size: 20, weight: .bold)).foregroundColor(Theme.a1)
+                        .frame(width: 46, height: 46)
+                        .lumoGlass(Circle(), interactive: true)
+                        .overlay(alignment: .top) {
+                            Text("\(info.mentions.count)")
+                                .font(.system(size: 11, weight: .bold)).foregroundColor(.white)
+                                .padding(.horizontal, 6).frame(minWidth: 20, minHeight: 20)
+                                .background(Capsule().fill(Theme.accent)).offset(y: -10)
+                        }
+                }
+                .buttonStyle(BouncyButtonStyle())
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: info.mentions.count)
+    }
 }

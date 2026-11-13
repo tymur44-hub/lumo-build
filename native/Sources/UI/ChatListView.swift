@@ -32,6 +32,8 @@ struct ChatListView: View {
     @State private var pulled = false
     @State private var archiveMode: String?
     @Namespace private var foldNS
+    /// поиск уезжает, когда листаешь список вниз, и возвращается, когда тянешь к началу
+    @State private var searchHidden = false
     @FocusState private var searchFocused: Bool
     /// iPad: список слева, чат справа (без собственной навигации)
     var sidebar = false
@@ -93,8 +95,13 @@ struct ChatListView: View {
                 }
                 header
                     .padding(.horizontal, 14).padding(.top, 6)
-                SearchField(placeholder: "Поиск", text: $query, focused: $searchFocused)
-                    .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 10)
+                if !searchHidden || searchFocused || !query.isEmpty {
+                    SearchField(placeholder: "Поиск", text: $query, focused: $searchFocused)
+                        .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 10)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                } else {
+                    Color.clear.frame(height: 6)
+                }
 
                 if query.trimmingCharacters(in: .whitespaces).isEmpty {
                     AnnounceCard()
@@ -110,6 +117,7 @@ struct ChatListView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: model.netStatus)
+            .animation(.spring(response: 0.32, dampingFraction: 0.86), value: searchHidden)
             .animation(.spring(response: 0.4, dampingFraction: 0.82), value: storiesOpen)
             .background(Theme.bg.ignoresSafeArea())
             .onChange(of: query) { q in runSearch(q) }
@@ -209,6 +217,39 @@ struct ChatListView: View {
         }
     }
 
+    // MARK: закреплённые — кружками в одну строку
+
+    private var pinnedChats: [ChatItem] { model.chats.filter { $0.pinned } }
+    private var showPinnedRow: Bool { folder == .all && !sidebar && !pinnedChats.isEmpty }
+
+    private var pinnedRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 10) {
+                ForEach(pinnedChats) { c in
+                    Button {
+                        guard !folderSwiping else { return }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        model.path.append(c.id)
+                    } label: { PinnedChatBubble(chat: c) }
+                    .buttonStyle(BouncyButtonStyle())
+                    .contextMenu {
+                        Button { Task { await model.setPinned(c.id, false) } } label: { Label("Открепить", systemImage: "pin.slash") }
+                        Button { Task { await model.setMuted(c.id, !c.muted) } } label: {
+                            Label(c.muted ? "Включить уведомления" : "Выключить уведомления", systemImage: c.muted ? "bell" : "bell.slash")
+                        }
+                        if c.unread > 0 {
+                            Button { Task { await model.loadMessages(c.id); model.markRead(c.id) } } label: { Label("Прочитано", systemImage: "checkmark.message") }
+                        }
+                    } preview: {
+                        ChatPreviewCard(chat: c).environmentObject(model)
+                    }
+                }
+            }
+            .padding(.horizontal, 8).padding(.vertical, 6)
+        }
+        .transition(.opacity)
+    }
+
     private var folders: some View {
         HStack(spacing: 2) {
             ForEach(ChatFolder.allCases, id: \.self) { f in
@@ -247,8 +288,9 @@ struct ChatListView: View {
             GeometryReader { g in Color.clear.preference(key: ProfileScrollKey.self, value: g.frame(in: .named("clist")).minY) }.frame(height: 0)
             LazyVStack(spacing: 0) {
                 if folder == .all { RemindersBar() }
+                if showPinnedRow { pinnedRow }
                 if !model.chatsLoaded {
-                    ProgressView().padding(40)
+                    ForEach(0..<8, id: \.self) { i in SkeletonChatRow(delay: Double(i) * 0.08) }
                 } else if filtered.isEmpty {
                     VStack(spacing: 10) {
                         Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 44)).foregroundColor(Theme.muted)
@@ -260,7 +302,7 @@ struct ChatListView: View {
                     }
                     .padding(.top, 60)
                 } else {
-                    ForEach(filtered) { c in
+                    ForEach(showPinnedRow ? filtered.filter { !$0.pinned } : filtered) { c in
                         SwipeChatRow(id: c.id, openId: $swipeOpen, leading: leadingSwipes(c), trailing: trailingSwipes(c)) {
                             chatLink(c).buttonStyle(RowButtonStyle())
                         }
@@ -314,6 +356,8 @@ struct ChatListView: View {
                 }
         )
         .onPull { y in
+            // поиск: пролистали вниз — убрать, вернулись к началу — показать
+            if y < -40, !searchHidden { searchHidden = true } else if y > -4, searchHidden { searchHidden = false }
             // как в Telegram: потянуть вниз — раскрыть ленту историй, прокрутить вверх — свернуть
             if y < 10 { pulled = false }
             if y > 70, !storiesOpen, !pulled {
@@ -564,5 +608,56 @@ struct ChatPreviewCard: View {
         .frame(width: 320, height: 420, alignment: .top)
         .background(Theme.bg)
         .task { await model.loadMessages(chat.id) }
+    }
+}
+
+
+/// Закреплённый чат кружком: аватарка, число непрочитанных и короткое имя
+struct PinnedChatBubble: View {
+    @EnvironmentObject var model: AppModel
+    let chat: ChatItem
+    var body: some View {
+        VStack(spacing: 5) {
+            AvatarView(name: chat.displayName, url: chat.displayAvatar, color: chat.displayColor, size: 60,
+                       online: chat.isPrivate && chat.peerId != model.myId && model.isOnline(chat.peerId),
+                       icon: chat.isPrivate && chat.peerId == model.myId ? "bookmark.fill" : nil)
+                .overlay(alignment: .topTrailing) {
+                    if chat.unread > 0 {
+                        Text(chat.unread > 99 ? "99+" : "\(chat.unread)")
+                            .font(.system(size: 11.5, weight: .bold)).foregroundColor(.white)
+                            .padding(.horizontal, 5).frame(minWidth: 21, minHeight: 21)
+                            .background(Capsule().fill(chat.muted ? Color(hex: 0xa3a6b8) : Theme.a1))
+                            .overlay(Capsule().stroke(Theme.bg, lineWidth: 2))
+                            .offset(x: 4, y: -2)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+            Text(chat.isPrivate && chat.peerId == model.myId ? "Избранное" : (chat.displayName.split(separator: " ").first.map(String.init) ?? chat.displayName))
+                .font(.system(size: 12, weight: chat.unread > 0 ? .semibold : .regular))
+                .foregroundColor(Theme.text).lineLimit(1)
+                .frame(width: 68)
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: chat.unread)
+    }
+}
+
+/// Заготовка строки чата, пока список грузится: серые плашки с бегущим бликом
+struct SkeletonChatRow: View {
+    var delay: Double = 0
+    @State private var on = false
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle().fill(Theme.text.opacity(0.08)).frame(width: 54, height: 54)
+            VStack(alignment: .leading, spacing: 9) {
+                Capsule().fill(Theme.text.opacity(0.08)).frame(width: 140, height: 12)
+                Capsule().fill(Theme.text.opacity(0.06)).frame(maxWidth: 220).frame(height: 10)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .opacity(on ? 0.45 : 1)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true).delay(delay)) { on = true }
+        }
     }
 }
