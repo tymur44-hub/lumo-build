@@ -1,0 +1,59 @@
+# Неподписанный .ipa для установки через Sideloadly / AltStore (подписывается вашим Apple ID при установке).
+name: IPA
+
+on:
+  push:
+    branches: [ms-report]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Собрать для iPhone без подписи
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MSReport.xcodeproj \
+            -scheme MSReport \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee ipa-build.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" ipa-build.log
+
+      - name: Упаковать в .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/MSReport.app Payload/
+          zip -qry MSReport.ipa Payload
+          ls -lh MSReport.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MSReport-ipa
+          path: MSReport.ipa
+
+      - name: Положить .ipa в ветку ms-report-ipa
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          cp MSReport.ipa "$RUNNER_TEMP/"
+          git checkout --orphan ipa-out
+          git rm -rfq --cached .
+          cp "$RUNNER_TEMP/MSReport.ipa" .
+          git add -f MSReport.ipa
+          git commit -qm "MSReport.ipa (${{ github.sha }})"
+          git push -f origin HEAD:ms-report-ipa
