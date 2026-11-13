@@ -112,6 +112,15 @@ public static class Api
         ApplyAuth(j);
     }
 
+    /// <summary>Вход по QR-коду: телефон присылает одноразовый token_hash</summary>
+    public static async Task SignInWithHash(string tokenHash)
+    {
+        JsonNode? j;
+        try { j = await Raw("POST", "/auth/v1/verify", body: J.O(("type", "magiclink"), ("token_hash", tokenHash)), auth: false); }
+        catch (ApiError) { j = await Raw("POST", "/auth/v1/verify", body: J.O(("type", "email"), ("token_hash", tokenHash)), auth: false); }
+        ApplyAuth(j);
+    }
+
     public static async Task Register(string username, string password, string name)
     {
         await Raw("POST", "/rest/v1/rpc/lm_register", body: J.O(("p_username", username), ("p_password", password), ("p_name", name)), auth: false);

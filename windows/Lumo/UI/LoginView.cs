@@ -1,95 +1,153 @@
+using System.Security.Cryptography;
+using System.Text.Json.Nodes;
 using Lumo.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using QRCoder;
 
 namespace Lumo.UI;
 
-/// <summary>Вход и регистрация по юзернейму и паролю (как на телефоне и в веб-версии)</summary>
+/// <summary>
+/// Вход только по QR-коду: телефон с Lumo сканирует код (Настройки → Подключить компьютер) и подтверждает вход.
+/// Протокол тот же, что в веб-версии: канал lm-qr-{ключ}, события scan / cancel / login (token_hash) / ok / fail.
+/// </summary>
 public sealed class LoginView : Grid
 {
-    bool register;
-    readonly TextBox user = new() { PlaceholderText = "Юзернейм", Height = 40 };
-    readonly TextBox name = new() { PlaceholderText = "Ваше имя", Height = 40, Visibility = Visibility.Collapsed };
-    readonly PasswordBox pass = new() { PlaceholderText = "Пароль", Height = 40 };
-    readonly TextBlock title = T.Txt("Вход в Lumo", 24, bold: true);
-    readonly TextBlock sub = T.Txt("Введите юзернейм и пароль от аккаунта", 13, T.Muted);
-    readonly TextBlock err = T.Txt("", 13, T.Danger);
-    readonly Button go;
-    readonly HyperlinkButton sw = new() { HorizontalAlignment = HorizontalAlignment.Center };
-    readonly CheckBox agree = new() { Visibility = Visibility.Collapsed };
-    readonly ProgressRing ring = new() { IsActive = false, Width = 22, Height = 22, Visibility = Visibility.Collapsed };
+    readonly Grid qrBox = new() { Width = 260, Height = 260, CornerRadius = new CornerRadius(24), Background = T.White, HorizontalAlignment = HorizontalAlignment.Center };
+    readonly Image qrImg = new() { Width = 236, Height = 236, Stretch = Stretch.Uniform };
+    readonly Border scanned = new() { Visibility = Visibility.Collapsed, Background = T.B(0xE6FFFFFF), CornerRadius = new CornerRadius(24) };
+    readonly ProgressRing ring = new() { IsActive = true, Width = 34, Height = 34 };
+    readonly TextBlock status = T.Txt("", 14, T.A2, bold: true);
+    string? key;
+    Realtime.Channel? ch;
+    CancellationTokenSource? rot;
+    bool done;
 
     public LoginView()
     {
         Background = T.Bg;
-        var card = new StackPanel { Width = 360, Spacing = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var card = new StackPanel { Width = 420, Spacing = 14, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        qrBox.Children.Add(ring);
+        qrImg.HorizontalAlignment = HorizontalAlignment.Center; qrImg.VerticalAlignment = VerticalAlignment.Center;
+        qrBox.Children.Add(qrImg);
+        // логотип в центре кода
         try
         {
-            card.Children.Add(new Image { Source = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "logo.png"))), Width = 84, Height = 84, Margin = new Thickness(0, 0, 0, 8) });
+            var logo = new Border { Width = 52, Height = 52, CornerRadius = new CornerRadius(14), Background = T.White, Padding = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                Child = new Image { Source = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "logo.png"))) } };
+            qrBox.Children.Add(logo);
         }
         catch { }
-        title.HorizontalAlignment = HorizontalAlignment.Center; title.TextAlignment = TextAlignment.Center;
-        sub.HorizontalAlignment = HorizontalAlignment.Center; sub.TextAlignment = TextAlignment.Center;
+        var sc = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var ok = T.Icon("\uE8EA", 40, T.A1); ok.HorizontalAlignment = HorizontalAlignment.Center;
+        sc.Children.Add(ok);
+        var st = T.Txt("Подтвердите вход\nна телефоне", 15, T.B(0xFF25264A), bold: true); st.TextAlignment = TextAlignment.Center;
+        sc.Children.Add(st);
+        scanned.Child = sc;
+        qrBox.Children.Add(scanned);
+        card.Children.Add(qrBox);
+
+        var title = T.Txt("Вход в Lumo по QR-коду", 22, bold: true); title.HorizontalAlignment = HorizontalAlignment.Center; title.Margin = new Thickness(0, 8, 0, 0);
         card.Children.Add(title);
-        card.Children.Add(sub);
-        card.Children.Add(new Border { Height = 6 });
-        card.Children.Add(name);
-        card.Children.Add(user);
-        card.Children.Add(pass);
-        // согласие при регистрации (152-ФЗ)
-        var at = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12.5, Foreground = T.Muted };
-        at.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = "Принимаю " });
-        var link = new Microsoft.UI.Xaml.Documents.Hyperlink { Foreground = T.A2 };
-        link.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = "Политику конфиденциальности" });
-        link.Click += async (_, _) => await Dialogs.Policy(App.Win);
-        at.Inlines.Add(link);
-        at.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = " и даю согласие на обработку моих персональных данных" });
-        agree.Content = at;
-        card.Children.Add(agree);
-        card.Children.Add(err);
-        go = T.Primary("Войти", Submit);
-        card.Children.Add(go);
-        ring.HorizontalAlignment = HorizontalAlignment.Center;
-        card.Children.Add(ring);
-        sw.Content = "Нет аккаунта? Зарегистрироваться";
-        sw.Click += (_, _) => Toggle();
-        card.Children.Add(sw);
+        var steps = new StackPanel { Spacing = 8, Margin = new Thickness(20, 0, 20, 0) };
+        string[] lines = { "Откройте Lumo на телефоне", "Зайдите в Настройки → Подключить компьютер", "Наведите камеру телефона на этот код" };
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var r = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+            var n = new Border { Width = 26, Height = 26, CornerRadius = new CornerRadius(13), Background = T.Accent, Child = new TextBlock { Text = (i + 1).ToString(), Foreground = T.White, FontWeight = Microsoft.UI.Text.FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+            r.Children.Add(n);
+            var t = T.Txt(lines[i], 14.5, T.Text); t.VerticalAlignment = VerticalAlignment.Center;
+            r.Children.Add(t);
+            steps.Children.Add(r);
+        }
+        card.Children.Add(steps);
+        status.HorizontalAlignment = HorizontalAlignment.Center; status.TextAlignment = TextAlignment.Center;
+        card.Children.Add(status);
+        var hint = T.Txt("Нет аккаунта? Зарегистрируйтесь в приложении Lumo на телефоне.", 12.5, T.Muted); hint.HorizontalAlignment = HorizontalAlignment.Center; hint.TextAlignment = TextAlignment.Center;
+        card.Children.Add(hint);
         var pl = new HyperlinkButton { Content = "Политика конфиденциальности", HorizontalAlignment = HorizontalAlignment.Center, FontSize = 12 };
         pl.Click += async (_, _) => await Dialogs.Policy(App.Win);
         card.Children.Add(pl);
         Children.Add(card);
-        pass.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) Submit(); };
-        user.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) pass.Focus(FocusState.Keyboard); };
+
+        Loaded += async (_, _) => { await Net.Pick(); Rotate(); };
+        Unloaded += (_, _) => Stop();
     }
 
-    void Toggle()
+    static string NewKey()
     {
-        register = !register;
-        title.Text = register ? "Регистрация" : "Вход в Lumo";
-        sub.Text = register ? "Придумайте юзернейм (латиница, цифры, _) и пароль" : "Введите юзернейм и пароль от аккаунта";
-        name.Visibility = register ? Visibility.Visible : Visibility.Collapsed;
-        agree.Visibility = register ? Visibility.Visible : Visibility.Collapsed;
-        ((TextBlock)go.Content).Text = register ? "Создать аккаунт" : "Войти";
-        sw.Content = register ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться";
-        err.Text = "";
+        var b = RandomNumberGenerator.GetBytes(18);
+        return Convert.ToBase64String(b).Replace('+', '-').Replace('/', '_').TrimEnd('=');
     }
 
-    async void Submit()
+    void Stop()
     {
-        var u = user.Text.Trim().TrimStart('@').ToLowerInvariant();
-        var p = pass.Password;
-        if (u.Length < 3) { err.Text = "Юзернейм — не короче 3 символов"; return; }
-        if (p.Length < 6) { err.Text = "Пароль — не короче 6 символов"; return; }
-        if (register && name.Text.Trim().Length == 0) { err.Text = "Введите имя"; return; }
-        if (register && agree.IsChecked != true) { err.Text = "Чтобы создать аккаунт, примите Политику конфиденциальности"; return; }
-        err.Text = ""; go.IsEnabled = false; ring.IsActive = true; ring.Visibility = Visibility.Visible;
+        rot?.Cancel();
+        if (key != null) Realtime.Leave("lm-qr-" + key);
+        ch = null; key = null;
+    }
+
+    /// <summary>Новый код каждую минуту (как в веб-версии)</summary>
+    async void Rotate()
+    {
+        if (done || Api.Session != null) return;
+        Stop();
+        var k = NewKey(); key = k;
+        scanned.Visibility = Visibility.Collapsed;
         try
         {
-            await Net.Pick();
-            if (register) await Api.Register(u, p, name.Text.Trim()); else await Api.SignIn(u, p);
+            using var gen = new QRCodeGenerator();
+            using var data = gen.CreateQrCode("https://lumomess.ru/#lmqr=" + k, QRCodeGenerator.ECCLevel.Q);
+            var png = new PngByteQRCode(data).GetGraphic(12, new byte[] { 0x14, 0x14, 0x2B, 0xFF }, new byte[] { 0xFF, 0xFF, 0xFF, 0xFF }, false);
+            var bmp = new BitmapImage();
+            using (var ms = new MemoryStream(png)) await bmp.SetSourceAsync(ms.AsRandomAccessStream());
+            qrImg.Source = bmp;
+            ring.IsActive = false; ring.Visibility = Visibility.Collapsed;
         }
-        catch (Exception e) { err.Text = e.Message; }
-        finally { go.IsEnabled = true; ring.IsActive = false; ring.Visibility = Visibility.Collapsed; }
+        catch (Exception e) { App.Log("qr: " + e.Message); status.Text = "Не удалось показать QR-код"; }
+        Realtime.Connect();
+        ch = Realtime.Get("lm-qr-" + k);
+        ch.OnBroadcast = (ev, p) => { if (ev == "qr") OnMsg(p, k); };
+        var c = new CancellationTokenSource(); rot = c;
+        try { await Task.Delay(60000, c.Token); } catch { return; }
+        Rotate();
+    }
+
+    async void OnMsg(JsonObject p, string k)
+    {
+        if (k != key || done) return;
+        switch (p.Str("t"))
+        {
+            case "scan":
+                rot?.Cancel();
+                scanned.Visibility = Visibility.Visible;
+                status.Text = "Подтвердите вход на телефоне…";
+                var c = new CancellationTokenSource(); rot = c;
+                try { await Task.Delay(120000, c.Token); } catch { return; }
+                status.Text = ""; Rotate();
+                break;
+            case "cancel":
+                status.Text = "Вход отменён на телефоне";
+                await Task.Delay(1500);
+                if (key == k) { status.Text = ""; Rotate(); }
+                break;
+            case "login":
+            {
+                var th = p.Str("th"); if (th == null) return;
+                status.Text = "Входим…";
+                var chan = ch;
+                bool okLogin;
+                try { await Api.SignInWithHash(th); okLogin = true; }
+                catch (Exception e) { App.Log("qr login: " + e.Message); okLogin = false; }
+                if (chan != null) Realtime.Broadcast(chan, "qr", J.O(("t", okLogin ? "ok" : "fail")));
+                if (!okLogin) { status.Text = "Не удалось войти — попробуйте ещё раз"; await Task.Delay(1500); Rotate(); return; }
+                done = true;
+                await Task.Delay(400);
+                Stop();
+                break;
+            }
+        }
     }
 }
