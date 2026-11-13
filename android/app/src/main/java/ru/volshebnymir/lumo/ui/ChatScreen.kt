@@ -953,7 +953,8 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
         if (!m.deleted && !m.body.isNullOrEmpty() && m.kind != "sticker" && m.kind != "system" && !bigEmo) {
             val cmdChat = if (!mine && m.senderId?.let { AppModel.profiles[it] }?.isBot == true) m.chatId else null
             val special = if (m.kind == "text") SpecialMsg.parse(m.body) else null
-            if (special != null) SpecialCard(special, fg, mine)
+            if (m.kind == "text" && m.body == ru.volshebnymir.lumo.core.E2E.LOCKED) LockedMessage(m.chatId, fg, mine)
+            else if (special != null) SpecialCard(special, fg, mine)
             else if (m.kind == "text") RichText(m.body, fg, mine, cmdChat = cmdChat) else RichText(m.body, fg, mine, Modifier.padding(horizontal = 6.dp, vertical = 3.dp), cmdChat)
         }
         BotButtons(m, mine)
@@ -1454,3 +1455,37 @@ class NoteSession(locked: Boolean) {
 
 
 fun viewsText(n: Int): String = if (n >= 1000) String.format(java.util.Locale.US, "%.1fK", n / 1000.0).replace(".0K", "K") else n.toString()
+
+
+/** Сообщение, которое этот телефон не смог расшифровать: объяснение и кнопка «Запросить ключ заново» */
+@Composable
+private fun LockedMessage(chatId: String, fg: Color, mine: Boolean) {
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    Column(Modifier.widthIn(max = 260.dp).padding(horizontal = 4.dp, vertical = 2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Lock, null, tint = fg, modifier = Modifier.size(17.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Не удалось открыть зашифрованное сообщение", color = fg, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text("Похоже, ключ шифрования на этом телефоне устарел. Обновите ключ — обычно сообщение сразу откроется.", color = fg.copy(alpha = 0.8f), fontSize = 13.sp)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.clip(CircleShape).background((if (mine) Color.White else P.a1).copy(alpha = 0.18f)).bouncy {
+            if (busy) return@bouncy
+            busy = true
+            scope.launch {
+                ru.volshebnymir.lumo.core.E2E.forceRefresh(chatId, AppModel.chat(chatId)?.peerId)
+                AppModel.loadMessages(chatId)
+                busy = false
+                if ((AppModel.messages[chatId] ?: emptyList()).any { it.body == ru.volshebnymir.lumo.core.E2E.LOCKED })
+                    AppModel.say("Не открылось — попросите собеседника отправить сообщение ещё раз")
+            }
+        }.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), color = fg, strokeWidth = 2.dp)
+            else Icon(Icons.Filled.Key, null, tint = fg, modifier = Modifier.size(15.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Запросить ключ заново", color = fg, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        }
+    }
+}

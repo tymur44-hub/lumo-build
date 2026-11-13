@@ -314,6 +314,13 @@ object E2E {
     fun dropCaches() { noKeyAt.clear(); peerPubs.keys.removeAll { it != me }; chatKeys.clear() }
 
     private val checkedAt = HashMap<String, Long>()
+
+    /** Кнопка «Запросить ключ заново»: сразу сверяем ключ собеседника с сервером и пересчитываем ключ чата */
+    suspend fun forceRefresh(chatId: String, peerId: String?) {
+        peerId?.let { checkedAt.remove(it); prefs.edit().remove("last_$it").apply(); peerPubs.remove(it) }
+        chatKeys.remove(chatId)
+        if (!refresh(chatId, peerId) && peerId != null) prepare(chatId, peerId)
+    }
     /**
      * Собеседник мог сменить ключ (новое устройство, сброс), пока приложение было открыто —
      * тогда старый ключ чата не расшифрует его новые сообщения. Сверяем ключ с сервером (не чаще раза в 20 с)

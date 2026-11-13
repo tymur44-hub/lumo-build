@@ -674,7 +674,7 @@ object AppModel {
 
     private var crashFlushed = false
     suspend fun loadChats() {
-        if (!crashFlushed && myId != null) { crashFlushed = true; scope.launch { CrashReporter.flush(ctx) } }
+        if (!crashFlushed && myId != null) { crashFlushed = true; scope.launch { CrashReporter.flush(ctx) }; Outbox.restore() }
         runCatching { draftsLoad() }
         if (!loggedIn) return
         try {
@@ -844,7 +844,8 @@ object AppModel {
             val saved = try { insertRow() } catch (e: ApiError) {
                 // у собеседника только что появился ключ — обновляем и пробуем ещё раз
                 if (e.message?.contains("зашифровано") == true) { E2E.dropCaches(); insertRow() } else throw e
-            } ?: throw ApiError("Не отправлено", 0)
+            } ?: throw ApiError("Не отправлено", 500)
+            Outbox.remove(pid)
             val m = dec(Message.from(saved))
             val list = (messages[chatId] ?: emptyList()).filter { it.id != pid }.let { l -> if (l.any { it.id == m.id }) l else l + m }
             messages[chatId] = sorted(list)
@@ -853,7 +854,13 @@ object AppModel {
             if (chat(chatId)?.isPrivate == true) scope.launch { delay(600); ru.volshebnymir.lumo.ui.Streaks.load() }
             true
         } catch (e: Exception) {
+            // нет связи — сообщение остаётся с часиками и уйдёт само, когда сеть вернётся
+            if (Outbox.isOffline(e)) {
+                Outbox.add(Outbox.Item(pid, chatId, kind, body, media, meta.toString(), replyTo, forwardedFrom))
+                return false
+            }
             messages[chatId] = (messages[chatId] ?: emptyList()).filter { it.id != pid }
+            Outbox.remove(pid)
             say("Не отправлено: " + (e.message ?: ""))
             false
         }
