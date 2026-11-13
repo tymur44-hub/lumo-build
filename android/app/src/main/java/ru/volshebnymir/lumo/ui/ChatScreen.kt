@@ -302,7 +302,7 @@ fun ChatScreen(chatId: String) {
                                 Text("Сообщений пока нет", color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                                 Text("Отправьте сообщение или напишите первым", color = p.muted, fontSize = 13.5.sp, textAlign = TextAlign.Center)
                             } else {
-                                Text("👋", fontSize = 54.sp)
+                                Icon(Icons.Filled.WavingHand, null, tint = p.a1, modifier = Modifier.size(52.dp))
                                 Text("Сообщений пока нет", color = p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                                 Text("Напишите что-нибудь!", color = p.muted, fontSize = 14.sp)
                             }
@@ -310,8 +310,39 @@ fun ChatScreen(chatId: String) {
                     }
                 }
                 val showDown by remember { derivedStateOf { list.firstVisibleItemIndex > 3 } }
+                // плавающая дата сверху — видна, пока листаешь
+                val topDay by remember(rows) { derivedStateOf {
+                    val i = list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                    when (val r = rows.getOrNull(i)) { is Row2.Msg -> Fmt.day(r.m.createdAt); is Row2.Day -> Fmt.day(r.d); else -> null }
+                } }
+                var dayShown by remember { mutableStateOf(false) }
+                LaunchedEffect(list.isScrollInProgress) {
+                    if (list.isScrollInProgress) dayShown = true else { delay(1200); dayShown = false }
+                }
+                androidx.compose.animation.AnimatedVisibility(dayShown && topDay != null && list.firstVisibleItemIndex > 2, Modifier.align(Alignment.TopCenter).padding(top = 6.dp),
+                    enter = fadeIn() + scaleIn(initialScale = 0.9f), exit = fadeOut()) {
+                    Text(topDay ?: "", color = p.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.glassChip(RoundedCornerShape(14.dp)).padding(horizontal = 12.dp, vertical = 5.dp))
+                }
+                // непрочитанные упоминания меня (@юзернейм) — кнопка «@» над кнопкой «вниз»
+                val myTag = AppModel.me?.username?.takeIf { it.isNotEmpty() }?.let { "@" + it.lowercase() }
+                val since = remember(chatId) { chat?.lastReadAt ?: Date() }
+                val seenMentions = remember(chatId) { mutableStateListOf<Int>() }
+                val visibleIds by remember(rows) { derivedStateOf {
+                    list.layoutInfo.visibleItemsInfo.mapNotNull { (rows.getOrNull(it.index) as? Row2.Msg)?.m?.id }.toSet()
+                } }
+                LaunchedEffect(visibleIds) { visibleIds.forEach { if (it !in seenMentions) seenMentions.add(it) } }
+                val mentions = if (myTag == null) emptyList() else msgs.filter {
+                    it.senderId != AppModel.myId && !it.deleted && it.createdAt.after(since) && it.id !in seenMentions && (it.body ?: "").lowercase().contains(myTag)
+                }
+                androidx.compose.animation.AnimatedVisibility(mentions.isNotEmpty(), Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = if (showDown) 70.dp else 14.dp),
+                    enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+                    Box(Modifier.size(46.dp).glassChip(CircleShape).bouncy { mentions.minByOrNull { it.id }?.let { scrollTo(it.id) } }, contentAlignment = Alignment.Center) {
+                        Text("@", color = p.a1, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
                 androidx.compose.animation.AnimatedVisibility(showDown, Modifier.align(Alignment.BottomEnd).padding(14.dp), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
-                    Box(Modifier.size(46.dp).clip(CircleShape).background(p.panel).bouncy { scope.launch { list.animateScrollToItem(0) } }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(46.dp).glassChip(CircleShape).bouncy { scope.launch { list.animateScrollToItem(0) } }, contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.KeyboardArrowDown, null, tint = p.text, modifier = Modifier.size(30.dp))
                     }
                 }
@@ -1248,6 +1279,14 @@ private fun Composer(
                     Box(Modifier.size(10.dp).alpha(a).clip(CircleShape).background(Color(0xFFFF3B5C)))
                     Spacer(Modifier.width(10.dp))
                     Text(Fmt.duration(recSec.toDouble()), color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Spacer(Modifier.width(8.dp))
+                    // живая волна звука
+                    @Suppress("UNUSED_VARIABLE") val tick = level
+                    Row(Modifier.height(24.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        recorder.levels.takeLast(24).forEach { l ->
+                            Box(Modifier.width(2.5.dp).height((3 + 21 * (l / 31f).coerceIn(0f, 1f)).dp).clip(CircleShape).background(p.a1.copy(alpha = 0.85f)))
+                        }
+                    }
                     Spacer(Modifier.weight(1f))
                     if (locked) Text("Запись без удержания", color = p.muted, fontSize = 14.sp)
                     else Row(Modifier.offset { IntOffset(dragX.coerceIn(-limit, 0f).roundToInt(), 0) }, verticalAlignment = Alignment.CenterVertically) {

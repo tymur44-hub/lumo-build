@@ -98,6 +98,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -466,7 +468,14 @@ fun ChatListScreen() {
                 Icon(Icons.Filled.Edit, null, tint = Color.White, modifier = Modifier.size(20.dp))
             }
         }
-        SearchBox(q, { q = it }, Modifier.padding(horizontal = 14.dp, vertical = 8.dp).fillMaxWidth())
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        // поиск уезжает, когда листаешь список вниз, и возвращается у начала списка
+        val searchHidden by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 80 } }
+        androidx.compose.animation.AnimatedVisibility(!searchHidden || q.isNotEmpty(),
+            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()) {
+            SearchBox(q, { q = it }, Modifier.padding(horizontal = 14.dp, vertical = 8.dp).fillMaxWidth())
+        }
         if (q.isBlank()) {
             val unreadOf = { f: (ChatItem) -> Boolean -> AppModel.chats.count { it.unread > 0 && !it.muted && f(it) } }
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -478,16 +487,18 @@ fun ChatListScreen() {
             val list = AppModel.chats.filter {
                 when (folder) { "private" -> it.isPrivate; "group" -> it.type == "group"; "channel" -> it.isChannel; "unread" -> it.unread > 0; else -> true }
             }
-            if (!AppModel.chatsLoaded) Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = p.a1) }
             androidx.compose.animation.AnimatedVisibility(storiesOpen && ru.volshebnymir.lumo.core.RemoteConfig.on("stories"), enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
                 exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()) { StoriesBar() }
             if (folder == "all") AnnounceCard()
-            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            val pinnedList = AppModel.chats.filter { it.pinned }
+            val pinRow = folder == "all" && pinnedList.isNotEmpty()
             // нажали «Чаты» на панели — наверх списка
             LaunchedEffect(AppModel.chatsTopTick) { if (AppModel.chatsTopTick > 0) listState.animateScrollToItem(0) }
             LazyColumn(Modifier.fillMaxSize().nestedScroll(pull), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 110.dp)) {
                 if (folder == "all" && Reminders.list.isNotEmpty()) item(key = "reminders") { RemindersBar() }
-                items(list, key = { it.id }) { c -> ChatRow(c, Modifier.animateItem()) }
+                if (pinRow) item(key = "pinned") { PinnedRow(pinnedList) }
+                if (!AppModel.chatsLoaded) items(8) { i -> SkeletonChatRow(i) }
+                items(if (pinRow) list.filter { !it.pinned } else list, key = { it.id }) { c -> ChatRow(c, Modifier.animateItem()) }
                 if (AppModel.chatsLoaded && list.isEmpty()) item {
                     Text(if (folder == "all") "Пока нет чатов.\nНайдите людей через поиск или нажмите карандаш" else "Здесь пусто",
                         color = p.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(40.dp))
@@ -726,6 +737,63 @@ fun StoryStack() {
         }
         groups.take(2).forEach { g ->
             Box(Modifier.size(34.dp).clip(CircleShape).background(p.bg).padding(2.dp)) { Avatar(g.name, g.avatarUrl, g.color, 30.dp) }
+        }
+    }
+}
+
+
+/** Закреплённые чаты — кружками в одну строку над списком */
+@Composable
+fun PinnedRow(list: List<ChatItem>) {
+    val p = P
+    val scope = rememberCoroutineScope()
+    androidx.compose.foundation.lazy.LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        items(list, key = { "pin" + it.id }) { c ->
+            var menu by remember { mutableStateOf(false) }
+            val saved = c.isPrivate && c.peerId == AppModel.myId
+            Box {
+                Column(Modifier.width(70.dp).clip(RoundedCornerShape(16.dp))
+                    .combinedClickable(onClick = { AppModel.push(Screen.Chat(c.id)) }, onLongClick = { menu = true })
+                    .padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box {
+                        if (saved) Box(Modifier.size(60.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Bookmark, null, tint = Color.White) }
+                        else Avatar(c.displayName, c.displayAvatar, c.displayColor, 60.dp, online = c.isPrivate && AppModel.isOnline(c.peerId))
+                        if (c.unread > 0) Box(Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-2).dp)
+                            .clip(CircleShape).background(p.bg).padding(2.dp).clip(CircleShape)
+                            .background(if (c.muted) Color(0xFFA3A6B8) else p.a1).padding(horizontal = 5.dp).height(18.dp).widthIn(min = 18.dp),
+                            contentAlignment = Alignment.Center) {
+                            Text(if (c.unread > 99) "99+" else "${c.unread}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(Modifier.height(5.dp))
+                    Text(if (saved) "Избранное" else c.displayName.substringBefore(' '), color = p.text, fontSize = 12.sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, fontWeight = if (c.unread > 0) FontWeight.SemiBold else FontWeight.Normal)
+                }
+                androidx.compose.material3.DropdownMenu(menu, { menu = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Открепить") }, onClick = { menu = false; scope.launch { AppModel.setPinned(c.id, false) } })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text(if (c.muted) "Включить уведомления" else "Выключить уведомления") },
+                        onClick = { menu = false; scope.launch { AppModel.setMuted(c.id, !c.muted) } })
+                }
+            }
+        }
+    }
+}
+
+/** Заготовка строки, пока список грузится: серые плашки, мягко мерцают */
+@Composable
+fun SkeletonChatRow(i: Int) {
+    val p = P
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "sk")
+    val a by t.animateFloat(1f, 0.45f, androidx.compose.animation.core.infiniteRepeatable(
+        androidx.compose.animation.core.tween(900, delayMillis = i * 80), androidx.compose.animation.core.RepeatMode.Reverse), label = "a")
+    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp).graphicsLayer { alpha = a }, verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(56.dp).clip(CircleShape).background(p.text.copy(alpha = 0.08f)))
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Box(Modifier.width(140.dp).height(12.dp).clip(CircleShape).background(p.text.copy(alpha = 0.08f)))
+            Spacer(Modifier.height(9.dp))
+            Box(Modifier.width(220.dp).height(10.dp).clip(CircleShape).background(p.text.copy(alpha = 0.06f)))
         }
     }
 }
