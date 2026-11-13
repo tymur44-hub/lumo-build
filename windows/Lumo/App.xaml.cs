@@ -11,7 +11,6 @@ public partial class App : Application
 
     public App()
     {
-        AppDomain.CurrentDomain.FirstChanceException += (_, e) => { if (e.Exception is System.Runtime.InteropServices.COMException) Log("first: " + e.Exception.Message); };
         InitializeComponent();
         UnhandledException += (_, e) => { e.Handled = true; Log("ui: " + e.Exception); };
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Log("domain: " + e.ExceptionObject);

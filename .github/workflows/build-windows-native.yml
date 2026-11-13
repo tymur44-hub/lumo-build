@@ -27,8 +27,15 @@ jobs:
             exit 1
           }
           Write-Host "SMOKE-OK"
+          Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("$env:GITHUB_WORKSPACE\screen.png")
           Get-Content "$env:LOCALAPPDATA\Lumo\log.txt" -ErrorAction SilentlyContinue
           Stop-Process -Id $p.Id -Force
+      - uses: actions/upload-artifact@v4
+        with: { name: screen, path: screen.png }
       - name: Архив и установщик
         shell: pwsh
         run: |
