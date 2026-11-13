@@ -34,8 +34,6 @@ jobs:
           $bmp.Save("$env:GITHUB_WORKSPACE\screen.png")
           Get-Content "$env:LOCALAPPDATA\Lumo\log.txt" -ErrorAction SilentlyContinue
           Stop-Process -Id $p.Id -Force
-      - uses: actions/upload-artifact@v4
-        with: { name: screen, path: screen.png }
       - name: Архив и установщик
         shell: pwsh
         run: |
@@ -49,3 +47,4 @@ jobs:
           files: |
             Lumo-Windows-x64.zip
             windows/dist/Lumo-Setup.exe
+            screen.png

@@ -213,7 +213,7 @@ public sealed class ShellView : Grid
 }
 
 /// <summary>Строка списка чатов</summary>
-public sealed class ChatRow : Grid
+public sealed class ChatRow : ListViewItem
 {
     public string Id { get; }
     readonly AvatarView av = new(50);
@@ -229,34 +229,59 @@ public sealed class ChatRow : Grid
     public ChatRow(string id)
     {
         Id = id;
-        Padding = new Thickness(6, 8, 6, 8); ColumnSpacing = 12;
-        ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        Children.Add(av);
-        var mid = new Grid { VerticalAlignment = VerticalAlignment.Center, RowSpacing = 3 };
+        HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        Padding = new Thickness(6, 0, 6, 0); MinHeight = 66; CornerRadius = new CornerRadius(10);
+        var g = new Grid { Padding = new Thickness(0, 8, 0, 8), ColumnSpacing = 12 };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.Children.Add(av);
+        var mid = new Grid { VerticalAlignment = VerticalAlignment.Center, RowSpacing = 3, ColumnSpacing = 5 };
         mid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         mid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         mid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         mid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
-        top.Children.Add(name); top.Children.Add(verified); top.Children.Add(muted);
+        mid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // имя (обрезается) + значки
+        var top = new Grid { ColumnSpacing = 5 };
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        name.HorizontalAlignment = HorizontalAlignment.Left;
+        top.Children.Add(name);
         verified.VerticalAlignment = VerticalAlignment.Center; muted.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(verified, 1); top.Children.Add(verified);
+        Grid.SetColumn(muted, 2); top.Children.Add(muted);
         mid.Children.Add(top);
-        var tr = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right };
-        tr.Children.Add(check); tr.Children.Add(time);
-        Grid.SetColumn(tr, 1); mid.Children.Add(tr);
-        var bottom = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-        lockIc.VerticalAlignment = VerticalAlignment.Center;
-        bottom.Children.Add(preview);
-        Grid.SetRow(bottom, 1); mid.Children.Add(bottom);
+        Grid.SetColumn(check, 1); mid.Children.Add(check);
+        Grid.SetColumn(time, 2); mid.Children.Add(time);
+        Grid.SetRow(preview, 1); mid.Children.Add(preview);
         var br = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Right };
         badge = new Border { MinWidth = 22, Height = 22, CornerRadius = new CornerRadius(11), Padding = new Thickness(6, 0, 6, 0), Child = badgeText };
         badgeText.VerticalAlignment = VerticalAlignment.Center;
         pin.VerticalAlignment = VerticalAlignment.Center;
         br.Children.Add(pin); br.Children.Add(badge);
-        Grid.SetRow(br, 1); Grid.SetColumn(br, 1); mid.Children.Add(br);
+        Grid.SetRow(br, 1); Grid.SetColumn(br, 1); Grid.SetColumnSpan(br, 2); mid.Children.Add(br);
         Grid.SetColumn(mid, 1);
-        Children.Add(mid);
+        g.Children.Add(mid);
+        Content = g;
+        RightTapped += (_, e) => { e.Handled = true; Menu().ShowAt(this, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions { Position = e.GetPosition(this) }); };
+    }
+
+    MenuFlyout Menu()
+    {
+        var fl = new MenuFlyout();
+        var c = Store.Chat(Id);
+        if (c == null) return fl;
+        MenuFlyoutItem It(string t, string glyph, Action a)
+        {
+            var i = new MenuFlyoutItem { Text = t, Icon = new FontIcon { Glyph = glyph, FontFamily = T.IconFont } };
+            i.Click += (_, _) => a();
+            return i;
+        }
+        fl.Items.Add(It(c.Pinned ? "Открепить" : "Закрепить", "\uE718", async () => await Store.SetPinned(Id, !c.Pinned)));
+        fl.Items.Add(It(c.Muted ? "Включить уведомления" : "Выключить уведомления", c.Muted ? "\uE767" : "\uE74F", async () => await Store.SetMuted(Id, !c.Muted)));
+        if (c.Unread > 0) fl.Items.Add(It("Отметить прочитанным", "\uE73E", async () => { await Store.LoadMessages(Id); Store.MarkRead(Id); }));
+        return fl;
     }
 
     public void Update(ChatItem c)
