@@ -153,7 +153,7 @@ struct SettingsView: View {
                     }
                     SettingsGroup {
                         Button { share = true } label: {
-                            SettingsRow(icon: "person.badge.plus", color: Color(hex: 0xff5b8a), title: "Пригласить друзей", subtitle: "Поделиться ссылкой на ваш профиль")
+                            SettingsRow(icon: "person.badge.plus", color: Color(hex: 0xff5b8a), title: "Пригласить друзей", subtitle: "Вам и другу — по 25 люменов")
                         }
                         divider
                         NavigationLink(value: SettingsPage.about) {
@@ -232,7 +232,7 @@ struct SettingsView: View {
             .sheet(isPresented: $showEmoji) { EmojiStatusSheet().environmentObject(model) }
             .sheet(isPresented: $limitSheet) { AccountLimitSheet(onPremium: { path.append(.premium) }).environmentObject(model) }
             .fullScreenCover(isPresented: $showScan) { QRScanScreen().environmentObject(model) }
-            .sheet(isPresented: $share) { ShareSheet(items: ["Я в Lumo — напиши мне: " + model.profileLink]) }
+            .sheet(isPresented: $share) { InviteView().environmentObject(model) }
         }
     }
 
