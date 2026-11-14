@@ -117,12 +117,17 @@ fun ChatWallDialog(chatId: String, peerName: String?, isPrivate: Boolean, onClos
                     }
                     Spacer(Modifier.height(12.dp))
                     LazyVerticalGrid(GridCells.Fixed(3), Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(WALL_ALL) { i ->
+                        WALL_SECTIONS.forEach { (title, list) ->
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                            Text(title.uppercase(), color = p.muted, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp, top = 6.dp))
+                        }
+                        items(list) { i ->
                             Box(Modifier.height(140.dp).clip(RoundedCornerShape(16.dp)).background(p.chatBg).border(1.dp, p.line, RoundedCornerShape(16.dp))
                                 .bouncy { preset = i; uri = null; preview = true }) {
                                 WallLayer(i, p)
                                 if (wallIsPremium(i)) Icon(Icons.Filled.Star, null, tint = Color(0xFFFFC247), modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(16.dp))
                             }
+                        }
                         }
                     }
                     Row(Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(16.dp)).background(p.panel2)

@@ -1005,13 +1005,32 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
     }
 }
 
-private val TOKENS = Regex("""\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|`([^`]+)`|(https?://[^\s]+)|(@[A-Za-z0-9_]{3,})|((?<![\w/])/[A-Za-z][A-Za-z0-9_]{1,31})""")
+private val TOKENS = Regex("""\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|`([^`]+)`|(https?://[^\s]+)|(@[A-Za-z0-9_]{3,})|((?<![\w/])/[A-Za-z][A-Za-z0-9_]{1,31})|\|\|([^|\n]+)\|\||\[([^\]\n]+)\]\(((?:https?://|date:|mailto:|tel:)[^)\s]+)\)""")
 
 @Composable
 fun RichText(s: String, color: Color, mine: Boolean, modifier: Modifier = Modifier, cmdChat: String? = null) {
+    // цитаты: строки, начинающиеся с «> »
+    if (s.startsWith("> ") || s.contains("\n> ")) {
+        val segs = mutableListOf<Pair<Boolean, String>>()
+        for (line in s.split("\n")) {
+            val q = line.startsWith("> "); val t = if (q) line.drop(2) else line
+            if (segs.isNotEmpty() && segs.last().first == q) segs[segs.size - 1] = q to (segs.last().second + "\n" + t) else segs.add(q to t)
+        }
+        val bar = if (mine) Color.White else P.a1
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            segs.forEach { (q, t) ->
+                if (q) Row(Modifier.height(IntrinsicSize.Min).clip(RoundedCornerShape(6.dp)).background(bar.copy(alpha = 0.14f))) {
+                    Box(Modifier.width(3.dp).fillMaxHeight().background(bar))
+                    RichText(t, color, mine, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), cmdChat)
+                } else RichText(t, color, mine, Modifier, cmdChat)
+            }
+        }
+        return
+    }
     val p = P
     val link = if (mine) Color.White else p.a2
-    val text: AnnotatedString = remember(s, mine, p.a2, cmdChat) {
+    var opened by remember(s) { mutableStateOf(false) }
+    val text: AnnotatedString = remember(s, mine, p.a2, cmdChat, opened) {
         buildAnnotatedString {
             var i = 0
             for (mt in TOKENS.findAll(s)) {
@@ -1030,6 +1049,18 @@ fun RichText(s: String, color: Color, mine: Boolean, modifier: Modifier = Modifi
                             AppModel.scope.launch { AppModel.send(cmdChat, "text", cmd) }
                         }) { append(cmd) }
                     } else append(g[7])
+                    g[8].isNotEmpty() -> if (opened) withStyle(SpanStyle(background = Color.Gray.copy(alpha = 0.22f))) { append(g[8]) }
+                        else withLink(LinkAnnotation.Clickable("spoiler", TextLinkStyles(SpanStyle(color = color, background = color))) { opened = true }) { append(g[8]) }
+                    g[9].isNotEmpty() -> {
+                        val u = g[10]
+                        if (u.startsWith("date:")) {
+                            val ts = u.drop(5).toLongOrNull() ?: 0L
+                            withLink(LinkAnnotation.Clickable("date", TextLinkStyles(SpanStyle(textDecoration = TextDecoration.Underline))) {
+                                val f = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.FULL, java.text.DateFormat.SHORT, java.util.Locale("ru"))
+                                AppModel.say(f.format(java.util.Date(ts * 1000)))
+                            }) { append(g[9]) }
+                        } else withLink(LinkAnnotation.Url(u, TextLinkStyles(SpanStyle(color = link, textDecoration = TextDecoration.Underline)))) { append(g[9]) }
+                    }
                 }
                 i = mt.range.last + 1
             }

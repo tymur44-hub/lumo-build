@@ -10,7 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-data class RemoteWall(val n: Int, val url: String, val premium: Boolean) { val id get() = 1000 + n }
+data class RemoteWall(val n: Int, val url: String, val premium: Boolean, val section: String? = null) { val id get() = 1000 + n }
 data class RemoteSticker(val id: String, val url: String)
 data class RemotePack(val id: String, val name: String, val items: List<RemoteSticker>)
 data class Announce(val id: String, val title: String, val text: String, val url: String?, val button: String?)
@@ -87,7 +87,7 @@ object RemoteConfig {
     val walls: List<RemoteWall> get() = arr(look, "walls").mapNotNull { j ->
         if (!j.has("n")) return@mapNotNull null
         val u = j.optString("url").ifBlank { return@mapNotNull null }
-        RemoteWall(j.optInt("n"), u, j.optBoolean("premium", false))
+        RemoteWall(j.optInt("n"), u, j.optBoolean("premium", false), j.optString("section").ifBlank { null })
     }
     fun wall(i: Int) = walls.firstOrNull { it.id == i }
     /** [{id, name, items:[{id, url}]}] */

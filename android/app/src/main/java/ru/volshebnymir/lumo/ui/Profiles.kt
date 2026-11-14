@@ -985,7 +985,9 @@ fun AppearanceScreen() {
         }
         Card {
             Text("Фон чатов", color = p.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
-            WALL_ALL.chunked(5).forEach { row ->
+            WALL_SECTIONS.forEach { (title, items) ->
+            Text(title, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
+            items.chunked(5).forEach { row ->
                 Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     row.forEach { i ->
                         Box(Modifier.size(width = 56.dp, height = 78.dp).clip(RoundedCornerShape(12.dp)).background(p.chatBg)
@@ -996,6 +998,7 @@ fun AppearanceScreen() {
                         }
                     }
                 }
+            }
             }
             Text("Звёздочкой отмечены обои Premium", color = p.muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 10.dp))
         }

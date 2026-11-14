@@ -20,7 +20,12 @@ import kotlin.math.*
 val WALL_FREE = listOf(0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17)
 val WALL_PREMIUM = listOf(6, 7, 8, 9, 20, 21, 22, 23, 24, 25, 26, 27)
 /** 1000+n — обои с сервера */
-val WALL_ALL: List<Int> get() = WALL_FREE + WALL_PREMIUM + ru.volshebnymir.lumo.core.RemoteConfig.walls.map { it.id }
+val WALL_ALL: List<Int> get() = WALL_SECTIONS.flatMap { it.second }
+/** Обои по разделам; обои с сервера группируются по полю section и идут первыми */
+val WALL_SECTIONS: List<Pair<String, List<Int>>> get() {
+    val remote = ru.volshebnymir.lumo.core.RemoteConfig.walls.groupBy { it.section ?: "Новые" }.map { (k, v) -> k to v.map { it.id } }
+    return remote + listOf("Цвета" to (0..9).toList(), "Узоры" to (10..17).toList(), "Картины" to (20..27).toList())
+}
 fun wallIsPremium(i: Int) = if (i >= 1000) (ru.volshebnymir.lumo.core.RemoteConfig.wall(i)?.premium ?: false) else (i in 6..9 || i >= 20)
 
 /** Слой обоев с нужным номером (поверх цвета фона чата) */

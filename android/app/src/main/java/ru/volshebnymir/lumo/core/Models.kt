@@ -210,7 +210,7 @@ data class Message(
             Message(-(System.currentTimeMillis() % 1_000_000_000).toInt() - (0..999).random(), chat, sender, kind, body, null, meta, replyTo, null, null, false, Date(), true, local)
 
         fun previewText(kind: String, body: String?): String {
-            val b = (body ?: "").replace("**", "").replace("__", "").replace("`", "").replace("~~", "")
+            val b = (body ?: "").replace(Regex("\\|\\|[^|\n]+\\|\\|"), "▒▒▒▒").replace(Regex("\\[([^\\]\n]+)\\]\\([^)\\s]+\\)"), "$1").replace(Regex("(^|\n)> "), "$1").replace("**", "").replace("__", "").replace("`", "").replace("~~", "")
             return when (kind) {
                 "voice" -> "Голосовое сообщение"
                 "video_note" -> "Видеосообщение"
