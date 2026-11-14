@@ -65,6 +65,7 @@ enum TextFormat {
               let tr = tv.textRange(from: st, to: en) else { return }
         tv.replace(tr, withText: s)
         if let sel = select { tv.selectedRange = sel }
+        tv.delegate?.textViewDidChange?(tv)
     }
 
     static func wrap(_ tv: UITextView, _ range: NSRange, _ l: String, _ r: String) {
@@ -223,4 +224,89 @@ struct FormatZone: UIViewRepresentable {
 final class SpoilerState: ObservableObject {
     static let shared = SpoilerState()
     @Published var open: Set<String> = []
+}
+
+/// Поле ввода сообщения на UITextView: растёт до 6 строк, а в меню выделенного текста есть «Форматировать»
+struct ComposerField: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var focused: Bool
+    var placeholder: String
+    var textColor: UIColor
+    var tint: UIColor
+    var placeholderColor: UIColor
+    var font: UIFont = .systemFont(ofSize: 16)
+    var maxLines: CGFloat = 6
+
+    func makeCoordinator() -> Coord { Coord(self) }
+
+    func makeUIView(context: Context) -> UITextView {
+        let tv = UITextView()
+        tv.delegate = context.coordinator
+        tv.backgroundColor = .clear
+        tv.font = font
+        tv.textContainerInset = UIEdgeInsets(top: 11, left: 0, bottom: 11, right: 0)
+        tv.textContainer.lineFragmentPadding = 0
+        tv.isScrollEnabled = false
+        tv.text = text
+        tv.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        tv.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        let ph = UILabel()
+        ph.font = font
+        ph.translatesAutoresizingMaskIntoConstraints = false
+        tv.addSubview(ph)
+        NSLayoutConstraint.activate([
+            ph.leadingAnchor.constraint(equalTo: tv.leadingAnchor),
+            ph.topAnchor.constraint(equalTo: tv.topAnchor, constant: 11),
+        ])
+        context.coordinator.ph = ph
+        return tv
+    }
+
+    func updateUIView(_ tv: UITextView, context: Context) {
+        context.coordinator.parent = self
+        if tv.markedTextRange == nil && tv.text != text { tv.text = text }
+        tv.textColor = textColor
+        tv.tintColor = tint
+        context.coordinator.ph?.text = placeholder
+        context.coordinator.ph?.textColor = placeholderColor
+        context.coordinator.ph?.isHidden = !text.isEmpty
+        if focused && !tv.isFirstResponder && tv.window != nil {
+            DispatchQueue.main.async { if self.focused { tv.becomeFirstResponder() } }
+        } else if !focused && tv.isFirstResponder {
+            DispatchQueue.main.async { if !self.focused { tv.resignFirstResponder() } }
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView tv: UITextView, context: Context) -> CGSize? {
+        let w = proposal.width ?? UIScreen.main.bounds.width - 120
+        let fit = tv.sizeThatFits(CGSize(width: w, height: .greatestFiniteMagnitude)).height
+        let maxH = (font.lineHeight * maxLines).rounded(.up) + 22
+        let h = min(max(fit, font.lineHeight.rounded(.up) + 22), maxH)
+        let scroll = fit > maxH
+        if tv.isScrollEnabled != scroll { DispatchQueue.main.async { tv.isScrollEnabled = scroll } }
+        return CGSize(width: w, height: h)
+    }
+
+    final class Coord: NSObject, UITextViewDelegate {
+        var parent: ComposerField
+        weak var ph: UILabel?
+        init(_ p: ComposerField) { parent = p }
+
+        func textViewDidChange(_ tv: UITextView) {
+            ph?.isHidden = !tv.text.isEmpty
+            if parent.text != tv.text { parent.text = tv.text }
+        }
+        func textViewDidBeginEditing(_ tv: UITextView) {
+            if !parent.focused { DispatchQueue.main.async { self.parent.focused = true } }
+        }
+        func textViewDidEndEditing(_ tv: UITextView) {
+            if parent.focused { DispatchQueue.main.async { self.parent.focused = false } }
+        }
+        func textView(_ tv: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            guard range.length > 0 else { return nil }
+            var acts = suggestedActions
+            acts.insert(TextFormat.menu(tv, range), at: min(1, acts.count))
+            return UIMenu(children: acts)
+        }
+    }
 }

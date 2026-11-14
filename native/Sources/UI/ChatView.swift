@@ -1133,7 +1133,7 @@ struct ComposerView: View {
     @State private var dragY: CGFloat = 0
     @State private var levels: [CGFloat] = []
     @State private var bigEdit = false
-    @FocusState private var focused: Bool
+    @State private var focused = false
     @State private var kbRestore = false
 
     var body: some View {
@@ -1220,12 +1220,9 @@ struct ComposerView: View {
                             .environmentObject(model)
                         }
                         HStack(alignment: .bottom, spacing: 4) {
-                            TextField("Сообщение", text: $text, axis: .vertical)
-                                .lineLimit(1...6)
-                                .focused($focused)
-                                .background(FormatZone())
-                                .font(.system(size: 16))
-                                .padding(.leading, 16).padding(.vertical, 11)
+                            ComposerField(text: $text, focused: $focused, placeholder: Lang.tr("Сообщение"),
+                                          textColor: UIColor(Theme.text), tint: UIColor(Theme.a1), placeholderColor: UIColor(Theme.muted))
+                                .padding(.leading, 16)
                                 .onChange(of: text) { t in if !t.isEmpty { model.userTyping(chatId) } }
                             if text.count > 160 || text.filter({ $0 == "\n" }).count >= 3 {
                                 // длинный текст — открыть на весь экран
