@@ -148,20 +148,21 @@ struct AppearanceView: View {
                     .padding(.vertical, 8).padding(.horizontal, 4)
                 }
 
-                SectionTitle(text: "Фон чата")
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                    ForEach(wallAll, id: \.self) { i in
-                        ChatWallpaper(index: i)
-                            .frame(height: 110)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(look.wall == i ? Theme.a1 : Theme.line, lineWidth: look.wall == i ? 3 : 1))
-                            .overlay { if i == 0 { Text("Без фона").font(.caption.weight(.bold)).foregroundColor(Theme.muted) } }
-                            .overlay(alignment: .bottomLeading) { if wallLive.contains(i) { Text("Живые").font(.system(size: 11, weight: .bold)).foregroundColor(.white).padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.black.opacity(0.35))).padding(7) } }
-                            .overlay(alignment: .topTrailing) { if wallIsPremium(i) { Image(systemName: "star.fill").font(.system(size: 13)).foregroundColor(Color(hex: 0xffc247)).padding(8) } }
-                            .onTapGesture { if wallIsPremium(i) && !model.isPremium { model.say(premiumSoon) } else { look.wall = i } }
+                ForEach(wallSections) { sec in
+                    SectionTitle(text: sec.title)
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                        ForEach(sec.items, id: \.self) { i in
+                            ChatWallpaper(index: i)
+                                .frame(height: 110)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(look.wall == i ? Theme.a1 : Theme.line, lineWidth: look.wall == i ? 3 : 1))
+                                .overlay { if i == 0 { Text("Без фона").font(.caption.weight(.bold)).foregroundColor(Theme.muted) } }
+                                .overlay(alignment: .topTrailing) { if wallIsPremium(i) { Image(systemName: "star.fill").font(.system(size: 13)).foregroundColor(Color(hex: 0xffc247)).padding(8) } }
+                                .onTapGesture { if wallIsPremium(i) && !model.isPremium { model.say(premiumSoon) } else { look.wall = i } }
+                        }
                     }
+                    .padding(.horizontal, 14)
                 }
-                .padding(.horizontal, 14)
                 Color.clear.frame(height: 30)
             }
             .padding(.top, 10)

@@ -248,6 +248,14 @@ struct ChatView: View {
                 Task { await model.openByUsername(url.lastPathComponent) }
                 return .handled
             }
+            if url.scheme == "lumo", url.host == "spoiler" {
+                withAnimation(.easeOut(duration: 0.25)) { _ = SpoilerState.shared.open.insert(url.lastPathComponent) }
+                return .handled
+            }
+            if url.scheme == "lumo", url.host == "date", let ts = Int(url.lastPathComponent) {
+                model.say(TextFormat.dateText(ts))
+                return .handled
+            }
             if url.scheme == "lumo", url.host == "cmd" {
                 let cmd = "/" + url.lastPathComponent
                 Task { _ = await model.send(chatId: chatId, kind: "text", body: cmd) }
@@ -1215,6 +1223,7 @@ struct ComposerView: View {
                             TextField("Сообщение", text: $text, axis: .vertical)
                                 .lineLimit(1...6)
                                 .focused($focused)
+                                .background(FormatZone())
                                 .font(.system(size: 16))
                                 .padding(.leading, 16).padding(.vertical, 11)
                                 .onChange(of: text) { t in if !t.isEmpty { model.userTyping(chatId) } }

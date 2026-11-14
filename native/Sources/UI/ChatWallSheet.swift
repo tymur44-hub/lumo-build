@@ -45,13 +45,17 @@ struct ChatWallSheet: View {
     private var gridView: some View {
         ScrollView {
             VStack(spacing: 14) {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                    ForEach(wallAll, id: \.self) { i in
-                        ChatWallpaper(index: i)
-                            .frame(height: 140).clipShape(RoundedRectangle(cornerRadius: 16))
-                            .overlay(alignment: .topTrailing) { if wallIsPremium(i) { Image(systemName: "star.fill").font(.system(size: 13)).foregroundColor(Color(hex: 0xffc247)).padding(8) } }
-                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.line))
-                            .onTapGesture { preset = i; image = nil; withAnimation(Motion.snappy) { preview = true } }
+                ForEach(wallSections) { sec in
+                    Text(sec.title.uppercased()).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 4).padding(.top, 4)
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                        ForEach(sec.items, id: \.self) { i in
+                            ChatWallpaper(index: i)
+                                .frame(height: 140).clipShape(RoundedRectangle(cornerRadius: 16))
+                                .overlay(alignment: .topTrailing) { if wallIsPremium(i) { Image(systemName: "star.fill").font(.system(size: 13)).foregroundColor(Color(hex: 0xffc247)).padding(8) } }
+                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.line))
+                                .onTapGesture { preset = i; image = nil; withAnimation(Motion.snappy) { preview = true } }
+                        }
                     }
                 }
                 PhotosPicker(selection: $pick, matching: .images) {

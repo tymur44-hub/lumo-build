@@ -7,8 +7,24 @@ struct IdentifiedURL: Identifiable {
 }
 
 /// Текст со ссылками, @упоминаниями и простым **жирным** / *курсивом* (как на сайте)
-func richText(_ s: String, cmds: Bool = false) -> AttributedString {
-    var a = (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+func richText(_ s0: String, cmds: Bool = false, spoilerKey: String? = nil) -> AttributedString {
+    // __курсив__ (как на сайте) и ||скрытый|| — в разметку, которую понимает Markdown
+    var s = s0
+    if let re = try? NSRegularExpression(pattern: "(?<!_)__([^_\\n]+)__(?!_)") {
+        s = re.stringByReplacingMatches(in: s, range: NSRange(location: 0, length: (s as NSString).length), withTemplate: "*$1*")
+    }
+    var spoilers = 0
+    if let re = try? NSRegularExpression(pattern: "\\|\\|([^|\\n]+)\\|\\|") {
+        let ns = s as NSString; var out = ""; var last = 0
+        for m in re.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+            out += ns.substring(with: NSRange(location: last, length: m.range.location - last))
+            let inner = ns.substring(with: m.range(at: 1)).replacingOccurrences(of: "[", with: "(").replacingOccurrences(of: "]", with: ")")
+            out += "[\(inner)](lumo://spoiler/\(spoilers))"; spoilers += 1
+            last = m.range.location + m.range.length
+        }
+        out += ns.substring(from: last); s = out
+    }
+    var a = (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s0)
     let plain = String(a.characters)
     let ns = plain as NSString
     if let det = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
@@ -35,7 +51,43 @@ func richText(_ s: String, cmds: Bool = false) -> AttributedString {
             a[r].inlinePresentationIntent = .stronglyEmphasized
         }
     }
+    // дата — подчёркнута, по нажатию показывается полностью; скрытый текст — «шум», открывается по нажатию
+    let open = spoilerKey.map { SpoilerState.shared.open.contains($0) } ?? false
+    // позиции считаем в символах: после замены одной части индексы AttributedString становятся недействительными
+    var spans: [(Int, Int, URL)] = []
+    for run in a.runs {
+        guard let u = run.link, u.scheme == "date" || (u.scheme == "lumo" && u.host == "spoiler") else { continue }
+        let st = a.characters.distance(from: a.startIndex, to: run.range.lowerBound)
+        spans.append((st, a.characters.distance(from: run.range.lowerBound, to: run.range.upperBound), u))
+    }
+    for (st, len, u) in spans.reversed() {
+        let lo = a.index(a.startIndex, offsetByCharacters: st), hi = a.index(lo, offsetByCharacters: len)
+        let r = lo..<hi
+        if u.scheme == "date" {
+            a[r].link = URL(string: "lumo://date/" + u.absoluteString.dropFirst(5))
+            a[r].underlineStyle = .single
+        } else if open {
+            a[r].link = nil
+            a[r].backgroundColor = Color.gray.opacity(0.22)
+        } else {
+            var hidden = AttributedString(String(String(a[r].characters).map { $0 == " " || $0 == "\n" ? $0 : "\u{2592}" }))
+            hidden.link = URL(string: "lumo://spoiler/" + (spoilerKey ?? "_"))
+            a.replaceSubrange(r, with: hidden)
+        }
+    }
     return a
+}
+
+/// Текст сообщения, разбитый на обычные части и цитаты («> » в начале строки)
+func quoteSegments(_ s: String) -> [(quote: Bool, text: String)] {
+    guard s.hasPrefix("> ") || s.contains("\n> ") else { return [(false, s)] }
+    var out: [(Bool, String)] = []
+    for line in s.components(separatedBy: "\n") {
+        let q = line.hasPrefix("> ")
+        let t = q ? String(line.dropFirst(2)) : line
+        if let l = out.last, l.0 == q { out[out.count - 1].1 += "\n" + t } else { out.append((q, t)) }
+    }
+    return out.map { (quote: $0.0, text: $0.1) }
 }
 
 func isOnlyEmoji(_ t: String?) -> Bool {
@@ -61,6 +113,7 @@ struct MessageRow: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var look: Appearance
     @ObservedObject private var ex = ExtraStore.shared
+    @ObservedObject private var spoilers = SpoilerState.shared
     let m: Message
     let chat: ChatItem?
     let first: Bool
@@ -464,11 +517,39 @@ struct MessageRow: View {
                     } else if let b = m.body, !b.isEmpty, m.kind != "call" {
                         media
                         // время — в одной строке с концом текста (как на сайте), без лишней строки снизу
-                        (Text(richText(b, cmds: !mine && (m.senderId.flatMap { model.profiles[$0]?.isBot } ?? false))).foregroundColor(mine ? .white : Theme.text)
-                         + (timeInReacts ? Text("") : timeReserveText))
-                            .font(.system(size: look.fontSize))
-                            .tint(mine ? .white : Theme.a2)
-                            .fixedSize(horizontal: false, vertical: true)
+                        let isBot = !mine && (m.senderId.flatMap { model.profiles[$0]?.isBot } ?? false)
+                        let segs = quoteSegments(b)
+                        if segs.count == 1 && !segs[0].quote {
+                            (Text(richText(b, cmds: isBot, spoilerKey: "\(m.id)")).foregroundColor(mine ? .white : Theme.text)
+                             + (timeInReacts ? Text("") : timeReserveText))
+                                .font(.system(size: look.fontSize))
+                                .tint(mine ? .white : Theme.a2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            VStack(alignment: .leading, spacing: 5) {
+                                ForEach(Array(segs.enumerated()), id: \.offset) { k, sg in
+                                    let isLast = k == segs.count - 1
+                                    let t = (Text(richText(sg.text, cmds: isBot, spoilerKey: "\(m.id)")).foregroundColor(mine ? .white : Theme.text)
+                                             + (isLast && !timeInReacts ? timeReserveText : Text("")))
+                                        .font(.system(size: look.fontSize))
+                                        .tint(mine ? .white : Theme.a2)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    if sg.quote {
+                                        t.padding(.leading, 10).padding(.trailing, 8).padding(.vertical, 5)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .background(alignment: .leading) {
+                                                ZStack(alignment: .leading) {
+                                                    RoundedRectangle(cornerRadius: 6).fill((mine ? Color.white : Theme.a1).opacity(0.14))
+                                                    Rectangle().fill(mine ? Color.white : Theme.a1).frame(width: 3)
+                                                }
+                                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                            }
+                                    } else {
+                                        t
+                                    }
+                                }
+                            }
+                        }
                     } else if m.kind == "image" || m.kind == "video" {
                         media.overlay(alignment: .bottomTrailing) {
                             if !timeInReacts { timeLine(onMedia: false)

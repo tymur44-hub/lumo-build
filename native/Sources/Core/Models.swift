@@ -320,6 +320,9 @@ struct Message: Identifiable, Equatable {
     static func previewText(kind: String, body: String?) -> String {
         let b = (body ?? "").replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "__", with: "")
             .replacingOccurrences(of: "`", with: "").replacingOccurrences(of: "~~", with: "")
+            .replacingOccurrences(of: #"\|\|[^|\n]+\|\|"#, with: "▒▒▒▒", options: .regularExpression)
+            .replacingOccurrences(of: #"\[([^\]\n]+)\]\([^)\s]+\)"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"(^|\n)> "#, with: "$1", options: .regularExpression)
         switch kind {
         case "voice": return "Голосовое сообщение"
         case "video_note": return "Видеосообщение"

@@ -3,7 +3,25 @@ import SwiftUI
 /// Номера обоев те же, что на Android: 0 — без обоев, 1–5 и 10–17 — для всех, 6–9 и 20–27 — Premium
 let wallFree = [0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17]
 let wallPremium = [6, 7, 8, 9, 20, 21, 22, 23, 24, 25, 26, 27]
-var wallAll: [Int] { wallLive + wallFree + wallPremium + RemoteConfig.shared.walls.map(\.id) }
+var wallAll: [Int] { wallSections.flatMap(\.items) }
+struct WallSection: Identifiable { let title: String; let items: [Int]; var id: String { title } }
+/// Обои по разделам. Обои с сервера группируются по полю section (например, «Новогодние») и идут первыми —
+/// новый раздел можно добавить без обновления приложения.
+var wallSections: [WallSection] {
+    var out: [WallSection] = []
+    var order: [String] = []; var by: [String: [Int]] = [:]
+    for w in RemoteConfig.shared.walls {
+        let t = w.section ?? "Новые"
+        if by[t] == nil { order.append(t) }
+        by[t, default: []].append(w.id)
+    }
+    for t in order { out.append(WallSection(title: t, items: by[t] ?? [])) }
+    out.append(WallSection(title: "Живые", items: wallLive))
+    out.append(WallSection(title: "Цвета", items: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]))
+    out.append(WallSection(title: "Узоры", items: Array(10...17)))
+    out.append(WallSection(title: "Картины", items: Array(20...27)))
+    return out
+}
 /// 1000+n — обои с сервера
 func wallIsPremium(_ i: Int) -> Bool { i >= 1000 ? (RemoteConfig.shared.wall(i)?.premium ?? false) : ((6...9).contains(i) || (20...27).contains(i) || (33...35).contains(i)) }
 

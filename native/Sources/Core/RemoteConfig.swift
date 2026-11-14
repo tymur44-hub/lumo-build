@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Настройки с сервера (таблица lm_config, ключи app / look / announce): то, что можно менять без выпуска новой версии.
 /// Последний полученный вариант хранится на устройстве, поэтому всё работает и без сети.
-struct RemoteWall: Identifiable { let n: Int; let url: URL; let premium: Bool; var id: Int { 1000 + n } }
+struct RemoteWall: Identifiable { let n: Int; let url: URL; let premium: Bool; var section: String? = nil; var id: Int { 1000 + n } }
 struct RemoteSticker: Identifiable { let id: String; let url: URL }
 struct RemotePack: Identifiable { let id: String; let name: String; let items: [RemoteSticker] }
 struct Announce: Equatable { let id: String; let title: String; let text: String; let url: URL?; let button: String? }
@@ -66,11 +66,11 @@ final class RemoteConfig: ObservableObject {
             return (a, b, (j["premium"] as? Bool) ?? false)
         }
     }
-    /// дополнительные обои: [{n:1, url:"https://…", premium:false}] — номер обоев 1000+n
+    /// дополнительные обои: [{n:1, url:"https://…", premium:false, section:"Новогодние"}] — номер обоев 1000+n
     var walls: [RemoteWall] {
         ((look["walls"] as? [JSON]) ?? []).compactMap { j in
             guard let n = j["n"] as? Int, let u = (j["url"] as? String).flatMap(URL.init(string:)) else { return nil }
-            return RemoteWall(n: n, url: u, premium: (j["premium"] as? Bool) ?? false)
+            return RemoteWall(n: n, url: u, premium: (j["premium"] as? Bool) ?? false, section: (j["section"] as? String).flatMap { $0.isEmpty ? nil : $0 })
         }
     }
     func wall(_ index: Int) -> RemoteWall? { walls.first { $0.id == index } }
