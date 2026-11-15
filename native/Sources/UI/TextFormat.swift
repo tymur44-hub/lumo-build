@@ -60,12 +60,15 @@ enum TextFormat {
     // MARK: правка текста через UITextInput — так SwiftUI получает изменения как обычный ввод
 
     private static func replace(_ tv: UITextView, _ range: NSRange, _ s: String, select: NSRange?) {
-        guard let st = tv.position(from: tv.beginningOfDocument, offset: range.location),
-              let en = tv.position(from: st, offset: range.length),
-              let tr = tv.textRange(from: st, to: en) else { return }
-        tv.replace(tr, withText: s)
-        if let sel = select { tv.selectedRange = sel }
+        let ns = (tv.text ?? "") as NSString
+        guard range.location >= 0, range.location + range.length <= ns.length else { return }
+        // правим текст напрямую: пункт меню срабатывает, когда поле уже потеряло фокус,
+        // поэтому tv.replace(...) по «живым» позициям не сработал бы
+        tv.text = ns.replacingCharacters(in: range, with: s)
+        if let sel = select { tv.selectedRange = NSRange(location: min(sel.location, (tv.text as NSString).length), length: sel.length) }
         tv.delegate?.textViewDidChange?(tv)
+        // вернуть клавиатуру и фокус — меню их сняло
+        (tv.delegate as? ComposerField.Coord)?.refocus(tv)
     }
 
     static func wrap(_ tv: UITextView, _ range: NSRange, _ l: String, _ r: String) {
@@ -291,6 +294,12 @@ struct ComposerField: UIViewRepresentable {
         var parent: ComposerField
         weak var ph: UILabel?
         init(_ p: ComposerField) { parent = p }
+
+        /// Вернуть фокус и клавиатуру после пункта меню «Форматировать»
+        func refocus(_ tv: UITextView) {
+            parent.focused = true
+            DispatchQueue.main.async { if !tv.isFirstResponder { tv.becomeFirstResponder() } }
+        }
 
         func textViewDidChange(_ tv: UITextView) {
             ph?.isHidden = !tv.text.isEmpty
