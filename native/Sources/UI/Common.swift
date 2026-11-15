@@ -280,7 +280,7 @@ struct FloatingTabBar: View {
     let settingsBadge: Int
     @EnvironmentObject var model: AppModel
 
-    private let tabs: [AppTab] = [.contacts, .chats, .calls, .settings]
+    private let tabs: [AppTab] = [.contacts, .calls, .chats, .settings]
     @State private var width: CGFloat = 0
     @State private var lensX: CGFloat?          // центр линзы, пока палец на панели
     @State private var pressed = false
