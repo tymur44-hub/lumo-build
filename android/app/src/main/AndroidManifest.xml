@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -87,7 +88,7 @@
         <service
             android:name=".core.LumoService"
             android:exported="false"
-            android:foregroundServiceType="dataSync|microphone|camera" />
+            android:foregroundServiceType="dataSync|remoteMessaging|microphone|camera" />
         <receiver android:name=".ui.RemindReceiver" android:exported="false" />
         <receiver android:name=".core.BootReceiver" android:exported="true">
             <intent-filter>
@@ -95,6 +96,7 @@
             </intent-filter>
         </receiver>
         <receiver android:name=".core.CallActionReceiver" android:exported="false" />
+        <receiver android:name=".core.WatchReceiver" android:exported="false" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

@@ -39,6 +39,10 @@ object Realtime {
         private set
     private var wanted = false
     var onReconnect: (() -> Unit)? = null
+    /** Не даёт телефону уснуть, пока идёт переподключение (ставит служба) */
+    var keepAwake: ((Long) -> Unit)? = null
+    @Volatile private var lastRx = 0L
+    private fun now() = android.os.SystemClock.elapsedRealtime()
     var onState: ((Boolean) -> Unit)? = null
 
     private fun nextRef(): String { ref += 1; return ref.toString() }
@@ -49,6 +53,7 @@ object Realtime {
         val sock = Api.http.newWebSocket(Request.Builder().url(Config.realtimeUrl).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) { scope.launch { opened(webSocket) } }
             override fun onMessage(webSocket: WebSocket, text: String) {
+                if (webSocket === ws) lastRx = now()
                 scope.launch { if (webSocket === ws) runCatching { handle(JSONObject(text)) } }
             }
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { scope.launch { if (webSocket === ws) dropped() } }
@@ -69,13 +74,30 @@ object Realtime {
     /** После возврата в приложение — проверить, живо ли соединение */
     fun ensure() { if (wanted && ws == null) connect() }
 
+    /** Проверка «живо ли соединение» — после смены сети, пробуждения, по будильнику службы.
+     *  Если сервер давно молчит (сокет «полумёртвый» после сна или смены сети) — переподключаемся сразу. */
+    fun kick() {
+        scope.launch {
+            if (!wanted) return@launch
+            if (ws == null) { reconnect?.cancel(); backoff = 1.0; connect(); return@launch }
+            if (isOpen && now() - lastRx > 40_000) dropped()
+            else if (isOpen) push("phoenix", "heartbeat", JSONObject())
+        }
+    }
+
     private fun opened(s: WebSocket) {
         if (s !== ws) return
         isOpen = true
         backoff = 1.0
+        lastRx = now()
         heartbeat?.cancel()
         heartbeat = scope.launch {
-            while (true) { delay(25_000); push("phoenix", "heartbeat", JSONObject()) }
+            while (true) {
+                delay(25_000)
+                // ответ на heartbeat приходит сразу; если сервер молчит больше минуты — соединение мёртвое
+                if (now() - lastRx > 60_000) { dropped(); break }
+                push("phoenix", "heartbeat", JSONObject())
+            }
         }
         channels.values.forEach { join(it) }
         onState?.invoke(true)
@@ -92,6 +114,7 @@ object Realtime {
         reconnect?.cancel()
         val d = backoff
         backoff = minOf(backoff * 2, 20.0)
+        keepAwake?.invoke((d * 1000).toLong() + 15_000)
         reconnect = scope.launch { runCatching { Net.pick() }; delay((d * 1000).toLong()); connect() }
     }
 

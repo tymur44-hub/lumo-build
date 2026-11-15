@@ -290,7 +290,13 @@ fun NotificationsScreen() {
                 runCatching { ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                     .onFailure { runCatching { ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
             }
+            Divider()
+            SettingsRow(Icons.Filled.RestartAlt, Color(0xFF3D8BFF), "Автозапуск", "Xiaomi, Huawei, Honor, Oppo, Vivo, Realme: разрешите автозапуск, иначе система закрывает Lumo") {
+                openAutostartSettings(ctx)
+            }
         }
+        Text("Если уведомления пропадают после того, как вы смахнули Lumo из недавних приложений, включите «Автозапуск» и отключите экономию батареи. На Xiaomi также можно закрепить Lumo в недавних — потяните карточку вниз и нажмите на замок.",
+            color = p.muted, fontSize = 12.5.sp, modifier = Modifier.padding(horizontal = 30.dp))
         SectionTitle("Telegram")
         Card {
             if (AppModel.tgLinked) {
@@ -613,4 +619,29 @@ fun InviteDialog(onClose: () -> Unit) {
             }
         },
         confirmButton = { TextButton(onClick = onClose) { Text("Закрыть", color = p.a1) } })
+}
+
+
+/** Настройки автозапуска у разных производителей: у каждого свой экран; если ни один не найден — карточка приложения */
+fun openAutostartSettings(ctx: android.content.Context) {
+    val comps = listOf(
+        "com.miui.securitycenter" to "com.miui.permcenter.autostart.AutoStartManagementActivity",
+        "com.huawei.systemmanager" to "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+        "com.huawei.systemmanager" to "com.huawei.systemmanager.optimize.process.ProtectActivity",
+        "com.hihonor.systemmanager" to "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+        "com.coloros.safecenter" to "com.coloros.safecenter.permission.startup.StartupAppListActivity",
+        "com.coloros.safecenter" to "com.coloros.safecenter.startupapp.StartupAppListActivity",
+        "com.oplus.safecenter" to "com.oplus.safecenter.startupapp.StartupAppListActivity",
+        "com.oppo.safe" to "com.oppo.safe.permission.startup.StartupAppListActivity",
+        "com.vivo.permissionmanager" to "com.vivo.permissionmanager.activity.BgStartUpManagerActivity",
+        "com.iqoo.secure" to "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity",
+        "com.letv.android.letvsafe" to "com.letv.android.letvsafe.AutobootManageActivity",
+        "com.asus.mobilemanager" to "com.asus.mobilemanager.entry.FunctionActivity",
+        "com.samsung.android.lool" to "com.samsung.android.sm.battery.ui.BatteryActivity",
+    )
+    for ((pkg, cls) in comps) {
+        val i = Intent().setComponent(android.content.ComponentName(pkg, cls)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (runCatching { ctx.startActivity(i) }.isSuccess) return
+    }
+    runCatching { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
