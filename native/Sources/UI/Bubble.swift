@@ -704,16 +704,14 @@ struct MessageRow: View {
                 .frame(width: w, height: h)
                 .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
             } else {
-                ZStack { Color.white.opacity(0.06); ProgressView() }.frame(width: 250, height: 180)
-                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                UploadMediaBox(id: m.id, w: 250, h: 180)
             }
         case "video":
             if let u = m.mediaURL.flatMap(URL.init(string:)) {
                 VideoThumb(url: u, dur: m.duration).onTapGesture { onVideo(u) }
                     .task { if MediaCache.shared.local(u) == nil, AutoDownloadSettings.shared.allow(.video, bytes: m.fileSize) { _ = await MediaCache.shared.fetch(u) } }
             } else {
-                ZStack { Color.white.opacity(0.06); ProgressView() }.frame(width: 250, height: 180)
-                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                UploadMediaBox(id: m.id, w: 250, h: 180)
             }
         case "voice":
             VoiceView(m: m, mine: mine)

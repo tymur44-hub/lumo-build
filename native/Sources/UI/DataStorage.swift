@@ -59,6 +59,7 @@ struct FileBubbleView: View {
     let mine: Bool
     @State private var local: URL?
     @State private var loading = false
+    @EnvironmentObject private var model: AppModel
 
     private var remote: URL? { m.mediaURL.flatMap(URL.init(string:)) }
 
@@ -71,13 +72,21 @@ struct FileBubbleView: View {
             HStack(spacing: 10) {
                 ZStack {
                     Circle().fill(mine ? Color.white.opacity(0.2) : Theme.a1)
-                    if loading { ProgressView().tint(.white) }
+                    if let up = model.uploadProgress[m.id] {
+                        Circle().trim(from: 0, to: max(0.02, up)).stroke(.white, style: StrokeStyle(lineWidth: 3, lineCap: .round)).rotationEffect(.degrees(-90)).frame(width: 26, height: 26)
+                    } else if loading { ProgressView().tint(.white) }
                     else { Image(systemName: local != nil ? "doc.fill" : "arrow.down").font(.title3).foregroundColor(.white) }
                 }
                 .frame(width: 44, height: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(m.fileName).font(.system(size: 15, weight: .semibold)).lineLimit(2)
-                    if let s = m.fileSize { Text(Fmt.size(s) + (local != nil ? " · на телефоне" : "")).font(.caption).opacity(0.7) }
+                    if let up = model.uploadProgress[m.id] {
+                        let b = model.uploadBytes[m.id]
+                        Text("\(Int(up * 100))%" + (b != nil ? " · " + Fmt.size(Int(Double(b!) * up)) + " / " + Fmt.size(b!) : ""))
+                            .font(.caption).opacity(0.8)
+                    } else if let s = m.fileSize {
+                        Text(Fmt.size(s) + (local != nil ? " · на телефоне" : "")).font(.caption).opacity(0.7)
+                    }
                 }
                 .foregroundColor(mine ? .white : Theme.text)
             }

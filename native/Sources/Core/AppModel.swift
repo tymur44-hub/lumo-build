@@ -10,6 +10,8 @@ enum AppTab: Hashable { case contacts, chats, calls, settings }
 final class AppModel: ObservableObject {
     /// прогресс загрузки истории 0…1, nil — ничего не грузится
     @Published var storyUpload: Double?
+    @Published var uploadProgress: [Int: Double] = [:]
+    @Published var uploadBytes: [Int: Int] = [:]
     static let shared = AppModel()
 
     @Published var loggedIn: Bool
@@ -1076,15 +1078,22 @@ final class AppModel: ObservableObject {
             temps.append(t)
         }
         messages[chatId, default: []].append(contentsOf: temps)
+        for (i, p) in parts.enumerated() { uploadProgress[temps[i].id] = 0; uploadBytes[temps[i].id] = p.data.count }
         Task {
             var urls = [String?](repeating: nil, count: parts.count)
             await withTaskGroup(of: (Int, String?).self) { g in
                 for (i, p) in parts.enumerated() {
-                    let d = p.data, e = p.ext, m = p.mime
-                    g.addTask { (i, try? await API.shared.upload(d, ext: e, contentType: m)) }
+                    let d = p.data, e = p.ext, m = p.mime, tid = temps[i].id
+                    g.addTask {
+                        let u = try? await API.shared.upload(d, ext: e, contentType: m) { frac in
+                            Task { @MainActor in AppModel.shared.uploadProgress[tid] = frac }
+                        }
+                        return (i, u)
+                    }
                 }
                 for await (i, u) in g { urls[i] = u }
             }
+            for t in temps { uploadProgress[t.id] = nil; uploadBytes[t.id] = nil }
             for (i, t) in temps.enumerated() {
                 guard let u = urls[i] else {
                     messages[chatId]?.removeAll { $0.id == t.id }
