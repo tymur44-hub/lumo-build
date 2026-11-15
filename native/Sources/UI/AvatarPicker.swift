@@ -222,4 +222,4 @@ struct AvatarCropView: View {
     }
 }
 
-struct CropItem: Identifiable { let asset: PHAsset; var id: String { asset.localIdentifier } }
+struct CropItem: Identifiable, Hashable { let asset: PHAsset; var id: String { asset.localIdentifier }; static func == (a: CropItem, b: CropItem) -> Bool { a.id == b.id }; func hash(into h: inout Hasher) { h.combine(id) } }
