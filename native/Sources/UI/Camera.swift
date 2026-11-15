@@ -1,61 +1,185 @@
 import SwiftUI
 import AVFoundation
-import UIKit
 
-// MARK: - мой QR-код
+/// Фоны карточки QR
+struct QRBackground: Identifiable {
+    let id: Int
+    let colors: [Color]
+    let dark: Bool
+}
+
+enum QRStyles {
+    static let backgrounds: [QRBackground] = [
+        QRBackground(id: 0, colors: [Color(hex: 0x7C5CFF), Color(hex: 0x9D7BFF)], dark: true),
+        QRBackground(id: 1, colors: [Color(hex: 0xFF6EC4), Color(hex: 0xFFA84B)], dark: true),
+        QRBackground(id: 2, colors: [Color(hex: 0x2BD6C6), Color(hex: 0x3A8DFF)], dark: true),
+        QRBackground(id: 3, colors: [Color(hex: 0x30364D), Color(hex: 0x11141F)], dark: true),
+        QRBackground(id: 4, colors: [Color(hex: 0xFFE29F), Color(hex: 0xFFA99F)], dark: false),
+        QRBackground(id: 5, colors: [Color(hex: 0x56CCF2), Color(hex: 0x2F80ED)], dark: true),
+        QRBackground(id: 6, colors: [Color(hex: 0xF5F7FA), Color(hex: 0xDCE3EC)], dark: false),
+        QRBackground(id: 7, colors: [Color(hex: 0x11998E), Color(hex: 0x38EF7D)], dark: true),
+    ]
+    static let emojis = ["", "🎉", "✨", "🔥", "💜", "🌟", "😎", "🚀", "🎵", "❤️", "🌈", "👑", "💎", "🍀", "⚡️", "🦋"]
+}
 
 struct MyQRView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var share = false
     @State private var scan = false
+    @State private var bg = 0
+    @State private var emoji = ""
+    @State private var shareImage: ShareImageItem?
+
+    private var background: QRBackground { QRStyles.backgrounds[bg] }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                VStack(spacing: 6) {
-                    AvatarView(name: model.me?.name ?? "", url: model.me?.avatarURL, color: model.me?.color ?? 0, size: 74)
-                    Text(model.me?.name ?? "").font(.title3.weight(.heavy))
-                    Text("@" + (model.me?.username ?? "")).foregroundColor(Theme.muted)
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 22).fill(Color.white)
-                        if let img = QRCode.image(model.profileLink) {
-                            Image(uiImage: img).interpolation(.none).resizable().scaledToFit().padding(14)
+            ScrollView {
+                VStack(spacing: 18) {
+                    qrCard
+                        .frame(maxWidth: 320)
+                        .padding(.top, 8)
+
+                    // выбор фона
+                    picker(title: "Фон") {
+                        ForEach(QRStyles.backgrounds) { b in
+                            Circle()
+                                .fill(LinearGradient(colors: b.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 40, height: 40)
+                                .overlay(Circle().stroke(Theme.a1, lineWidth: bg == b.id ? 3 : 0))
+                                .overlay(Circle().stroke(Theme.line, lineWidth: 0.5))
+                                .onTapGesture { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { bg = b.id } }
                         }
-                        Image(systemName: "bubble.left.fill").font(.system(size: 20)).foregroundColor(.white)
-                            .frame(width: 46, height: 46)
-                            .background(RoundedRectangle(cornerRadius: 14).fill(Theme.accent))
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white, lineWidth: 4))
                     }
-                    .frame(width: 230, height: 230)
-                    .padding(.top, 10)
-                }
-                .padding(.vertical, 20).frame(maxWidth: .infinity)
-                .background(RoundedRectangle(cornerRadius: 24).fill(LinearGradient(colors: [Theme.a1.opacity(0.18), Theme.a2.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing)))
-                Text("Покажите код другу: он отсканирует его в Lumo и сразу попадёт в ваш профиль. Кнопка «Сканировать» — открыть чужой профиль или войти на компьютере.")
-                    .font(.subheadline).foregroundColor(Theme.muted).multilineTextAlignment(.center)
-                HStack(spacing: 10) {
-                    Button { scan = true } label: {
-                        Text("Сканировать").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
-                            .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 16)).foregroundColor(Theme.text)
+
+                    // выбор эмодзи
+                    picker(title: "Эмодзи") {
+                        ForEach(QRStyles.emojis, id: \.self) { e in
+                            ZStack {
+                                Circle().fill(e == emoji ? Theme.a1.opacity(0.18) : Theme.panel2)
+                                if e.isEmpty { Image(systemName: "nosign").foregroundColor(Theme.muted) }
+                                else { Text(e).font(.system(size: 22)) }
+                            }
+                            .frame(width: 40, height: 40)
+                            .overlay(Circle().stroke(Theme.a1, lineWidth: e == emoji ? 2.5 : 0))
+                            .onTapGesture {
+                                UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                                withAnimation(.spring(response: 0.45, dampingFraction: 0.55)) { emoji = e }
+                            }
+                        }
                     }
-                    GradientButton(title: "Поделиться") { share = true }
+
+                    Text("Покажите код другу — он отсканирует его в Lumo и попадёт в ваш профиль.")
+                        .font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+
+                    HStack(spacing: 10) {
+                        Button { scan = true } label: {
+                            Label("Сканировать", systemImage: "qrcode.viewfinder").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                                .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 16)).foregroundColor(Theme.text)
+                        }
+                        Button { UIPasteboard.general.string = model.profileLink; model.say("Ссылка скопирована") } label: {
+                            Image(systemName: "link").font(.headline).frame(width: 54, minHeight: 50)
+                                .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 16)).foregroundColor(Theme.text)
+                        }
+                        Button { renderAndShare() } label: {
+                            Label("Поделиться", systemImage: "square.and.arrow.up").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                                .background(LinearGradient(colors: [Theme.a1, Theme.a2], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 16))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .padding(.horizontal, 4)
                 }
-                Spacer()
+                .padding(16)
             }
-            .padding(16)
             .background(Theme.bg.ignoresSafeArea())
             .navigationTitle("Мой QR-код")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
-            .sheet(isPresented: $share) { ShareSheet(items: [model.profileLink]) }
+            .sheet(item: $shareImage) { it in ShareSheet(items: [it.image]) }
             .fullScreenCover(isPresented: $scan) { QRScanScreen().environmentObject(model) }
+        }
+    }
+
+    // карточка, которую видно и которой делимся
+    private var qrCard: some View {
+        VStack(spacing: 12) {
+            AvatarView(name: model.me?.name ?? "", url: model.me?.avatarURL, color: model.me?.color ?? 0, size: 72)
+                .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 3))
+            Text(model.me?.name ?? "").font(.system(size: 21, weight: .heavy)).foregroundColor(background.dark ? .white : Color(hex: 0x11141F))
+            Text("@" + (model.me?.username ?? "")).font(.system(size: 15, weight: .medium)).foregroundColor(background.dark ? .white.opacity(0.85) : Color(hex: 0x11141F).opacity(0.7))
+            ZStack {
+                RoundedRectangle(cornerRadius: 24).fill(.white).shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+                if let img = QRCode.image(model.profileLink, correction: "H") {
+                    Image(uiImage: img).interpolation(.none).resizable().scaledToFit().padding(18)
+                }
+                Image(systemName: "bubble.left.fill").font(.system(size: 22)).foregroundColor(.white)
+                    .frame(width: 48, height: 48)
+                    .background(RoundedRectangle(cornerRadius: 15).fill(LinearGradient(colors: background.colors, startPoint: .topLeading, endPoint: .bottomTrailing)))
+                    .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white, lineWidth: 4))
+            }
+            .frame(width: 210, height: 210)
+            .overlay(alignment: .topTrailing) {
+                if !emoji.isEmpty { LiquidEmoji(emoji: emoji).offset(x: 14, y: -14) }
+            }
+        }
+        .padding(.vertical, 26).padding(.horizontal, 20).frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 30).fill(LinearGradient(colors: background.colors, startPoint: .topLeading, endPoint: .bottomTrailing)))
+        .overlay(RoundedRectangle(cornerRadius: 30).stroke(.white.opacity(0.15), lineWidth: 1))
+    }
+
+    @ViewBuilder private func picker<C: View>(title: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.muted).padding(.leading, 6)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) { content() }.padding(.horizontal, 6)
+            }
+        }
+    }
+
+    @MainActor private func renderAndShare() {
+        let card = qrCard.frame(width: 320)
+        let renderer = ImageRenderer(content: card.environmentObject(model))
+        renderer.scale = 3
+        if let img = renderer.uiImage {
+            shareImage = ShareImageItem(image: img)
+        } else {
+            share = true
         }
     }
 }
 
-// MARK: - сканер QR-кодов
+struct ShareImageItem: Identifiable { let id = UUID(); let image: UIImage }
 
+/// Эмодзи в «жидком стекле»: появляется каплей и мягко колышется
+struct LiquidEmoji: View {
+    let emoji: String
+    @State private var appear = false
+    @State private var wobble = false
+    var body: some View {
+        Text(emoji)
+            .font(.system(size: 30))
+            .frame(width: 56, height: 56)
+            .background(
+                ZStack {
+                    Circle().fill(.ultraThinMaterial)
+                    Circle().fill(LinearGradient(colors: [.white.opacity(0.5), .white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    Circle().stroke(LinearGradient(colors: [.white.opacity(0.9), .white.opacity(0.2)], startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                    // блик-капля
+                    Ellipse().fill(.white.opacity(0.6)).frame(width: 18, height: 11).blur(radius: 3).offset(x: -8, y: -12)
+                }
+            )
+            .clipShape(Circle())
+            .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
+            .scaleEffect(appear ? (wobble ? 1.06 : 1.0) : 0.1)
+            .rotationEffect(.degrees(wobble ? 4 : -4))
+            .onAppear {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.45)) { appear = true }
+                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true).delay(0.4)) { wobble = true }
+            }
+    }
+}
 struct QRScanScreen: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss

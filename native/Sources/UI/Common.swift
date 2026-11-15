@@ -496,10 +496,10 @@ struct ShareSheet: UIViewControllerRepresentable {
 }
 
 enum QRCode {
-    static func image(_ text: String, size: CGFloat = 600) -> UIImage? {
+    static func image(_ text: String, size: CGFloat = 600, correction: String = "M") -> UIImage? {
         let f = CIFilter.qrCodeGenerator()
         f.message = Data(text.utf8)
-        f.correctionLevel = "M"
+        f.correctionLevel = correction
         guard let out = f.outputImage else { return nil }
         let k = size / out.extent.width
         let scaled = out.transformed(by: CGAffineTransform(scaleX: k, y: k))
