@@ -30,9 +30,11 @@ struct AvatarPickerSheet: View {
                     .padding(.horizontal, 16).padding(.bottom, 8)
                 }
             }
-            .navigationDestination(item: $cropItem) { it in
-                AvatarCropView(asset: it.asset) { img in
-                    Task { try? await model.setAvatar(img); dismiss() }
+            .fullScreenCover(item: $cropItem) { it in
+                NavigationStack {
+                    AvatarCropView(asset: it.asset) { img in
+                        Task { try? await model.setAvatar(img); dismiss() }
+                    }
                 }
             }
             .sheet(item: $trimVideo) { v in VideoAvatarTrimSheet(source: v.url) { trimVideo = nil; dismiss() }.environmentObject(model) }
@@ -163,6 +165,9 @@ struct AvatarCropView: View {
             }
             .task { await loadFull() }
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { Image(systemName: "xmark").foregroundColor(.white) }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button { confirm(side: side) } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .bold)) }
                         .disabled(full == nil || busy)
