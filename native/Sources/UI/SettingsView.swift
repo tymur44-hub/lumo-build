@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var avatarPick: PhotosPickerItem?
     @State private var videoPick: PhotosPickerItem?
     @State private var showVideoPick = false
+    @State private var showAvatarPicker = false
     @State private var trimVideo: IdentifiedURL?
     @State private var confirmLogout = false
     @State private var showQR = false
@@ -225,6 +226,7 @@ struct SettingsView: View {
                 }
             }
             .sheet(item: $trimVideo) { v in VideoAvatarTrimSheet(source: v.url) { trimVideo = nil }.environmentObject(model) }
+            .sheet(isPresented: $showAvatarPicker) { AvatarPickerSheet().environmentObject(model) }
             .confirmationDialog("Выйти из аккаунта на этом iPhone?", isPresented: $confirmLogout, titleVisibility: .visible) {
                 Button("Выйти", role: .destructive) { Task { await model.logout() } }
             }
@@ -271,7 +273,8 @@ struct SettingsView: View {
                 Button { path.append(.profileStyle) } label: { heroAction("paintpalette", "Изменить цвет профиля") }
                     .buttonStyle(BouncyButtonStyle())
                 Divider().overlay(Theme.line).padding(.leading, 48)
-                PhotosPicker(selection: $avatarPick, matching: .images) { heroAction("camera", "Изменить фотографию") }
+                Button { showAvatarPicker = true } label: { heroAction("camera", "Изменить фотографию") }
+                    .buttonStyle(BouncyButtonStyle())
             }
         }
     }
