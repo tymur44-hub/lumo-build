@@ -67,8 +67,8 @@ enum TextFormat {
         tv.text = ns.replacingCharacters(in: range, with: s)
         if let sel = select { tv.selectedRange = NSRange(location: min(sel.location, (tv.text as NSString).length), length: sel.length) }
         tv.delegate?.textViewDidChange?(tv)
-        // вернуть клавиатуру и фокус — меню их сняло
-        (tv.delegate as? ComposerField.Coord)?.refocus(tv)
+        // вернуть клавиатуру и фокус (после окна ссылки/даты)
+        if !tv.isFirstResponder { (tv.delegate as? ComposerField.Coord)?.refocus(tv) }
     }
 
     static func wrap(_ tv: UITextView, _ range: NSRange, _ l: String, _ r: String) {
@@ -311,11 +311,69 @@ struct ComposerField: UIViewRepresentable {
         func textViewDidEndEditing(_ tv: UITextView) {
             if parent.focused { DispatchQueue.main.async { self.parent.focused = false } }
         }
-        func textView(_ tv: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
-            guard range.length > 0 else { return nil }
-            var acts = suggestedActions
-            acts.insert(TextFormat.menu(tv, range), at: min(1, acts.count))
-            return UIMenu(children: acts)
+        /// Выделен текст — над клавиатурой появляется панель форматирования; снято выделение — панель убирается.
+        /// Кнопки панели не забирают фокус у поля, поэтому правка всегда применяется.
+        private var barView: UIView?
+        func textViewDidChangeSelection(_ tv: UITextView) {
+            let has = tv.selectedRange.length > 0 && tv.isFirstResponder
+            if has && tv.inputAccessoryView == nil {
+                tv.inputAccessoryView = barView ?? FormatBar.make(tv)
+                barView = tv.inputAccessoryView
+                tv.reloadInputViews()
+            } else if !has && tv.inputAccessoryView != nil {
+                tv.inputAccessoryView = nil
+                tv.reloadInputViews()
+            }
         }
+    }
+}
+
+/// Панель форматирования над клавиатурой: только иконки
+enum FormatBar {
+    static func make(_ tv: UITextView) -> UIView {
+        let bar = UIView(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 46))
+        bar.autoresizingMask = .flexibleWidth
+        bar.backgroundColor = .secondarySystemBackground
+        let line = UIView(); line.backgroundColor = .separator; line.translatesAutoresizingMaskIntoConstraints = false
+        bar.addSubview(line)
+        let sc = UIScrollView(); sc.showsHorizontalScrollIndicator = false; sc.translatesAutoresizingMaskIntoConstraints = false
+        bar.addSubview(sc)
+        let st = UIStackView(); st.axis = .horizontal; st.spacing = 4; st.translatesAutoresizingMaskIntoConstraints = false
+        sc.addSubview(st)
+        NSLayoutConstraint.activate([
+            line.topAnchor.constraint(equalTo: bar.topAnchor), line.leadingAnchor.constraint(equalTo: bar.leadingAnchor),
+            line.trailingAnchor.constraint(equalTo: bar.trailingAnchor), line.heightAnchor.constraint(equalToConstant: 0.5),
+            sc.topAnchor.constraint(equalTo: bar.topAnchor), sc.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
+            sc.leadingAnchor.constraint(equalTo: bar.leadingAnchor), sc.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
+            st.topAnchor.constraint(equalTo: sc.contentLayoutGuide.topAnchor), st.bottomAnchor.constraint(equalTo: sc.contentLayoutGuide.bottomAnchor),
+            st.leadingAnchor.constraint(equalTo: sc.contentLayoutGuide.leadingAnchor, constant: 8),
+            st.trailingAnchor.constraint(equalTo: sc.contentLayoutGuide.trailingAnchor, constant: -8),
+            st.heightAnchor.constraint(equalTo: sc.frameLayoutGuide.heightAnchor),
+        ])
+        weak var w = tv
+        func btn(_ icon: String, _ label: String, _ f: @escaping (UITextView, NSRange) -> Void) -> UIButton {
+            let b = UIButton(type: .system, primaryAction: UIAction(image: UIImage(systemName: icon, withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .medium))) { _ in
+                guard let tv = w else { return }
+                let r = tv.selectedRange
+                guard r.length > 0 else { return }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                f(tv, r)
+            })
+            b.accessibilityLabel = label
+            b.tintColor = tv.tintColor
+            b.widthAnchor.constraint(equalToConstant: 44).isActive = true
+            return b
+        }
+        [
+            btn("bold", "Жирный") { TextFormat.wrap($0, $1, "**", "**") },
+            btn("italic", "Курсив") { TextFormat.wrap($0, $1, "__", "__") },
+            btn("strikethrough", "Зачёркнутый") { TextFormat.wrap($0, $1, "~~", "~~") },
+            btn("chevron.left.forwardslash.chevron.right", "Моноширинный") { TextFormat.wrap($0, $1, "`", "`") },
+            btn("eye.slash", "Скрытый") { TextFormat.wrap($0, $1, "||", "||") },
+            btn("text.quote", "Цитата") { TextFormat.quote($0, $1) },
+            btn("link", "Ссылка") { TextFormat.askLink($0, $1) },
+            btn("calendar", "Дата") { TextFormat.askDate($0, $1) },
+        ].forEach { st.addArrangedSubview($0) }
+        return bar
     }
 }
