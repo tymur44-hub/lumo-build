@@ -101,7 +101,7 @@ struct MyQRView: View {
                     .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 16)).foregroundColor(Theme.text)
             }
             Button { UIPasteboard.general.string = model.profileLink; model.say("Ссылка скопирована") } label: {
-                Image(systemName: "link").font(.headline).frame(width: 54, minHeight: 50)
+                Image(systemName: "link").font(.headline).frame(width: 54, height: 50)
                     .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 16)).foregroundColor(Theme.text)
             }
             Button { renderAndShare() } label: {

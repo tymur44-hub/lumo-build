@@ -14,37 +14,7 @@ struct AvatarPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if gallery.status == .authorized || gallery.status == .limited {
-                    ScrollView {
-                        LazyVGrid(columns: cols, spacing: 2) {
-                            ForEach(gallery.assets, id: \.localIdentifier) { a in
-                                Button { pick(a) } label: {
-                                    AssetThumb(asset: a)
-                                        .aspectRatio(1, contentMode: .fill)
-                                        .frame(maxWidth: .infinity)
-                                        .clipped()
-                                        .overlay(alignment: .bottomTrailing) {
-                                            if a.mediaType == .video {
-                                                Image(systemName: "video.fill").font(.system(size: 11)).foregroundColor(.white)
-                                                    .padding(4).shadow(radius: 2)
-                                            }
-                                        }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(2)
-                    }
-                } else {
-                    VStack(spacing: 14) {
-                        Image(systemName: "photo.on.rectangle.angled").font(.system(size: 44)).foregroundColor(Theme.muted)
-                        Text("Нет доступа к галерее").font(.headline)
-                        Button("Открыть настройки") { if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) } }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
+            content
             .background(Theme.bg.ignoresSafeArea())
             .navigationTitle("Фото профиля").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -73,6 +43,45 @@ struct AvatarPickerSheet: View {
         }
     }
 
+    @ViewBuilder private var content: some View {
+        if gallery.status == .authorized || gallery.status == .limited { grid } else { noAccess }
+    }
+
+    private var grid: some View {
+        ScrollView {
+            LazyVGrid(columns: cols, spacing: 2) {
+                ForEach(gallery.assets, id: \.localIdentifier) { a in
+                    cell(a)
+                }
+            }
+            .padding(2)
+        }
+    }
+
+    private func cell(_ a: PHAsset) -> some View {
+        Button { pick(a) } label: {
+            AvatarAssetThumb(asset: a)
+                .aspectRatio(1, contentMode: .fill)
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .overlay(alignment: .bottomTrailing) {
+                    if a.mediaType == .video {
+                        Image(systemName: "video.fill").font(.system(size: 11)).foregroundColor(.white).padding(4).shadow(radius: 2)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var noAccess: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "photo.on.rectangle.angled").font(.system(size: 44)).foregroundColor(Theme.muted)
+            Text("Нет доступа к галерее").font(.headline)
+            Button("Открыть настройки") { if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) } }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private func pick(_ a: PHAsset) {
         if a.mediaType == .video {
             let res = PHAssetResource.assetResources(for: a)
@@ -90,7 +99,7 @@ struct AvatarPickerSheet: View {
 }
 
 /// Миниатюра ассета
-struct AssetThumb: View {
+struct AvatarAssetThumb: View {
     let asset: PHAsset
     @State private var img: UIImage?
     var body: some View {
