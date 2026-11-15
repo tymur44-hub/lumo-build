@@ -63,6 +63,10 @@ struct FileBubbleView: View {
     private var remote: URL? { m.mediaURL.flatMap(URL.init(string:)) }
 
     var body: some View {
+        if AudioManager.isAudio(m.fileName) { AudioBubbleView(m: m, mine: mine) } else { fileBody }
+    }
+
+    private var fileBody: some View {
         Button { Task { await open() } } label: {
             HStack(spacing: 10) {
                 ZStack {

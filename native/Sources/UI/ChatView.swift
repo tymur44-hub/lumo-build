@@ -143,6 +143,9 @@ struct ChatView: View {
 
     private var chatBody: some View {
         VStack(spacing: 0) {
+            MiniPlayerBar(compact: true)
+                .padding(.horizontal, 10).padding(.top, 6)
+                .animation(.spring(response: 0.4, dampingFraction: 0.85), value: AudioManager.shared.track?.id)
             if chat?.type == "group", gcCount > 0 { GroupCallBanner(count: gcCount) { joinGroupCall(video: false) } }
             if let pid = chat?.pinnedMessageId { pinnedBar(pid) }
             PaidBar(chat: chat, chatId: chatId).environmentObject(model)
