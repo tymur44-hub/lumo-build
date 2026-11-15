@@ -37,59 +37,11 @@ struct MyQRView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    qrCard
-                        .frame(maxWidth: 320)
-                        .padding(.top, 8)
-
-                    // выбор фона
-                    picker(title: "Фон") {
-                        ForEach(QRStyles.backgrounds) { b in
-                            Circle()
-                                .fill(LinearGradient(colors: b.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 40, height: 40)
-                                .overlay(Circle().stroke(Theme.a1, lineWidth: bg == b.id ? 3 : 0))
-                                .overlay(Circle().stroke(Theme.line, lineWidth: 0.5))
-                                .onTapGesture { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { bg = b.id } }
-                        }
-                    }
-
-                    // выбор эмодзи
-                    picker(title: "Эмодзи") {
-                        ForEach(QRStyles.emojis, id: \.self) { e in
-                            ZStack {
-                                Circle().fill(e == emoji ? Theme.a1.opacity(0.18) : Theme.panel2)
-                                if e.isEmpty { Image(systemName: "nosign").foregroundColor(Theme.muted) }
-                                else { Text(e).font(.system(size: 22)) }
-                            }
-                            .frame(width: 40, height: 40)
-                            .overlay(Circle().stroke(Theme.a1, lineWidth: e == emoji ? 2.5 : 0))
-                            .onTapGesture {
-                                UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                                withAnimation(.spring(response: 0.45, dampingFraction: 0.55)) { emoji = e }
-                            }
-                        }
-                    }
-
-                    Text("Покажите код другу — он отсканирует его в Lumo и попадёт в ваш профиль.")
-                        .font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
-
-                    HStack(spacing: 10) {
-                        Button { scan = true } label: {
-                            Label("Сканировать", systemImage: "qrcode.viewfinder").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
-                                .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 16)).foregroundColor(Theme.text)
-                        }
-                        Button { UIPasteboard.general.string = model.profileLink; model.say("Ссылка скопирована") } label: {
-                            Image(systemName: "link").font(.headline).frame(width: 54, minHeight: 50)
-                                .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 16)).foregroundColor(Theme.text)
-                        }
-                        Button { renderAndShare() } label: {
-                            Label("Поделиться", systemImage: "square.and.arrow.up").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
-                                .background(LinearGradient(colors: [Theme.a1, Theme.a2], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 16))
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .padding(.horizontal, 4)
+                    qrCard.frame(maxWidth: 320).padding(.top, 8)
+                    bgPicker
+                    emojiPicker
+                    hint
+                    actions
                 }
                 .padding(16)
             }
@@ -100,6 +52,65 @@ struct MyQRView: View {
             .sheet(item: $shareImage) { it in ShareSheet(items: [it.image]) }
             .fullScreenCover(isPresented: $scan) { QRScanScreen().environmentObject(model) }
         }
+    }
+
+    private var hint: some View {
+        Text("Покажите код другу — он отсканирует его в Lumo и попадёт в ваш профиль.")
+            .font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(.horizontal, 20)
+    }
+
+    private var bgPicker: some View {
+        picker(title: "Фон") {
+            ForEach(QRStyles.backgrounds) { b in
+                Circle()
+                    .fill(LinearGradient(colors: b.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 40, height: 40)
+                    .overlay(Circle().stroke(Theme.a1, lineWidth: bg == b.id ? 3 : 0))
+                    .overlay(Circle().stroke(Theme.line, lineWidth: 0.5))
+                    .onTapGesture { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { bg = b.id } }
+            }
+        }
+    }
+
+    private var emojiPicker: some View {
+        picker(title: "Эмодзи") {
+            ForEach(QRStyles.emojis, id: \.self) { e in
+                emojiCell(e)
+            }
+        }
+    }
+
+    private func emojiCell(_ e: String) -> some View {
+        ZStack {
+            Circle().fill(e == emoji ? Theme.a1.opacity(0.18) : Theme.panel2)
+            if e.isEmpty { Image(systemName: "nosign").foregroundColor(Theme.muted) }
+            else { Text(e).font(.system(size: 22)) }
+        }
+        .frame(width: 40, height: 40)
+        .overlay(Circle().stroke(Theme.a1, lineWidth: e == emoji ? 2.5 : 0))
+        .onTapGesture {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.55)) { emoji = e }
+        }
+    }
+
+    private var actions: some View {
+        HStack(spacing: 10) {
+            Button { scan = true } label: {
+                Label("Сканировать", systemImage: "qrcode.viewfinder").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                    .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 16)).foregroundColor(Theme.text)
+            }
+            Button { UIPasteboard.general.string = model.profileLink; model.say("Ссылка скопирована") } label: {
+                Image(systemName: "link").font(.headline).frame(width: 54, minHeight: 50)
+                    .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 16)).foregroundColor(Theme.text)
+            }
+            Button { renderAndShare() } label: {
+                Label("Поделиться", systemImage: "square.and.arrow.up").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                    .background(LinearGradient(colors: [Theme.a1, Theme.a2], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 16))
+                    .foregroundColor(.white)
+            }
+        }
+        .padding(.horizontal, 4)
     }
 
     // карточка, которую видно и которой делимся
