@@ -188,9 +188,12 @@ struct ChatDetail: View {
     }
 }
 
+struct BrowserURL: Identifiable { let url: URL; var id: String { url.absoluteString } }
+
 struct MainView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.horizontalSizeClass) private var hsc
+    @ObservedObject private var browser = InAppBrowser.shared
 
     private var split: Bool { hsc == .regular && model.tab == .chats }
 
@@ -198,11 +201,19 @@ struct MainView: View {
         switch model.tab {
         case .chats: return model.path.isEmpty
         case .contacts: return model.contactsPath.isEmpty
+        case .calls: return true
         case .settings: return model.settingsPath.isEmpty
         }
     }
 
     var body: some View {
+        rootBody
+            .fullScreenCover(item: Binding(get: { browser.url.map { BrowserURL(url: $0) } }, set: { browser.url = $0?.url })) { b in
+                WebBrowserView(initial: b.url) { browser.url = nil }
+            }
+    }
+
+    @ViewBuilder private var rootBody: some View {
         if split {
             HStack(spacing: 0) {
                 ZStack(alignment: .bottom) {
@@ -227,6 +238,7 @@ struct MainView: View {
                 switch model.tab {
                 case .chats: ChatListView()
                 case .contacts: ContactsView(path: $model.contactsPath)
+                case .calls: NavigationStack { CallsView().navigationBarTitleDisplayMode(.inline) }
                 case .settings: SettingsView(path: $model.settingsPath)
                 }
             }

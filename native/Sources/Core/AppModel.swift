@@ -3,7 +3,7 @@ import Contacts
 import UIKit
 import AudioToolbox
 
-enum AppTab: Hashable { case contacts, chats, settings }
+enum AppTab: Hashable { case contacts, chats, calls, settings }
 
 /// Состояние приложения: вход, чаты, сообщения, живые обновления, уведомления
 @MainActor
@@ -34,6 +34,7 @@ final class AppModel: ObservableObject {
     private var netTask: Task<Void, Never>?
     @Published var contactsPath: [String] = []
     @Published var settingsPath: [SettingsPage] = []
+    @Published var callsPath: [String] = []
     @Published var tab: AppTab = .chats
     @Published var toast: String?
     /// Баннер нового сообщения внутри приложения (как в Telegram): показывается, даже если

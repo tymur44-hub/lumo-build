@@ -272,10 +272,6 @@ struct SettingsView: View {
                     .buttonStyle(BouncyButtonStyle())
                 Divider().overlay(Theme.line).padding(.leading, 48)
                 PhotosPicker(selection: $avatarPick, matching: .images) { heroAction("camera", "Изменить фотографию") }
-                Divider().overlay(Theme.line).padding(.leading, 48)
-                // видео-аватарка — только Premium
-                Button { model.premium { showVideoPick = true } } label: { heroAction("video.circle", "Видео-аватарка") }
-                    .buttonStyle(BouncyButtonStyle())
             }
         }
     }

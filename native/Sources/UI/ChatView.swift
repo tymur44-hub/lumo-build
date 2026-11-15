@@ -261,6 +261,10 @@ struct ChatView: View {
                 Task { _ = await model.send(chatId: chatId, kind: "text", body: cmd) }
                 return .handled
             }
+            if url.scheme == "http" || url.scheme == "https" {
+                InAppBrowser.shared.open(url)
+                return .handled
+            }
             return .systemAction
         })
         .fullScreenCover(item: $imageURL) { ImageScreen(url: $0.url) }

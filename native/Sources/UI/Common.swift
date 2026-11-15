@@ -280,7 +280,7 @@ struct FloatingTabBar: View {
     let settingsBadge: Int
     @EnvironmentObject var model: AppModel
 
-    private let tabs: [AppTab] = [.contacts, .chats, .settings]
+    private let tabs: [AppTab] = [.contacts, .chats, .calls, .settings]
     @State private var width: CGFloat = 0
     @State private var lensX: CGFloat?          // центр линзы, пока палец на панели
     @State private var pressed = false
@@ -366,7 +366,7 @@ struct FloatingTabBar: View {
     }
 
     private func badge(_ t: AppTab) -> Int {
-        switch t { case .chats: return chatsBadge; case .settings: return settingsBadge; case .contacts: return 0 }
+        switch t { case .chats: return chatsBadge; case .settings: return settingsBadge; case .contacts: return 0; case .calls: return 0 }
     }
 
     /// капля-линза: прозрачное стекло с радужной кромкой, внутри — увеличенные значки
@@ -440,11 +440,13 @@ struct TabBarItem: View {
             Image(systemName: "bubble.left.and.bubble.right.fill").font(.system(size: 22, weight: .semibold))
         case .contacts:
             Image(systemName: "person.crop.circle.fill").font(.system(size: 23, weight: .semibold))
+        case .calls:
+            Image(systemName: "phone.fill").font(.system(size: 21, weight: .semibold))
         }
     }
 
     private var label: String {
-        switch t { case .settings: return Lang.tr("Настройки"); case .chats: return Lang.tr("Чаты"); case .contacts: return Lang.tr("Контакты") }
+        switch t { case .settings: return Lang.tr("Настройки"); case .chats: return Lang.tr("Чаты"); case .contacts: return Lang.tr("Контакты"); case .calls: return Lang.tr("Звонки") }
     }
 
     private func animate() {
