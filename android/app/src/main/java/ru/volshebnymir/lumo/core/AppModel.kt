@@ -262,6 +262,7 @@ object AppModel {
             launch { ru.volshebnymir.lumo.ui.Reminders.load(); ru.volshebnymir.lumo.ui.Dnd.load(); ru.volshebnymir.lumo.ui.Streaks.load() }
             launch { PhoneStore.load(); if (PhoneStore.hasContactsAccess()) PhoneStore.syncContacts() }
             myId?.let { E2E.setup(it) }
+            Push.register(ctx)
             netStatus = "Обновление…"
             loadContacts()
             loadChats()
@@ -361,6 +362,7 @@ object AppModel {
     fun logout() {
         scope.launch {
             presence(false)
+            Push.unregister(ctx)
             Api.userId?.let { Accounts.remove(it) }
             Api.signOut()
             resetAfterLogout()
@@ -374,6 +376,7 @@ object AppModel {
         if (Accounts.list.size >= Accounts.limit()) return false
         scope.launch {
             presence(false)
+            Push.unregister(ctx)
             resetAfterLogout()
             Api.forget()
         }

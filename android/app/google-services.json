@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "404189756776",
+    "project_id": "lumo-5d8ff",
+    "storage_bucket": "lumo-5d8ff.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:404189756776:android:8e424b7df3e3f27c6aaadd",
+        "android_client_info": {
+          "package_name": "ru.volshebnymir.lumo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQnrJUpySLpxsQexShaVW2JdPJDewDnZ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

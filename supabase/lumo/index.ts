@@ -144,6 +144,63 @@ async function vapid() {
   vapidCache = JSON.parse(s.vapid);
   return vapidCache!;
 }
+// ---------- FCM (Android push через Firebase) ----------
+let fcmSA: { client_email: string; private_key: string; project_id: string } | null = null;
+async function fcmCfg() {
+  if (fcmSA) return fcmSA;
+  const raw = (await secrets()).fcm_sa;
+  if (!raw) return null;
+  fcmSA = typeof raw === "string" ? JSON.parse(raw) : raw;
+  return fcmSA;
+}
+function pemToBuf(pem: string) {
+  const b = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
+  const bin = atob(b); const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u.buffer;
+}
+let fcmTok: { tok: string; exp: number } | null = null;
+async function fcmAccessToken() {
+  if (fcmTok && fcmTok.exp > Date.now() + 60000) return fcmTok.tok;
+  const sa = await fcmCfg(); if (!sa) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64u(new TextEncoder().encode(JSON.stringify({ alg: "RS256", typ: "JWT" })));
+  const claim = b64u(new TextEncoder().encode(JSON.stringify({
+    iss: sa.client_email, scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 })));
+  const unsigned = `${head}.${claim}`;
+  const key = await crypto.subtle.importKey("pkcs8", pemToBuf(sa.private_key),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const sig = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned)));
+  const jwt = `${unsigned}.${b64u(sig)}`;
+  const r = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}` });
+  const j = await r.json();
+  if (!j.access_token) { console.log("fcm oauth", JSON.stringify(j).slice(0, 200)); return null; }
+  fcmTok = { tok: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
+  return fcmTok.tok;
+}
+async function pushFcm(ids: string[], data: Record<string, string>, ttl = 86400) {
+  if (!ids.length) return 0;
+  const { data: toks } = await db.from("lm_fcm").select("token").in("user_id", ids);
+  if (!toks?.length) return 0;
+  const at = await fcmAccessToken(); if (!at) return 0;
+  const sa = await fcmCfg(); const pid = sa!.project_id;
+  let n = 0;
+  await Promise.all(toks.map(async (x: { token: string }) => {
+    try {
+      const r = await fetch(`https://fcm.googleapis.com/v1/projects/${pid}/messages:send`, {
+        method: "POST", headers: { Authorization: `Bearer ${at}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ message: { token: x.token, data, android: { priority: "high", ttl: `${ttl}s` } } }) });
+      if (r.ok) n++;
+      else { const t = await r.text();
+        if (r.status === 404 || t.includes("UNREGISTERED") || t.includes("NOT_FOUND")) await db.from("lm_fcm").delete().eq("token", x.token);
+        else console.log("fcm", r.status, t.slice(0, 160)); }
+    } catch (e) { console.log("fcm err", String(e)); }
+  }));
+  return n;
+}
 async function pushUsers(ids: string[], data: Record<string, unknown>, ttl = 86400) {
   if (!ids.length) return 0;
   const { data: subs } = await db.from("lm_push").select("endpoint,p256dh,auth").in("user_id", ids);
@@ -309,7 +366,21 @@ async function handleNotify(messageId: number) {
       return tg("sendMessage", { chat_id: l.tg_chat_id, text, parse_mode: "HTML", reply_markup: kb, disable_web_page_preview: true });
     }));
   })();
-  await Promise.all([pushP, tgP]);
+  const fcmP = (async () => {
+    const enc = m.kind === "text" && !!m.body && String(m.body).startsWith("e2e1:") && chat?.type === "private";
+    await Promise.all(idle.map((id: string) => {
+      const tb = titleBody(id);
+      let body = tb.body;
+      if (m.kind === "call") body = (m.meta || {}).video ? "Пропущенный видеозвонок" : "Пропущенный звонок";
+      const data: Record<string, string> = {
+        t: "msg", chat: String(m.chat_id), id: String(m.id),
+        title: tb.title, body: enc ? "" : body, enc: enc ? "1" : "0",
+      };
+      if (enc && String(m.body).length < 3500) data.e = String(m.body);
+      return pushFcm([id], data, m.kind === "call" ? 60 : 86400);
+    }));
+  })();
+  await Promise.all([pushP, tgP, fcmP]);
 }
 
 async function handleCall(req: Request) {
@@ -328,13 +399,17 @@ async function handleCall(req: Request) {
   const { data: ct } = await db.from("lm_contacts").select("alias").eq("owner_id", peer_id).eq("contact_id", me).maybeSingle();
   const name = (ct?.alias && String(ct.alias).trim()) || p?.name || "Кто-то";
   let pushed = 0;
-  if (!isActive(pp)) pushed = await pushUsers([peer_id], { title: name, body: video ? "📹 Входящий видеозвонок" : "📞 Входящий звонок", tag: "call", chat: chat.id, call: true }, 45);
+  let fpush = 0;
+  if (!isActive(pp)) {
+    pushed = await pushUsers([peer_id], { title: name, body: video ? "📹 Входящий видеозвонок" : "📞 Входящий звонок", tag: "call", chat: chat.id, call: true }, 45);
+    fpush = await pushFcm([peer_id], { t: "call", chat: String(chat.id), title: name, video: video ? "1" : "0" }, 60);
+  }
   const { data: link } = await db.from("lm_tg_links").select("*").eq("user_id", peer_id).eq("enabled", true).maybeSingle();
   if (link) await tg("sendMessage", {
     chat_id: link.tg_chat_id, parse_mode: "HTML", reply_markup: await openButton(String(chat.id), "📞 Открыть звонок"),
     text: `📞 <b>${escH(name)}</b> звонит вам в Lumo${video ? " (видео)" : ""}.\nОткройте приложение, чтобы ответить.`,
   });
-  return json({ ok: true, tg: !!link, push: pushed });
+  return json({ ok: true, tg: !!link, push: pushed, fcm: fpush });
 }
 
 // ---------- вход и регистрация через Telegram ----------
