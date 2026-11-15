@@ -16,6 +16,7 @@ struct LumoApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .buttonStyle(BouncyButtonStyle())   // живое нажатие у всех кнопок
                 .environmentObject(model)
                 .environmentObject(calls)
                 .environmentObject(look)
