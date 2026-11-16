@@ -58,7 +58,7 @@ sealed class Screen {
     data class AutoDl(val cellular: Boolean) : Screen()
 }
 
-enum class Tab { Contacts, Chats, Settings }
+enum class Tab { Contacts, Calls, Chats, Settings }
 
 /** Состояние приложения: вход, чаты, сообщения, живые обновления. Всё меняется на главном потоке. */
 object AppModel {

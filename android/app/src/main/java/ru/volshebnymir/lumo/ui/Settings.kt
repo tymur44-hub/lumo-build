@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
@@ -53,6 +54,8 @@ import ru.volshebnymir.lumo.core.premium
 import ru.volshebnymir.lumo.core.PREMIUM_SOON
 import ru.volshebnymir.lumo.core.isPremium
 import ru.volshebnymir.lumo.core.Fmt
+import ru.volshebnymir.lumo.core.Message
+import ru.volshebnymir.lumo.core.ChatItem
 import ru.volshebnymir.lumo.core.Screen
 import ru.volshebnymir.lumo.core.PhoneStore
 import ru.volshebnymir.lumo.core.Lumens
@@ -214,38 +217,113 @@ private fun Chip(icon: ImageVector, t: String, onClick: () -> Unit) {
 // ---------------- звонки ----------------
 
 @Composable
-fun CallsHistoryScreen() {
+fun CallsHistoryScreen(tab: Boolean = false) {
     val p = P
     val call = rememberCallStarter()
     var loading by remember { mutableStateOf(true) }
+    var onlyMissed by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    var showNew by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { AppModel.loadCalls(); loading = false }
+    fun kind(m: Message): String {
+        val out = m.senderId == AppModel.myId; val st = m.metaStatus ?: ""; val ok = st == "ended"
+        return when { out -> if (ok) "Исходящий" else "Отменённый"; ok -> "Входящий"; st == "rejected" -> "Отклонённый"; else -> "Пропущенный" }
+    }
+    fun isMissed(m: Message): Boolean { val st = m.metaStatus ?: ""; return m.senderId != AppModel.myId && st != "ended" && st != "rejected" }
     val rows = AppModel.calls.mapNotNull { m -> AppModel.chat(m.chatId)?.takeIf { it.isPrivate }?.let { m to it } }
+        .filter { !onlyMissed || isMissed(it.first) }
+    // подряд идущие звонки одному человеку за день сливаем в одну строку
+    val groups = ArrayList<MutableList<Pair<Message, ChatItem>>>()
+    val cal = java.util.Calendar.getInstance()
+    fun day(d: java.util.Date?): Int { cal.time = d ?: java.util.Date(0); return cal.get(java.util.Calendar.YEAR) * 400 + cal.get(java.util.Calendar.DAY_OF_YEAR) }
+    for (r in rows) {
+        val last = groups.lastOrNull()
+        if (last != null && last[0].second.id == r.second.id && day(last[0].first.createdAt) == day(r.first.createdAt)) last.add(r) else groups.add(mutableListOf(r))
+    }
     Column(Modifier.fillMaxSize().background(p.bg)) {
-        TopBar("Звонки")
-        LazyColumn(Modifier.fillMaxSize()) {
-            if (!loading && rows.isEmpty()) item {
-                Text("Звонков пока нет.\nПозвонить можно из чата или из контактов", color = p.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(40.dp))
-            }
-            items(rows, key = { it.first.id }) { (m, c) ->
-                val out = m.senderId == AppModel.myId
-                val st = m.metaStatus ?: ""
-                val ok = st == "ended"
-                val missed = !ok && !out && st != "rejected"
-                var label = when { out -> if (ok) "Исходящий" else "Отменённый"; ok -> "Входящий"; st == "rejected" -> "Отклонённый"; else -> "Пропущенный" }
-                label += (if (m.isVideoCall) " видеозвонок" else " звонок") + " · " + Fmt.listTime(m.createdAt)
-                if (ok && m.duration > 0) label += " · " + Fmt.duration(m.duration)
-                Row(Modifier.fillMaxWidth().bouncy { AppModel.push(Screen.Chat(c.id)) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(c.displayName, c.displayAvatar, c.displayColor, 50.dp, online = AppModel.isOnline(c.peerId))
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(c.displayName, color = if (missed) p.danger else p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (out) Icons.AutoMirrored.Filled.CallMade else Icons.AutoMirrored.Filled.CallReceived, null, tint = if (ok) p.ok else p.danger, modifier = Modifier.size(15.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(label, color = p.muted, fontSize = 13.5.sp, maxLines = 1)
+        if (tab) {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.clip(RoundedCornerShape(22.dp)).background(p.panel).bouncy { editing = !editing }.padding(horizontal = 18.dp, vertical = 11.dp)) {
+                    Text(if (editing) "Готово" else "Изм.", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                }
+                Spacer(Modifier.weight(1f))
+                Row(Modifier.clip(RoundedCornerShape(22.dp)).background(p.panel).padding(4.dp)) {
+                    for ((t, on) in listOf("Все" to !onlyMissed, "Пропущ." to onlyMissed)) {
+                        Box(Modifier.clip(RoundedCornerShape(18.dp)).background(if (on) p.panel2 else Color.Transparent).bouncy { onlyMissed = t != "Все" }.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            Text(t, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                         }
                     }
-                    RoundIcon(if (m.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call, 40.dp, tint = p.a1, bg = p.panel2) { call(c, m.isVideoCall) }
+                }
+                Spacer(Modifier.weight(1f))
+                RoundIcon(Icons.Filled.AddIcCall, 44.dp, tint = p.text, bg = p.panel) { showNew = true }
+            }
+        } else TopBar("Звонки")
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if (tab) 100.dp else 0.dp)) {
+            if (tab) item {
+                Row(Modifier.fillMaxWidth().bouncy { showNew = true }.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.AddIcCall, null, tint = p.a1, modifier = Modifier.size(26.dp))
+                    Spacer(Modifier.width(16.dp))
+                    Text("Новый звонок", color = p.a1, fontSize = 19.sp)
+                }
+            }
+            if (!loading && groups.isEmpty()) item {
+                Text(if (onlyMissed) "Пропущенных звонков нет" else "Звонков пока нет.\nПозвонить можно из чата или из контактов", color = p.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(40.dp))
+            }
+            items(groups, key = { it[0].first.id }) { g ->
+                val (m, c) = g[0]
+                val out = m.senderId == AppModel.myId
+                val missed = isMissed(m)
+                var label = g.map { kind(it.first) }.distinct().joinToString(", ")
+                if (g.size > 1) label += " (${g.size})"
+                else {
+                    if (m.isVideoCall) label += " видео"
+                    if (m.metaStatus == "ended" && m.duration > 0) label += " · " + Fmt.duration(m.duration)
+                }
+                Row(Modifier.fillMaxWidth().bouncy { if (editing) {} else call(c, m.isVideoCall) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (editing) {
+                        val sc = rememberCoroutineScope()
+                        RoundIcon(Icons.Filled.RemoveCircle, 34.dp, tint = p.danger, bg = Color.Transparent) { sc.launch { runCatching { AppModel.delete(g.map { it.first }, false) }; AppModel.loadCalls() } }
+                    } else Box(Modifier.width(20.dp)) {
+                        if (out) Icon(Icons.AutoMirrored.Filled.CallMade, null, tint = p.muted, modifier = Modifier.size(14.dp))
+                    }
+                    Avatar(c.displayName, c.displayAvatar, c.displayColor, 54.dp, online = AppModel.isOnline(c.peerId))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(c.displayName, color = if (missed) p.danger else p.text, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, maxLines = 1)
+                        Text(label, color = p.muted, fontSize = 14.sp, maxLines = 1)
+                    }
+                    Text(Fmt.listTime(m.createdAt), color = p.muted, fontSize = 14.sp)
+                    Spacer(Modifier.width(6.dp))
+                    RoundIcon(Icons.Outlined.Info, 38.dp, tint = p.a1, bg = Color.Transparent) { AppModel.push(Screen.Chat(c.id)) }
+                }
+            }
+        }
+    }
+    if (showNew) NewCallSheet({ showNew = false }) { c, v -> showNew = false; call(c, v) }
+}
+
+@Composable
+private fun NewCallSheet(onClose: () -> Unit, onPick: (ChatItem, Boolean) -> Unit) {
+    val p = P
+    var q by remember { mutableStateOf("") }
+    val list = AppModel.chats.filter { it.isPrivate && it.peerId != null && (q.isBlank() || it.displayName.contains(q, ignoreCase = true)) }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.fillMaxSize().background(p.bg).statusBarsPadding()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                RoundIcon(Icons.AutoMirrored.Filled.ArrowBack) { onClose() }
+                Text("Новый звонок", color = p.text, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(start = 4.dp))
+            }
+            androidx.compose.material3.OutlinedTextField(q, { q = it }, placeholder = { Text("Поиск") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp))
+            LazyColumn(Modifier.fillMaxSize()) {
+                items(list, key = { it.id }) { c ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(c.displayName, c.displayAvatar, c.displayColor, 46.dp, online = AppModel.isOnline(c.peerId))
+                        Spacer(Modifier.width(12.dp))
+                        Text(c.displayName, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.weight(1f), maxLines = 1)
+                        RoundIcon(Icons.Filled.Call, 40.dp, tint = p.a1, bg = p.panel2) { onPick(c, false) }
+                        Spacer(Modifier.width(8.dp))
+                        RoundIcon(Icons.Filled.Videocam, 40.dp, tint = p.a1, bg = p.panel2) { onPick(c, true) }
+                    }
                 }
             }
         }

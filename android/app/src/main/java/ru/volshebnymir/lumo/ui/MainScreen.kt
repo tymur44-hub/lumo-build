@@ -319,6 +319,7 @@ fun Tabs() {
             when (t) {
                 Tab.Chats -> ChatListScreen()
                 Tab.Contacts -> ContactsScreen()
+                Tab.Calls -> CallsHistoryScreen(tab = true)
                 Tab.Settings -> SettingsScreen()
             }
         }
@@ -337,6 +338,7 @@ fun TabBar(modifier: Modifier) {
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             TabItem(Tab.Contacts, Icons.Filled.AccountCircle, "Контакты", 0)
+            TabItem(Tab.Calls, Icons.Filled.Call, "Звонки", 0)
             TabItem(Tab.Chats, Icons.Filled.ChatBubble, "Чаты", AppModel.unreadTotal)
             TabItem(Tab.Settings, Icons.Filled.Settings, "Настройки", 0)
         }
@@ -360,7 +362,7 @@ fun androidx.compose.foundation.layout.RowScope.TabItem(t: Tab, icon: ImageVecto
                 when (t) {
                     Tab.Settings -> scope.launch { rot.animateTo(rot.value + 120f, spring(0.85f, Spring.StiffnessVeryLow)) }
                     Tab.Chats -> scope.launch { for (a in listOf(-7f, 6f, 0f)) rot.animateTo(a, tween(200)) }
-                    Tab.Contacts -> scope.launch { dy.animateTo(-3f, tween(200)); dy.animateTo(0f, spring(0.85f, Spring.StiffnessLow)) }
+                    Tab.Contacts, Tab.Calls -> scope.launch { dy.animateTo(-3f, tween(200)); dy.animateTo(0f, spring(0.85f, Spring.StiffnessLow)) }
                 }
             }
             .padding(vertical = 7.dp),
@@ -439,6 +441,7 @@ fun ChatListScreen() {
     if (emojiDlg) EmojiPickerDialog { emojiDlg = false }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         NetStatusBar()
+        BirthdayBar()
         Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box {
                 Text("Изм.", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
