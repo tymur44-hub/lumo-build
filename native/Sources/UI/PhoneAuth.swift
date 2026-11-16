@@ -122,14 +122,9 @@ struct PhoneAuthView: View {
         case .phone:
             VStack(spacing: 14) {
                 HStack(spacing: 8) {
-                    Text("🇷🇺 +7").font(.system(size: 20, weight: .semibold)).foregroundColor(Theme.text)
-                    TextField("900 123-45-67", text: Binding(get: { format(digits) }, set: { v in
-                        var d = v.filter { $0.isNumber }
-                        if d.hasPrefix("7") && d.count > 10 { d.removeFirst() }
-                        if d.hasPrefix("8") && d.count > 10 { d.removeFirst() }
-                        digits = String(d.prefix(10)); error = nil
-                    }))
-                    .keyboardType(.numberPad).font(.system(size: 20, weight: .semibold)).focused($focus).textContentType(.telephoneNumber)
+                    Text("+7").font(.system(size: 20, weight: .semibold)).foregroundColor(Theme.text)
+                    PhoneDigitsField(digits: Binding(get: { digits }, set: { digits = $0; error = nil }), focused: focus) { focus = $0 }
+                    .frame(height: 40)
                 }
                 .padding(.horizontal, 16).frame(height: 56)
                 .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
@@ -369,3 +364,63 @@ struct PhoneReminderSheet: View {
     }
 }
 
+
+
+/// Поле номера: цифры форматируются на лету, курсор всегда остаётся в конце и не «прыгает»
+struct PhoneDigitsField: UIViewRepresentable {
+    @Binding var digits: String
+    var focused: Bool
+    var onFocus: (Bool) -> Void
+
+    static func format(_ d: String) -> String {
+        var s = ""
+        for (i, c) in d.enumerated() {
+            if i == 3 { s += " " }
+            if i == 6 || i == 8 { s += "-" }
+            s.append(c)
+        }
+        return s
+    }
+
+    func makeUIView(context: Context) -> UITextField {
+        let t = UITextField()
+        t.keyboardType = .numberPad
+        t.font = .systemFont(ofSize: 20, weight: .semibold)
+        t.placeholder = "900 123-45-67"
+        t.textContentType = .telephoneNumber
+        t.delegate = context.coordinator
+        t.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        t.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .editingChanged)
+        t.text = Self.format(digits)
+        return t
+    }
+
+    func updateUIView(_ t: UITextField, context: Context) {
+        context.coordinator.parent = self
+        let want = Self.format(digits)
+        if t.text != want { t.text = want }
+        if focused && !t.isFirstResponder { DispatchQueue.main.async { t.becomeFirstResponder() } }
+        if !focused && t.isFirstResponder { DispatchQueue.main.async { t.resignFirstResponder() } }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: PhoneDigitsField
+        init(_ p: PhoneDigitsField) { parent = p }
+
+        @objc func changed(_ t: UITextField) {
+            var d = (t.text ?? "").filter { $0.isNumber }
+            if d.count > 10 && (d.hasPrefix("7") || d.hasPrefix("8")) { d.removeFirst() }
+            d = String(d.prefix(10))
+            let f = PhoneDigitsField.format(d)
+            if t.text != f { t.text = f }
+            // курсор — всегда в конец
+            let end = t.endOfDocument
+            t.selectedTextRange = t.textRange(from: end, to: end)
+            if parent.digits != d { parent.digits = d }
+        }
+        func textFieldDidBeginEditing(_ t: UITextField) { parent.onFocus(true) }
+        func textFieldDidEndEditing(_ t: UITextField) { parent.onFocus(false) }
+    }
+}
