@@ -457,18 +457,7 @@ struct MyProfileView: View {
                 }
             }
         }
-        .photosPicker(isPresented: $showPicker, selection: $avatarPick, matching: .images)
-        .onChange(of: avatarPick) { item in
-            guard let item = item else { return }
-            avatarPick = nil
-            uploading = true
-            Task {
-                if let d = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: d) {
-                    do { try await model.setAvatar(img); model.say("Фото профиля обновлено") } catch { model.say(error.localizedDescription) }
-                }
-                uploading = false
-            }
-        }
+        .sheet(isPresented: $showPicker) { AvatarPickerSheet().environmentObject(model) }
         .sheet(isPresented: $showQR) { MyQRView().environmentObject(model) }
         .sheet(isPresented: $addStory) { AddStoryView().environmentObject(model) }
         .fullScreenCover(item: $avatarFull) { ImageScreen(url: $0.url) }
@@ -560,11 +549,11 @@ struct ProfileEditView: View {
                     .buttonStyle(BouncyButtonStyle())
                     Spacer()
                     VStack(spacing: 12) {
-                        Button { photoMenu = true } label: {
+                        Button { showPicker = true } label: {
                             AvatarView(name: [first, last].joined(separator: " "), url: me?.avatarURL, color: me?.color ?? 0, size: 124)
                         }
                         .buttonStyle(BouncyButtonStyle())
-                        Button { photoMenu = true } label: {
+                        Button { showPicker = true } label: {
                             Text("Изменить фотографию").font(.system(size: 18)).foregroundColor(Theme.a1)
                         }
                     }
@@ -688,22 +677,7 @@ struct ProfileEditView: View {
             bio = me?.bio ?? ""
             birthday = me?.birthday.map { String($0.prefix(10)) }
         }
-        .confirmationDialog("Фото профиля", isPresented: $photoMenu) {
-            Button("Выбрать фото") { showPicker = true }
-            if me?.avatarURL != nil {
-                Button("Удалить фото", role: .destructive) { Task { do { try await model.setAvatar(nil) } catch { model.say(error.localizedDescription) } } }
-            }
-        }
-        .photosPicker(isPresented: $showPicker, selection: $avatarPick, matching: .images)
-        .onChange(of: avatarPick) { item in
-            guard let item = item else { return }
-            avatarPick = nil
-            Task {
-                if let d = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: d) {
-                    do { try await model.setAvatar(img); model.say("Фото профиля обновлено") } catch { model.say(error.localizedDescription) }
-                }
-            }
-        }
+        .sheet(isPresented: $showPicker) { AvatarPickerSheet().environmentObject(model) }
         .sheet(isPresented: $dateSheet) {
             NavigationStack {
                 DatePicker("", selection: $datePick, in: ...Date(), displayedComponents: .date)
