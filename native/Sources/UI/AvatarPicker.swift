@@ -63,9 +63,7 @@ struct AvatarPickerSheet: View {
     private func cell(_ a: PHAsset) -> some View {
         Button { pick(a) } label: {
             AvatarAssetThumb(asset: a)
-                .aspectRatio(1, contentMode: .fill)
-                .frame(maxWidth: .infinity)
-                .clipped()
+                .aspectRatio(1, contentMode: .fit)
                 .overlay(alignment: .bottomTrailing) {
                     if a.mediaType == .video {
                         Image(systemName: "video.fill").font(.system(size: 11)).foregroundColor(.white).padding(4).shadow(radius: 2)
@@ -100,22 +98,10 @@ struct AvatarPickerSheet: View {
     }
 }
 
-/// Миниатюра ассета
+/// Миниатюра ассета (быстрая, с кэшем — как в шторке отправки фото)
 struct AvatarAssetThumb: View {
     let asset: PHAsset
-    @State private var img: UIImage?
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.05)
-            if let i = img { Image(uiImage: i).resizable().scaledToFill() }
-        }
-        .task {
-            let o = PHImageRequestOptions(); o.deliveryMode = .opportunistic; o.isNetworkAccessAllowed = true; o.resizeMode = .fast
-            PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 300, height: 300), contentMode: .aspectFill, options: o) { i, _ in
-                if let i = i { img = i }
-            }
-        }
-    }
+    var body: some View { GridThumb(asset: asset) }
 }
 
 /// Выбор видимой области: двигаем и масштабируем, галочка — готово

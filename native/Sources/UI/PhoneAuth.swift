@@ -123,7 +123,7 @@ struct PhoneAuthView: View {
             VStack(spacing: 14) {
                 HStack(spacing: 8) {
                     Text("+7").font(.system(size: 20, weight: .semibold)).foregroundColor(Theme.text)
-                    PhoneDigitsField(digits: Binding(get: { digits }, set: { digits = $0; error = nil }), focused: focus) { focus = $0 }
+                    PhoneDigitsField(digits: Binding(get: { digits }, set: { digits = $0; error = nil }))
                     .frame(height: 40)
                 }
                 .padding(.horizontal, 16).frame(height: 56)
@@ -369,8 +369,6 @@ struct PhoneReminderSheet: View {
 /// Поле номера: цифры форматируются на лету, курсор всегда остаётся в конце и не «прыгает»
 struct PhoneDigitsField: UIViewRepresentable {
     @Binding var digits: String
-    var focused: Bool
-    var onFocus: (Bool) -> Void
 
     static func format(_ d: String) -> String {
         var s = ""
@@ -392,6 +390,7 @@ struct PhoneDigitsField: UIViewRepresentable {
         t.setContentHuggingPriority(.defaultLow, for: .horizontal)
         t.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .editingChanged)
         t.text = Self.format(digits)
+        DispatchQueue.main.async { t.becomeFirstResponder() }   // клавиатура открывается один раз при появлении
         return t
     }
 
@@ -399,8 +398,6 @@ struct PhoneDigitsField: UIViewRepresentable {
         context.coordinator.parent = self
         let want = Self.format(digits)
         if t.text != want { t.text = want }
-        if focused && !t.isFirstResponder { DispatchQueue.main.async { t.becomeFirstResponder() } }
-        if !focused && t.isFirstResponder { DispatchQueue.main.async { t.resignFirstResponder() } }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -420,7 +417,5 @@ struct PhoneDigitsField: UIViewRepresentable {
             t.selectedTextRange = t.textRange(from: end, to: end)
             if parent.digits != d { parent.digits = d }
         }
-        func textFieldDidBeginEditing(_ t: UITextField) { parent.onFocus(true) }
-        func textFieldDidEndEditing(_ t: UITextField) { parent.onFocus(false) }
     }
 }

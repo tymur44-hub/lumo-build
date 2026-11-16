@@ -64,25 +64,7 @@ enum AttachLoader {
 
 private struct AssetThumb: View {
     let asset: PHAsset
-    @State private var img: UIImage?
-
-    var body: some View {
-        Color.clear
-            .overlay {
-                if let i = img { Image(uiImage: i).resizable().scaledToFill() } else { Theme.panel2 }
-            }
-            .clipped()
-            .onAppear {
-                guard img == nil else { return }
-                let o = PHImageRequestOptions()
-                o.deliveryMode = .opportunistic
-                o.resizeMode = .fast
-                o.isNetworkAccessAllowed = true
-                PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 320, height: 320), contentMode: .aspectFill, options: o) { i, _ in
-                    if let i = i { DispatchQueue.main.async { img = i } }
-                }
-            }
-    }
+    var body: some View { GridThumb(asset: asset) }
 }
 
 /// Шторка «скрепки»: галерея с выбором нескольких фото, подпись и вкладки внизу (как в Telegram)
