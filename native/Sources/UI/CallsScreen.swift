@@ -168,7 +168,7 @@ struct CallRowView: View {
 
     private var label: String {
         var seen: [String] = []
-        for m in group.items { let k = kind(m); if !seen.contains(k) { seen.append(k) } }
+        for m in group.items { let k = kind(m.message); if !seen.contains(k) { seen.append(k) } }
         var t = seen.joined(separator: ", ")
         if group.items.count > 1 { t += " (\(group.items.count))" }
         if group.items.count == 1, let m = group.items.first?.message {
