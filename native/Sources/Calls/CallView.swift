@@ -132,16 +132,23 @@ struct CallView: View {
                     .offset(y: hideUI ? 40 : 0)
                     .allowsHitTesting(!hideUI)
             }
-            if calls.reconnecting {
-                HStack(spacing: 10) {
-                    ProgressView().tint(.white)
-                    Text("Повторное подключение…").font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+            VStack {
+                if let b = banner {
+                    HStack(spacing: 10) {
+                        if b.spinner { ProgressView().tint(.white) }
+                        else { Image(systemName: b.icon).font(.system(size: 16, weight: .semibold)).foregroundColor(b.color) }
+                        Text(b.text).font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 18).padding(.vertical, 11)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .environment(\.colorScheme, .dark)
+                    .padding(.top, 8)
+                    .id(b.text)
+                    .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.9)))
                 }
-                .padding(.horizontal, 18).padding(.vertical, 11)
-                .background(.ultraThinMaterial, in: Capsule())
-                .environment(\.colorScheme, .dark)
-                .transition(.scale(scale: 0.85).combined(with: .opacity))
+                Spacer()
             }
+            .allowsHitTesting(false)
             if calls.video, let lv = calls.localVideo, !calls.camOff, calls.state != .incoming {
                 VStack {
                     HStack {
@@ -167,9 +174,20 @@ struct CallView: View {
         .onChange(of: calls.remoteVideo) { CallPiP.shared.setTrack(calls.video ? $0 : nil) }
         .onChange(of: calls.relayImage) { if let im = $0 { CallPiP.shared.push(im) } }
         .onAppear { CallPiP.shared.setTrack(calls.video ? calls.remoteVideo : nil) }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: calls.reconnecting)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: banner?.text)
         .animation(.spring(response: 0.45, dampingFraction: 0.7), value: calls.callCode)
         .statusBarHidden(showRemote || showRelay)
+    }
+
+    /// Плашка состояния связи (по важности): удержание, нет интернета, повторное подключение, плохое соединение
+    private var banner: (text: String, icon: String, color: Color, spinner: Bool)? {
+        guard calls.state == .active || calls.state == .connecting else { return nil }
+        if calls.onHold { return ("Звонок на удержании", "pause.circle.fill", .white, false) }
+        if calls.peerHold { return ("Собеседник на удержании", "pause.circle.fill", .white, false) }
+        if calls.offline { return ("Нет интернета", "wifi.slash", Theme.danger, false) }
+        if calls.reconnecting { return ("Повторное подключение…", "", .white, true) }
+        if calls.poor { return ("Плохое соединение", "wifi.exclamationmark", Color(hex: 0xffb020), false) }
+        return nil
     }
 
     private var hideUI: Bool { (showRemote || showRelay) && !uiShown }

@@ -5,6 +5,7 @@ import AudioToolbox
 import UserNotifications
 import UIKit
 import WebRTC
+import Network
 
 /// Звонки Lumo: тот же протокол, что у сайта (сигналы через канал lm-call-<id>), звук и видео — WebRTC,
 /// входящий звонок показывается системным экраном iOS (CallKit), в том числе на заблокированном экране.
@@ -41,6 +42,18 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
     @Published var reconnecting = false
     /// код проверки: 4 значка из ключей шифрования обоих телефонов (одинаковые у обоих — посередине никого нет)
     @Published var callCode: [Int]?
+    /// плохое соединение: много потерь, большая задержка или звук перестал приходить
+    @Published var poor = false
+    /// у меня нет интернета
+    @Published var offline = false
+    /// звонок на удержании у меня (обычный звонок, Siri, будильник) / у собеседника
+    @Published var onHold = false
+    @Published var peerHold = false
+    private var statsTimer: Timer?
+    private var lastRecv = -1, lastLost = 0
+    private var badRuns = 0, goodRuns = 0
+    private var pathMonitor: NWPathMonitor?
+    private var observersSet = false
     private var downSince: Date?
     private var reconnTimer: Timer?
     /// Звук и видео идут только напрямую через WebRTC (свой TURN), через сервер Supabase — только сигналы
@@ -104,7 +117,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         let cfg = CXProviderConfiguration()
         cfg.supportsVideo = true
         cfg.maximumCallsPerCallGroup = 1
-        cfg.maximumCallGroups = 1
+        cfg.maximumCallGroups = 2   // обычный звонок поверх Lumo: можно поставить Lumo на удержание
         cfg.supportedHandleTypes = [.generic]
         cfg.includesCallsInRecents = false
         provider = CXProvider(configuration: cfg)
@@ -113,6 +126,66 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         UserDefaults.standard.removeObject(forKey: "lm_ck_broken_at")
         RTCAudioSession.sharedInstance().useManualAudio = true
         RTCAudioSession.sharedInstance().isAudioEnabled = false
+        setupObservers()
+    }
+
+    // MARK: - окружение звонка: сеть, прерывания звука, наушники
+
+    private func setupObservers() {
+        guard !observersSet else { return }
+        observersSet = true
+        let m = NWPathMonitor()
+        m.pathUpdateHandler = { path in
+            let off = path.status != .satisfied
+            Task { @MainActor in
+                let cm = CallManager.shared
+                if cm.offline != off { cm.offline = off; if !off { cm.networkChanged() } }
+            }
+        }
+        m.start(queue: DispatchQueue(label: "lumo.callnet"))
+        pathMonitor = m
+        let nc = NotificationCenter.default
+        nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { n in
+            let type = (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init) ?? .began
+            let resume = ((n.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt) ?? 0) & AVAudioSession.InterruptionOptions.shouldResume.rawValue != 0
+            Task { @MainActor in CallManager.shared.audioInterrupted(began: type == .began, resume: resume) }
+        }
+        nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { _ in
+            Task { @MainActor in CallManager.shared.routeChanged() }
+        }
+    }
+
+    /// Другой звук прервал разговор (звонок по сотовой сети, Siri, будильник) — ставим на удержание, потом возвращаем
+    private func audioInterrupted(began: Bool, resume: Bool) {
+        guard state == .active || state == .connecting else { return }
+        if began {
+            setHold(true, tellPeer: true)
+        } else {
+            // системный звонок закончился — снимаем удержание и заново включаем звук
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                let cm = CallManager.shared
+                guard cm.state == .active || cm.state == .connecting else { return }
+                cm.setHold(false, tellPeer: true)
+                if cm.uuid == nil || cm.manualUsed { cm.manualAudio() }
+            }
+        }
+    }
+
+    private func setHold(_ on: Bool, tellPeer: Bool) {
+        guard onHold != on else { return }
+        onHold = on
+        audioTrack?.isEnabled = !on && !muted
+        localVideo?.isEnabled = !on && !camOff
+        log(on ? "hold_on" : "hold_off")
+        if tellPeer, let p = peerId { sig(p, ["t": "hold", "on": on]) }
+    }
+
+    /// Подключили/отключили наушники или Bluetooth — переключатель «Динамик» показывает реальное состояние
+    private func routeChanged() {
+        guard state == .active || state == .connecting else { return }
+        let outs = AVAudioSession.sharedInstance().currentRoute.outputs
+        let onSpeaker = outs.contains { $0.portType == .builtInSpeaker }
+        if speaker != onSpeaker && !outs.isEmpty { speaker = onSpeaker }
     }
 
     // MARK: - каналы сигналов
@@ -305,7 +378,25 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
             if doneCalls.contains(cid) { return }
             if cid != callId { log("ring_in", ["cid": cid, "from": from, "cur": callId ?? ""]) }
             if state != .idle {
-                if cid != callId { sig(from, ["t": "busy", "callId": cid]); log("reply_busy", ["cid": cid]) }
+                // оба позвонили друг другу одновременно: у кого id меньше — остаётся звонящим, другой отвечает на его вызов
+                if state == .calling, role == "caller", from == peerId, cid != callId {
+                    if let me = myId, me < from { return }
+                    if let mine = callId { sig(from, ["t": "cancel", "callId": mine]) }
+                    log("glare_yield")
+                    end("glare", why: "glare")
+                    onSig(p)
+                    return
+                }
+                if cid != callId {
+                    sig(from, ["t": "busy", "callId": cid]); log("reply_busy", ["cid": cid])
+                    // пока разговариваю — не теряем вызов: говорим, кто звонил
+                    if !doneCalls.contains(cid) {
+                        doneCalls.insert(cid)
+                        let n = AppModel.shared.aliases[from].flatMap { $0.isEmpty ? nil : $0 } ?? p.str("name") ?? "Lumo"
+                        AppModel.shared.say("Пропущен звонок: \(n)")
+                        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                    }
+                }
                 else if state == .incoming { sig(from, ["t": "ringing"]) }
                 return
             }
@@ -405,6 +496,9 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
                 speaker = true
                 applySpeaker()
             }
+        case "hold":
+            peerHold = p.bool("on")
+            if peerHold { poor = false }
         case "restart":
             if role == "caller" { createOffer(restart: true) }
         default:
@@ -526,7 +620,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         up.remoteHandle = CXHandle(type: .generic, value: peerName)
         up.localizedCallerName = peerName
         up.hasVideo = video
-        up.supportsHolding = false
+        up.supportsHolding = true
         up.supportsGrouping = false
         up.supportsUngrouping = false
         up.supportsDTMF = false
@@ -573,7 +667,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
 
     func toggleMute() {
         muted.toggle()
-        audioTrack?.isEnabled = !muted
+        audioTrack?.isEnabled = !muted && !onHold
         relay.muted = muted
     }
 
@@ -699,6 +793,8 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         reconnecting = false
         downSince = nil
         callCode = nil
+        statsTimer?.invalidate(); statsTimer = nil
+        poor = false; onHold = false; peerHold = false
         audioActive = false
         remoteVideo = nil
         videoSource = nil
@@ -733,7 +829,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
             rs.unlockForConfiguration()
             manualUsed = false
         }
-        if wasCaller, let c = cid {
+        if wasCaller, status != "glare", let c = cid {
             Task { await AppModel.shared.send(chatId: c, kind: "call", meta: ["status": dur > 0 ? "ended" : status, "duration": dur, "video": wasVideo]) }
         }
         if status == "ended" && remote { AppModel.shared.say("Звонок завершён") }
@@ -1043,6 +1139,50 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
             }
         }
         lastPeer = Date()
+        startStats()
+    }
+
+    // MARK: - качество связи
+
+    private func startStats() {
+        statsTimer?.invalidate()
+        lastRecv = -1; lastLost = 0; badRuns = 0; goodRuns = 0; poor = false
+        statsTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
+            Task { @MainActor in CallManager.shared.sampleStats() }
+        }
+    }
+
+    private func sampleStats() {
+        guard state == .active, let p = pc, p.connectionState == .connected, !reconnecting else { return }
+        p.statistics { report in
+            var rec = 0, lost = 0
+            var rtt = 0.0
+            for (_, st) in report.statistics {
+                let v = st.values
+                if st.type == "inbound-rtp" {
+                    rec += (v["packetsReceived"] as? NSNumber)?.intValue ?? 0
+                    lost += (v["packetsLost"] as? NSNumber)?.intValue ?? 0
+                } else if st.type == "candidate-pair", (v["nominated"] as? NSNumber)?.boolValue == true || (v["state"] as? String) == "succeeded" {
+                    if let r = (v["currentRoundTripTime"] as? NSNumber)?.doubleValue { rtt = max(rtt, r) }
+                }
+            }
+            let (r, l, t) = (rec, lost, rtt)
+            Task { @MainActor in CallManager.shared.evaluate(recv: r, lost: l, rtt: t) }
+        }
+    }
+
+    private func evaluate(recv: Int, lost: Int, rtt: Double) {
+        defer { lastRecv = recv; lastLost = lost }
+        guard lastRecv >= 0, state == .active else { return }
+        let dRec = max(0, recv - lastRecv), dLost = max(0, lost - lastLost)
+        let total = dRec + dLost
+        let ratio = total > 0 ? Double(dLost) / Double(total) : 0
+        // собеседник на удержании — тишина нормальна
+        let stalled = dRec == 0 && !peerHold && !onHold
+        let bad = stalled || ratio > 0.10 || rtt > 0.6 || offline
+        if bad { badRuns += 1; goodRuns = 0 } else { goodRuns += 1; badRuns = 0 }
+        if !poor && badRuns >= 2 { poor = true; log("poor_on", ["loss": ratio, "rtt": rtt]) }
+        else if poor && goodRuns >= 3 { poor = false; log("poor_off") }
     }
 
     // MARK: - резервный канал (как на сайте)
@@ -1229,6 +1369,14 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
                     self.manualAudio()
                 } else if self.state != .idle { self.hangup() }
             }
+            action.fulfill()
+        }
+    }
+
+    nonisolated func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction) {
+        Task { @MainActor in
+            self.log("cx_hold", ["on": action.isOnHold])
+            if self.uuid == action.callUUID { self.setHold(action.isOnHold, tellPeer: true) }
             action.fulfill()
         }
     }
