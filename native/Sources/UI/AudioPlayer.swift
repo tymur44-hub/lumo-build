@@ -91,7 +91,7 @@ final class AudioManager: ObservableObject {
         if track?.id == t.id, player != nil { resume(); return }
         teardown()
         // голосовое или кружок — останавливаем, чтобы не играло одновременно
-        AudioPlayer.shared.stop()
+        Task { @MainActor in AudioPlayer.shared.stop() }
         withAnimation(Self.anim) { track = t }
         try? AVAudioSession.sharedInstance().setCategory(.playback)
         try? AVAudioSession.sharedInstance().setActive(true)

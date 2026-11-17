@@ -111,7 +111,7 @@ struct MiniPlayerBar: View {
         .contentShape(RoundedRectangle(cornerRadius: 14))
         // свайп в сторону — закрыть плеер
         .offset(x: drag)
-        .opacity(1 - min(0.6, abs(drag) / 300))
+        .opacity(1.0 - min(0.6, Double(abs(drag)) / 300.0))
         .gesture(
             DragGesture(minimumDistance: 12)
                 .onChanged { v in if abs(v.translation.width) > abs(v.translation.height) { drag = v.translation.width } }
