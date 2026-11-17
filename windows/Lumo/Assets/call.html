@@ -94,6 +94,12 @@ const E2E={ encStr:(cid,text)=>ask('enc',{cid,text}), decStr:(cid,text)=>ask('de
 let ME={id:'',name:'',avatar:null,color:0}, ICE=[{urls:'stun:stun.l.google.com:19302'}], CFG={callsFrom:'all',contacts:[],online:[],blocked:[]};
 const doneCalls=new Set();
 const C={st:null};
+/* Все потоки камеры и микрофона запоминаем: когда звонка нет — гасим их, чтобы камера (и её лампочка) точно выключалась */
+const LIVE=new Set();
+(function(){ const md=navigator.mediaDevices; if(!md||!md.getUserMedia) return; const orig=md.getUserMedia.bind(md);
+  md.getUserMedia=async c=>{ const s=await orig(c); s.getTracks().forEach(t=>{ LIVE.add(t); t.addEventListener('ended',()=>LIVE.delete(t)); }); return s; }; })();
+function releaseDevices(){ LIVE.forEach(t=>{ try{ t.stop(); }catch{} }); LIVE.clear(); }
+setInterval(()=>{ if(!C.st && (typeof G==='undefined'||!G) && LIVE.size) releaseDevices(); },4000);
 
 window.LC={cmd(m){
   switch(m.op){
@@ -245,7 +251,9 @@ function endCall(status,remote=false){
   const wasCaller=C.role==='caller', dur=C.t0?Math.round((Date.now()-C.t0)/1000):0, chatId=C.chatId, video=C.video;
   stopRing(); if(C.callId) doneCalls.add(C.callId);
   clearInterval(C.reRing); clearTimeout(C.timeoutT); clearTimeout(C.inT); clearInterval(C.timer); clearInterval(C.hb); clearInterval(C.watch); clearTimeout(C.rT);
+  try{ C.pc&&C.pc.getSenders().forEach(x=>{ try{ x.track&&x.track.stop(); }catch{} }); }catch{}
   try{ C.pc&&C.pc.close(); }catch{} try{ C.local&&C.local.getTracks().forEach(t=>t.stop()); }catch{}
+  releaseDevices();
   ['#rv','#rvbg','#lv','#ra'].forEach(s=>{ const v=$(s); try{ v.pause(); v.srcObject=null; }catch{} }); fitMode='auto'; try{$('#rvbg').style.display='none'}catch{}
   $('#code').style.display='none';
   Object.assign(C,{st:null,pc:null,local:null,remote:null,t0:0,peer:null,callId:null,pendingOffer:null,iceQ:[],secCid:null,secP:null,reconn:false,everUp:false,peerCamOff:false});
@@ -328,7 +336,9 @@ async function gstart(m){
 }
 function gend(remote){
   if(!G) return; const g=G; G=null; clearInterval(g.timer);
-  try{ g.room.disconnect(); }catch{}
+  try{ g.room.localParticipant.trackPublications.forEach(p=>{ try{ p.track&&p.track.stop(); }catch{} }); }catch{}
+  try{ g.room.disconnect(true); }catch{}
+  setTimeout(releaseDevices,300);
   $('#grid').innerHTML=''; $('#call').classList.remove('grp');
   if(remote) toast('Звонок завершён');
   callUI();

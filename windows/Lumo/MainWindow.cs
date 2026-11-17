@@ -219,6 +219,9 @@ public sealed class MainWindow : Window
         shell?.ShowSettings("qr");
         await Task.Delay(3000);
         await Capture(Path.Combine(dir, "9-qr.png"));
+        shell?.ShowSettings("look");
+        await Task.Delay(3000);
+        await Capture(Path.Combine(dir, "12-look.png"));
         shell?.ShowSettings("privacy");
         await Task.Delay(2500);
         await Capture(Path.Combine(dir, "10-privacy.png"));

@@ -1,0 +1,54 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box}html,body{margin:0;background:#0e0f22;color:#eef0ff;font-family:"Segoe UI Variable Text","Segoe UI",sans-serif;-webkit-user-select:none;user-select:none}
+body{padding:4px 28px 40px;max-width:820px;margin:0 auto}
+.pv{position:relative;height:230px;border-radius:22px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.pv canvas{position:absolute;inset:0;width:100%;height:100%}
+.msgs{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;padding:18px}
+.b{max-width:62%;padding:9px 13px 7px;border-radius:18px;font-size:14px;line-height:1.35;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.b small{display:block;text-align:right;font-size:11px;opacity:.65;margin-top:2px}
+.in{background:#1d1f3d;align-self:flex-start;border-bottom-left-radius:6px}
+.out{background:linear-gradient(135deg,#6a4cf5,#3a7bff);align-self:flex-end;border-bottom-right-radius:6px}
+h3{font-size:12.5px;letter-spacing:.4px;text-transform:uppercase;color:#8d90b8;margin:26px 2px 10px;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.w{position:relative;height:104px;border-radius:16px;overflow:hidden;cursor:pointer;border:2px solid rgba(255,255,255,.07);transition:transform .2s cubic-bezier(.2,.9,.3,1.4),border-color .2s,box-shadow .2s;background:#0e0f22}
+.w:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 8px 22px rgba(0,0,0,.35)}.w:active{transform:scale(.96)}
+.w.on{border-color:#7c5cff;box-shadow:0 0 0 3px rgba(124,92,255,.35)}
+.w canvas{position:absolute;inset:0;width:100%;height:100%}
+.w .none{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#8d90b8;font-weight:700;font-size:13px}
+.w .st{position:absolute;top:7px;right:7px;width:18px;height:18px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+.w .ck{position:absolute;bottom:7px;right:7px;width:22px;height:22px;border-radius:50%;background:#7c5cff;display:none;align-items:center;justify-content:center}
+.w.on .ck{display:flex;animation:pop .35s cubic-bezier(.2,.9,.3,1.6)}
+@keyframes pop{from{transform:scale(0)}}
+.hint{font-size:12px;color:#8d90b8;margin-top:12px}
+</style></head><body>
+<div class="pv"><canvas id="pv"></canvas><div class="msgs"><div class="b in">Привет! Как тебе новый Lumo?<small>12:30</small></div><div class="b out">Очень красиво<small>12:31</small></div></div></div>
+<div id="secs"></div>
+<div class="hint">Обои показываются в переписке на этом компьютере. Обои со звёздочкой — для Lumo Premium.</div>
+<script src="https://lumo.app.local/wall.js"></script>
+<script>
+const post=o=>{try{window.chrome.webview.postMessage(JSON.stringify(o))}catch(e){}};
+const STAR='<svg class="st" viewBox="0 0 24 24"><path fill="#ffc247" d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7.1L12 17.3 5.8 21l1.6-7.1L2 9.2l7.1-.6z"/></svg>';
+const CK='<span class="ck"><svg width="13" height="13" viewBox="0 0 24 24"><path fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
+let D={cur:0,url:null,remote:[],premium:false}, stopPv=null, stops=[];
+function preview(){ if(stopPv) stopPv(); const c=document.getElementById('pv'); const r=D.remote.find(x=>x.id===D.cur);
+  if(D.cur===0){ const g=c.getContext('2d'); c.width=c.clientWidth; c.height=c.clientHeight; g.fillStyle='#0e0f22'; g.fillRect(0,0,c.width,c.height); stopPv=null; }
+  else stopPv=LumoWall(c,D.cur,{url:r?r.url:null}); }
+function render(){
+  stops.forEach(f=>f()); stops=[];
+  const secs=[]; const by={}; const order=[];
+  D.remote.forEach(w=>{ const t=w.section||'Новые'; if(!by[t]){by[t]=[];order.push(t)} by[t].push(w.id); });
+  order.forEach(t=>secs.push([t,by[t]]));
+  secs.push(['Живые',[30,31,32,33,34,35]],['Цвета',[0,1,2,3,4,5,6,7,8,9]],['Узоры',[10,11,12,13,14,15,16,17]],['Картины',[20,21,22,23,24,25,26,27]]);
+  const host=document.getElementById('secs'); host.innerHTML='';
+  secs.forEach(([t,items])=>{ const h=document.createElement('h3'); h.textContent=t; host.appendChild(h); const g=document.createElement('div'); g.className='grid'; host.appendChild(g);
+    items.forEach(i=>{ const r=D.remote.find(x=>x.id===i); const prem=r?r.premium:LumoWallPremium(i);
+      const d=document.createElement('div'); d.className='w'+(i===D.cur?' on':''); d.dataset.i=i;
+      d.innerHTML=(i===0?'<div class="none">Без фона</div>':'<canvas></canvas>')+(prem?STAR:'')+CK; g.appendChild(d);
+      if(i!==0) stops.push(LumoWall(d.querySelector('canvas'),i,{url:r?r.url:null}));
+      d.onclick=()=>post({t:'wall',n:i,url:r?r.url:null,premium:prem}); }); });
+  preview();
+}
+window.setData=d=>{ D=Object.assign(D,d); render(); };
+window.select=(n)=>{ D.cur=n; document.querySelectorAll('.w').forEach(e=>e.classList.toggle('on',+e.dataset.i===n)); preview(); };
+</script></body></html>

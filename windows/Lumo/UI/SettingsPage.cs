@@ -83,6 +83,7 @@ public sealed class SettingsPage : Grid
             },
             new Item[]
             {
+                new("look", "\uE790", 0xFF22A6FF, "Оформление", "Обои чата — как в мобильной версии", () => Task.FromResult<UIElement>(new LookWeb())),
                 new("notify", "\uEA8F", 0xFFFF5B5B, "Уведомления и звуки", "Сообщения, текст, панель задач", () => Task.FromResult(Dialogs.NotifyPanel())),
                 new("privacy", "\uE72E", 0xFF8E8EA8, "Конфиденциальность", "Время захода, звонки, блокировки", PrivacyPage.Make),
                 new("data", "\uE8B7", 0xFF4CC764, "Данные и память", "Кэш файлов на этом компьютере", DataPanel),

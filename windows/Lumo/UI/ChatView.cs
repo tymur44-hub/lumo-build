@@ -117,6 +117,7 @@ public sealed class ChatView : Grid
         // ----- переписка -----
         var area = new Grid { AllowDrop = true, Background = T.ChatBg };
         sv.Content = msgs;
+        area.Children.Add(new WallLayer());   // обои из «Оформления»
         area.Children.Add(sv);
         area.Children.Add(loading);
         down = new Button
