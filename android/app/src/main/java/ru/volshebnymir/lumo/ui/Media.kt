@@ -1,5 +1,6 @@
 package ru.volshebnymir.lumo.ui
 
+import ru.volshebnymir.lumo.core.askPremium
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -332,7 +333,7 @@ fun TranscribeButton(mine: Boolean) {
     Box(Modifier.size(width = 38.dp, height = 32.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
         .background(if (mine) Color.White.copy(alpha = 0.2f) else p.a1.copy(alpha = 0.14f))
         .bouncy {
-            if (!prem) ru.volshebnymir.lumo.core.AppModel.say(ru.volshebnymir.lumo.core.PREMIUM_SOON)
+            if (!prem) ru.volshebnymir.lumo.core.AppModel.askPremium()
             else ru.volshebnymir.lumo.core.AppModel.say("Расшифровка на Android пока в разработке")
         }, contentAlignment = Alignment.Center) {
         Row(verticalAlignment = Alignment.CenterVertically) {

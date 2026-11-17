@@ -1,5 +1,6 @@
 package ru.volshebnymir.lumo.ui
 
+import ru.volshebnymir.lumo.core.askPremium
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -336,7 +337,7 @@ fun StoryHoursPicker(hours: Int, onPick: (Int) -> Unit) {
     val p = P
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         listOf(24 to "24 ч", 48 to "48 ч ★", 72 to "3 дня ★", 168 to "7 дней ★").forEach { (h, t) ->
-            Pill(t, hours == h) { if (h > 24 && !AppModel.isPremium) AppModel.say(PREMIUM_SOON) else onPick(h) }
+            Pill(t, hours == h) { if (h > 24 && !AppModel.isPremium) AppModel.askPremium() else onPick(h) }
         }
     }
     Text("Сколько будет жить история", color = p.muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 4.dp))

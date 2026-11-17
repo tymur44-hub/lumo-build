@@ -204,11 +204,20 @@ object AppModel {
     /** Нажатие кнопки под сообщением бота */
     fun botPress(m: Message, b: BotBtn) {
         if (!b.webApp.isNullOrEmpty() && m.senderId != null) { miniApp = MiniAppReq(m.senderId, b.webApp); return }
-        if (!b.url.isNullOrEmpty()) { openUrl?.invoke(b.url); return }
+        if (!b.url.isNullOrEmpty()) {
+            // оплата — в окне оплаты внутри Lumo
+            if ((android.net.Uri.parse(b.url).host ?: "").endsWith("yoomoney.ru")) ru.volshebnymir.lumo.ui.Pay.open(b.url, ru.volshebnymir.lumo.ui.Pay.orderFrom(b.url))
+            else openUrl?.invoke(b.url)
+            return
+        }
         val d = b.data ?: return
         scope.launch {
             try {
-                val r = Api.botFunction("/cb", JSONObject().put("message_id", m.id).put("data", d)) as? JSONObject
+                val body = JSONObject().put("message_id", m.id).put("data", d)
+                if (d.startsWith("pay_")) body.put("inline", true)
+                val r = Api.botFunction("/cb", body) as? JSONObject
+                val pu = r?.str("pay_url")
+                if (pu != null) { ru.volshebnymir.lumo.ui.Pay.open(pu, r.str("order_id")); return@launch }
                 r?.str("toast")?.let { say(it) }
             } catch (e: Exception) { say("Не удалось выполнить действие") }
         }

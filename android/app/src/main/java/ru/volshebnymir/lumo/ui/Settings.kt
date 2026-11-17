@@ -1,5 +1,6 @@
 package ru.volshebnymir.lumo.ui
 
+import ru.volshebnymir.lumo.core.askPremium
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -601,7 +602,7 @@ fun MsgPrivacyScreen() {
             listOf("all" to "Все", "premium" to "Контакты и Premium-подписчики").forEachIndexed { i, (v, t) ->
                 val locked = v == "premium" && !AppModel.isPremium
                 Row(Modifier.fillMaxWidth().bouncy {
-                    if (locked) AppModel.say(PREMIUM_SOON) else scope.launch { AppModel.setPrivacyKey("msg_prem", v) }
+                    if (locked) AppModel.askPremium() else scope.launch { AppModel.setPrivacyKey("msg_prem", v) }
                 }.padding(horizontal = 20.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.width(34.dp)) {
                         if (cur == v) Icon(Icons.Filled.Check, null, tint = p.a1, modifier = Modifier.size(22.dp))
@@ -632,7 +633,7 @@ private fun PaidPriceSection() {
     Row(Modifier.padding(horizontal = 14.dp).fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf(0 to "Бесплатно", 5 to "5", 10 to "10", 25 to "25", 50 to "50", 100 to "100").forEach { (v, t) ->
             Pill(t, price == v) {
-                if (v > 0 && !AppModel.isPremium) AppModel.say(PREMIUM_SOON)
+                if (v > 0 && !AppModel.isPremium) AppModel.askPremium()
                 else scope.launch { runCatching { Api.rpc("lm_paid_set", jsonOf("p_price" to v)) }.onSuccess { price = v; AppModel.say(if (v == 0) "Платные сообщения выключены" else "Цена сообщения: $v") }.onFailure { AppModel.say(it.message ?: "Ошибка") } }
             }
         }

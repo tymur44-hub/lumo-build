@@ -1,5 +1,6 @@
 package ru.volshebnymir.lumo.ui
 
+import ru.volshebnymir.lumo.core.askPremium
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -979,7 +980,7 @@ fun AppearanceScreen() {
                     row.forEach { (i, ab) ->
                         Box(Modifier.size(40.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Color(ab.first), Color(ab.second))))
                             .border(3.dp, if (Look.accent == i) p.text else Color.Transparent, CircleShape)
-                            .bouncy { if (Look.accentPremium(i) && !AppModel.isPremium) AppModel.say(ru.volshebnymir.lumo.core.PREMIUM_SOON) else { Look.accent = i; Look.save() } })
+                            .bouncy { if (Look.accentPremium(i) && !AppModel.isPremium) AppModel.askPremium() else { Look.accent = i; Look.save() } })
                     }
                 }
             }
@@ -994,7 +995,7 @@ fun AppearanceScreen() {
                     row.forEach { i ->
                         Box(Modifier.size(width = 56.dp, height = 78.dp).clip(RoundedCornerShape(12.dp)).background(p.chatBg)
                             .border(3.dp, if (Extra.wall == i) p.text else Color.Transparent, RoundedCornerShape(12.dp))
-                            .bouncy { if (wallIsPremium(i) && !AppModel.isPremium) AppModel.say(ru.volshebnymir.lumo.core.PREMIUM_SOON) else Extra.chooseWall(i) }) {
+                            .bouncy { if (wallIsPremium(i) && !AppModel.isPremium) AppModel.askPremium() else Extra.chooseWall(i) }) {
                             WallLayer(i, p)
                             if (wallIsPremium(i)) Icon(Icons.Filled.Star, null, tint = Color(0xFFFFC247), modifier = Modifier.align(Alignment.TopEnd).padding(3.dp).size(13.dp))
                         }

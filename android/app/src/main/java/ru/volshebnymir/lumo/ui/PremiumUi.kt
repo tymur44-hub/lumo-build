@@ -1,5 +1,6 @@
 package ru.volshebnymir.lumo.ui
 
+import ru.volshebnymir.lumo.core.askPremium
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
@@ -97,7 +98,7 @@ fun PremiumChatCard(c: ChatItem?) {
                 listOf(0 to "Выключить", 3600 to "1 час", 86400 to "1 день", 604800 to "1 неделя", 2592000 to "1 месяц").forEach { (v, t) ->
                     Text(t, color = if (v == ttl) p.a1 else p.text, fontWeight = if (v == ttl) FontWeight.Bold else FontWeight.Normal, fontSize = 16.sp,
                         modifier = Modifier.fillMaxWidth().bouncy {
-                            if (v > 0 && !AppModel.isPremium) { AppModel.say(PREMIUM_SOON); return@bouncy }
+                            if (v > 0 && !AppModel.isPremium) { AppModel.askPremium(); return@bouncy }
                             scope.launch { if (AppModel.setChatTtl(c.id, v)) { ttl = v; ttlDlg = false } }
                         }.padding(vertical = 10.dp))
                 }

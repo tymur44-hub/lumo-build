@@ -87,59 +87,130 @@ fun WalletScreen() {
     val p = P
     val scope = rememberCoroutineScope()
     var rows by remember { mutableStateOf<List<LedgerRow>>(emptyList()) }
+    var loaded by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    var tab by remember { mutableIntStateOf(0) }
     suspend fun reload() {
-        Lumens.load(); rows = Lumens.history()
-        AppModel.loadProfiles(rows.mapNotNull { it.refUser })
+        Lumens.load(); val a = Lumens.history()
+        AppModel.loadProfiles(a.mapNotNull { it.refUser })
+        rows = a; loaded = true
     }
-    LaunchedEffect(Unit) { reload() }
-    Column(Modifier.fillMaxSize().background(p.bg).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        TopBar("Люмены")
-        Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(p.accent).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            LumenIcon(72.dp)
-            Spacer(Modifier.height(10.dp))
-            Text(Lumens.balance.toString(), color = Color.White, fontSize = 46.sp, fontWeight = FontWeight.Black)
-            Text(lumenWord(Lumens.balance), color = Color.White.copy(alpha = 0.85f), fontSize = 16.sp)
-        }
-        Column(Modifier.padding(horizontal = 14.dp)) {
-            GradientButton(if (Lumens.canClaim) "Забрать ежедневный бонус" else "Бонус получен — загляните позже", busy, Lumens.canClaim) {
-                busy = true
-                scope.launch {
-                    try { val n = Lumens.claim(); AppModel.say("Получено: $n ${lumenWord(n.toLong())}"); rows = Lumens.history() }
-                    catch (e: Exception) { AppModel.say(e.message ?: "Ошибка") }
-                    busy = false
+    LaunchedEffect(Pay.paidTick) { reload() }
+    val shown = when (tab) { 1 -> rows.filter { it.delta > 0 }; 2 -> rows.filter { it.delta < 0 }; else -> rows }
+    Column(Modifier.fillMaxSize().background(p.bg).verticalScroll(rememberScrollState())) {
+        TopBar("")
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.height(140.dp), contentAlignment = Alignment.Center) { LumenLive(62.dp) }
+            Text("Люмены Lumo", color = p.text, fontWeight = FontWeight.Black, fontSize = 27.sp)
+            Text("Покупайте люмены, чтобы дарить подарки, поддерживать авторов и каналы и отправлять их друзьям.",
+                color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp))
+            // баланс
+            Column(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.panel).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LumenIcon(34.dp); Spacer(Modifier.width(8.dp))
+                    Text(Lumens.balance.toString(), color = p.text, fontWeight = FontWeight.Black, fontSize = 42.sp)
+                }
+                Text("Ваш баланс", color = p.muted, fontSize = 15.sp)
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp)).background(p.accent).bouncy { Pay.buy = true },
+                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Add, null, tint = Color.White, modifier = Modifier.size(19.dp)); Spacer(Modifier.width(6.dp))
+                        Text("Пополнить", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                    val can = Lumens.canClaim
+                    Row(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp)).background(p.a1.copy(alpha = if (can) 0.14f else 0.07f)).bouncy {
+                        if (!can || busy) return@bouncy
+                        busy = true
+                        scope.launch {
+                            try { val n = Lumens.claim(); AppModel.say("Получено: $n ${lumenWord(n.toLong())}"); reload() }
+                            catch (e: Exception) { AppModel.say(e.message ?: "Ошибка") }
+                            busy = false
+                        }
+                    }, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), color = p.a1, strokeWidth = 2.dp)
+                        else {
+                            Icon(if (can) Icons.Filled.AutoAwesome else Icons.Filled.Check, null, tint = if (can) p.a1 else p.muted, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+                            Text(if (can) "Бонус дня" else "Бонус получен", color = if (can) p.a1 else p.muted, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                    }
                 }
             }
-            if (Lumens.streak > 0) Text("Серия: ${Lumens.streak} ${plr(Lumens.streak.toLong(), "день", "дня", "дней")} подряд. Чем длиннее серия, тем больше бонус — до 10 в день.",
-                color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp, start = 6.dp, end = 6.dp))
-        }
-        Card {
-            SettingsRow(Icons.Filled.AddCard, Color(0xFF2BD67B), "Пополнить", "Покупка люменов — в разработке") { AppModel.say("Пополнение пока недоступно") }
-            Divider()
-            if (ru.volshebnymir.lumo.core.RemoteConfig.on("gifts")) {
-            SettingsRow(Icons.Filled.CardGiftcard, Color(0xFFFF5E8A), "Подарки", "NFT-подарки за люмены") { AppModel.push(Screen.Gifts) }
-            Divider()
+            Row(Modifier.padding(vertical = 12.dp).bouncy { Pay.friend = true }.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.CardGiftcard, null, tint = p.a1, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(6.dp))
+                Text("Подарить люмены друзьям", color = p.a1, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp)
+                Icon(Icons.Filled.ChevronRight, null, tint = p.a1, modifier = Modifier.size(18.dp))
             }
-            SettingsRow(Icons.Filled.Info, p.a1, "Как это работает", "Откройте профиль человека и нажмите «Люмены», либо удерживайте его сообщение, либо нажмите на скрепку в личном чате.") {}
         }
-        Text("ИСТОРИЯ", color = p.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 22.dp))
-        if (rows.isEmpty()) Text("Пока пусто", color = p.muted, modifier = Modifier.padding(horizontal = 22.dp))
-        else Card {
-            rows.forEachIndexed { i, r ->
-                if (i > 0) Divider()
-                val who = r.refUser?.let { AppModel.displayName(it) } ?: ""
-                Row(Modifier.fillMaxWidth().padding(vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("ЗАРАБОТАТЬ ЛЮМЕНЫ", color = p.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 30.dp, bottom = 6.dp))
+        Card {
+            SettingsRow(Icons.Filled.CalendarMonth, Color(0xFFFF9A3D), "Ежедневный бонус",
+                if (Lumens.streak > 0) "Серия ${Lumens.streak} ${plr(Lumens.streak.toLong(), "день", "дня", "дней")} подряд — завтра +${minOf(3 + Lumens.streak, 10)}" else "Заходите каждый день — до 10 люменов в день") {}
+            Divider()
+            SettingsRow(Icons.Filled.Favorite, Color(0xFFFF5E8A), "Поддержка от читателей", "Люмены за ваши сообщения и посты в каналах") {}
+            Divider()
+            SettingsRow(Icons.Filled.SportsEsports, Color(0xFF7C5CFF), "Игры с друзьями", "Ставки и выигрыши в играх Lumo") {}
+            if (RemoteConfig.on("gifts")) {
+                Divider()
+                SettingsRow(Icons.Filled.Redeem, Color(0xFFC65CFF), "Подарки", "Подарки за люмены — дарите и храните в профиле") { AppModel.push(Screen.Gifts) }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Card {
+            SettingsRow(Icons.Filled.VerifiedUser, Color(0xFF2BD67B), "Оплата работает", "Банковской картой через ЮMoney. Люмены и Premium зачисляются автоматически, обычно за минуту.") { Pay.buy = true }
+        }
+        // вкладки операций
+        Row(Modifier.padding(horizontal = 16.dp).padding(top = 18.dp, bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(50)).background(p.panel2).padding(3.dp)) {
+            listOf("Все операции", "Зачисления", "Списания").forEachIndexed { i, t ->
+                Box(Modifier.weight(1f).height(34.dp).clip(RoundedCornerShape(50)).background(if (tab == i) p.panel else Color.Transparent).clickable { tab = i }, contentAlignment = Alignment.Center) {
+                    Text(t, color = if (tab == i) p.text else p.muted, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1)
+                }
+            }
+        }
+        if (shown.isEmpty()) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Filled.History, null, tint = p.muted.copy(alpha = 0.6f), modifier = Modifier.size(30.dp))
+                Text(if (loaded) "Операций пока нет" else "Загрузка…", color = p.muted, fontSize = 15.sp)
+            }
+        } else Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.panel)) {
+            shown.forEachIndexed { i, r ->
+                if (i > 0) Box(Modifier.padding(start = 70.dp).fillMaxWidth().height(1.dp).background(p.line))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val u = r.refUser
+                    if (u != null) { val pr = AppModel.profiles[u]; Avatar(AppModel.displayName(u), pr?.avatarUrl, pr?.color ?: 0, 44.dp) }
+                    else {
+                        val (ic, c1, c2) = when (r.kind) {
+                            "buy" -> Triple(Icons.Filled.CreditCard, 0xFF2BD67B, 0xFF18A957)
+                            "daily" -> Triple(Icons.Filled.CalendarMonth, 0xFFFFB347, 0xFFFF7A3D)
+                            "gift_buy", "gift_sell" -> Triple(Icons.Filled.CardGiftcard, 0xFFFF7AB8, 0xFFC65CFF)
+                            "game_win", "game_stake", "game_refund" -> Triple(Icons.Filled.SportsEsports, 0xFF8A7BFF, 0xFF5B5CFF)
+                            else -> Triple(Icons.Filled.AutoAwesome, 0xFF36B8FF, 0xFF3A7BFF)
+                        }
+                        Box(Modifier.size(44.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Color(c1), Color(c2)))), contentAlignment = Alignment.Center) {
+                            Icon(ic, null, tint = Color.White, modifier = Modifier.size(21.dp))
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(when (r.kind) { "daily" -> "Ежедневный бонус"; "tip_in" -> "От $who"; "tip_out" -> "Для $who"; "grant" -> "Начисление"; else -> "Операция" }, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                        val title = when (r.kind) {
+                            "tip_in", "tip_out" -> u?.let { AppModel.displayName(it) } ?: "Пользователь"
+                            "buy" -> "Покупка люменов"; "daily" -> "Ежедневный бонус"; "grant" -> "Начисление от Lumo"
+                            "gift_buy" -> "Покупка подарка"; "gift_sell" -> "Продажа подарка"
+                            "game_win" -> "Выигрыш в игре"; "game_stake" -> "Ставка в игре"; "game_refund" -> "Возврат ставки"
+                            else -> "Операция"
+                        }
+                        Text(title, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp, maxLines = 1)
+                        val sub = when (r.kind) { "tip_in" -> "Отправил(а) вам люмены"; "tip_out" -> "Вы отправили люмены"; "buy" -> "Оплата картой"; else -> null }
+                        if (sub != null) Text(sub, color = p.muted, fontSize = 13.sp, maxLines = 1)
                         Text(whenText(r.at), color = p.muted, fontSize = 12.5.sp)
                     }
-                    Text((if (r.delta > 0) "+" else "") + r.delta, color = if (r.delta > 0) Color(0xFF2BD67B) else p.text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                    Spacer(Modifier.width(6.dp))
-                    LumenIcon(18.dp)
+                    Text((if (r.delta > 0) "+" else "−") + kotlin.math.abs(r.delta), color = if (r.delta > 0) Color(0xFF2BC46F) else Color(0xFFFF4D6A), fontWeight = FontWeight.Bold, fontSize = 16.5.sp)
+                    Spacer(Modifier.width(5.dp))
+                    LumenIcon(17.dp)
                 }
             }
         }
-        Spacer(Modifier.height(30.dp))
+        Spacer(Modifier.height(30.dp).navigationBarsPadding())
     }
 }
 

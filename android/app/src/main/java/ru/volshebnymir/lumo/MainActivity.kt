@@ -48,6 +48,7 @@ class MainActivity : FragmentActivity() {
                 // ссылки из сообщений — во встроенный браузер
                 androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalUriHandler provides ru.volshebnymir.lumo.ui.Browser.handler) { Root() }
                 ru.volshebnymir.lumo.ui.BrowserHost()
+                ru.volshebnymir.lumo.ui.PayHost()
             }
             ru.volshebnymir.lumo.ui.AccountFlip.Overlay()
             // во время звонка окно Lumo показывается поверх экрана блокировки и включает экран

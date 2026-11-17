@@ -1,5 +1,6 @@
 package ru.volshebnymir.lumo.ui
 
+import ru.volshebnymir.lumo.core.askPremium
 import android.os.Build
 import android.view.WindowManager
 import androidx.compose.animation.core.LinearEasing
@@ -179,7 +180,7 @@ val FEATURES = listOf(
 private val ABOUT = listOf(
     "Что это" to "Lumo Premium — необязательная подписка с дополнительными возможностями для общения. Основные функции мессенджера остаются бесплатными.",
     "Где работает" to "Подписка привязана к вашему аккаунту и действует на всех устройствах: сайт, iOS, Android и Windows.",
-    "Как оформить" to "Оплата проходит через встроенного бота @lumo_premium прямо в Lumo. После оплаты значок и функции включаются сами.",
+    "Как оформить" to "Нажмите «Оформить Premium» и оплатите банковской картой через ЮMoney прямо в Lumo. После оплаты значок и функции включаются сами, обычно за минуту.",
     "Безопасность" to "Шифрование медиа остаётся бесплатным для всех. Premium не даёт доступа к чужим перепискам.",
     "Скоро" to "Функции с пометкой «в разработке» появятся в следующих обновлениях.",
 )
@@ -219,7 +220,7 @@ fun PremiumScreen() {
     if (emo) EmojiPickerDialog { emo = false }
     detail?.let { i ->
         PremiumDetailDialog(i, owner, onClose = { detail = null }) {
-            if (owner) { detail = null; scope.launch { AppModel.openByUsername("lumo_premium") } } else AppModel.say("Оплата пока временно недоступна")
+            detail = null; Pay.showPlans()
         }
     }
     Column(Modifier.fillMaxSize().background(p.bg)) {
@@ -299,7 +300,7 @@ fun PremiumScreen() {
         }
         Box(Modifier.fillMaxWidth().background(p.panel).navigationBarsPadding().padding(12.dp)) {
             ShimmerButton(if (AppModel.isPremium) "Продлить подписку" else "Оформить Premium") {
-                if (owner) scope.launch { AppModel.openByUsername("lumo_premium") } else AppModel.say("Оплата пока временно недоступна")
+                Pay.showPlans()
             }
         }
     }
@@ -455,7 +456,7 @@ fun AppIconDialog(onClose: () -> Unit) {
                 Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     row.forEach { (k, title, res) ->
                         Column(Modifier.clip(RoundedCornerShape(16.dp)).bouncy {
-                            if (k != "Classic" && !AppModel.isPremium) AppModel.say(PREMIUM_SOON)
+                            if (k != "Classic" && !AppModel.isPremium) AppModel.askPremium()
                             else { applyIcon(ctx, k); cur = k }
                         }.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(res), null,

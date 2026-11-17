@@ -4,12 +4,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Date
 
-const val PREMIUM_SOON = "Функция Lumo Premium. Оформление пока временно недоступно"
+const val PREMIUM_SOON = "Это функция Lumo Premium"
 
 val AppModel.isPremium: Boolean get() = me?.premium == true
 
 /** Выполняет действие, только если у пользователя есть Premium; иначе сообщает, что функция пока недоступна */
-fun AppModel.premium(action: () -> Unit) { if (isPremium) action() else say(PREMIUM_SOON) }
+fun AppModel.premium(action: () -> Unit) { if (isPremium) action() else askPremium() }
+
+/** Функция Premium без подписки: подсказка и сразу окно оформления */
+fun AppModel.askPremium() { say(PREMIUM_SOON); ru.volshebnymir.lumo.ui.Pay.showPlans() }
 
 suspend fun AppModel.scheduleMessage(chatId: String, text: String, at: Date, replyTo: Int?): Boolean {
     prep(chatId)

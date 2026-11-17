@@ -405,15 +405,15 @@ fun GiftShopDialog(to: String, onClose: () -> Unit) {
                 Text("Подарить Premium", color = p.text, fontWeight = FontWeight.Black, fontSize = 28.sp, modifier = Modifier.padding(top = 8.dp))
                 Text("Подарите $name доступ к дополнительным функциям Lumo.", color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp))
                 Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    listOf(Triple("3 месяца", "🎁", null as String?), Triple("6 месяцев", "🎁", "-35%"), Triple("1 год", "🎁", "-40%")).forEachIndexed { i, (t, e, badge) ->
+                    listOf(Triple("1 месяц", "199 ₽", null as String?), Triple("6 месяцев", "1 490 ₽", "-38%"), Triple("1 год", "2 490 ₽", "-58%")).forEachIndexed { i, (t, price, badge) ->
                         val tint = listOf(Color(0xFF4CAF50), Color(0xFF22A6FF), Color(0xFFFF5B5B))[i]
-                        Box(Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).background(p.panel).bouncy { AppModel.say("Подарок Premium в разработке") }) {
+                        Box(Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).background(p.panel).bouncy { Pay.showPlans(to, listOf(1, 6, 12)[i]) }) {
                             Column(Modifier.fillMaxWidth().padding(vertical = 14.dp, horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(tint.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.CardGiftcard, null, tint = tint, modifier = Modifier.size(32.dp)) }
                                 Text(t, color = p.text, fontWeight = FontWeight.Black, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
                                 Text("Premium", color = p.muted, fontSize = 13.sp)
                                 Box(Modifier.padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(p.a1.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 5.dp)) {
-                                    Text("Скоро", color = p.a1, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text(price, color = p.a1, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                 }
                             }
                             if (badge != null) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(8.dp)).background(Brush.horizontalGradient(listOf(p.a1, Color(0xFFB069FF)))).padding(horizontal = 6.dp, vertical = 2.dp)) {
@@ -422,7 +422,7 @@ fun GiftShopDialog(to: String, onClose: () -> Unit) {
                         }
                     }
                 }
-                Text("Оплата Premium ещё в разработке: как только она заработает, подарок можно будет отправить прямо отсюда.", color = p.muted, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 24.dp))
+                Text("Оплата картой через ЮMoney прямо в Lumo. Premium включится у получателя сразу после оплаты.", color = p.muted, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 24.dp))
                 Spacer(Modifier.height(26.dp))
                 Text("Отправить подарок", color = p.text, fontWeight = FontWeight.Black, fontSize = 26.sp)
                 Text("Дарите $name подарки, которые можно хранить в профиле.", color = p.muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp))
