@@ -45,7 +45,7 @@ public sealed class ShellView : Grid
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var meBtn = new Button { Content = meAv, Padding = new Thickness(0), Background = T.Transparent, BorderThickness = new Thickness(0), CornerRadius = new CornerRadius(17) };
         ToolTipService.SetToolTip(meBtn, "Мой профиль и настройки");
-        meBtn.Click += async (_, _) => await Dialogs.Settings(win);
+        meBtn.Click += (_, _) => ShowSettings();
         head.Children.Add(meBtn);
         var title = T.Txt("Чаты", 20, bold: true); title.VerticalAlignment = VerticalAlignment.Center; title.Margin = new Thickness(12, 0, 0, 0);
         Grid.SetColumn(title, 1); head.Children.Add(title);
@@ -54,7 +54,7 @@ public sealed class ShellView : Grid
         newBtn.Click += (_, _) => NewMenu().ShowAt(newBtn);
         tools.Children.Add(newBtn);
         tools.Children.Add(T.IconButton("\uE717", "Звонки", async () => await CallsSheet.Show(Open)));
-        tools.Children.Add(T.IconButton("\uE713", "Настройки", async () => await Dialogs.Settings(win)));
+        tools.Children.Add(T.IconButton("\uE713", "Настройки", () => ShowSettings()));
         Grid.SetColumn(tools, 2); head.Children.Add(tools);
         left.Children.Add(head);
 
@@ -232,6 +232,16 @@ public sealed class ShellView : Grid
             Store.Say("Не удалось открыть чат: " + e.Message);
             chat = null; openId = null;
         }
+    }
+
+    /// <summary>Настройки — на всю правую часть окна</summary>
+    public void ShowSettings(string? section = null)
+    {
+        chat?.Detach(); chat = null; openId = null; Store.OpenChatId = null;
+        list.SelectedItem = null;
+        var page = new SettingsPage(win, this);
+        right.Children.Clear(); right.Children.Add(page);
+        if (section != null) page.Select(section);
     }
 
     public void CloseChat()

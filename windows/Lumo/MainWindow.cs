@@ -181,7 +181,7 @@ public sealed class MainWindow : Window
             if (first != null) OpenChat(first.Id);
             await Task.Delay(2500);
             await Capture(Path.Combine(dir, "1-chat.png"));
-            _ = Dialogs.Settings(this);
+            shell?.ShowSettings();
             await Task.Delay(1500);
             await Capture(Path.Combine(dir, "2-profile.png"));
             Sheet.CloseTop();
@@ -211,8 +211,8 @@ public sealed class MainWindow : Window
         await Capture(Path.Combine(dir, "7-games.png"));
         Sheet.CloseTop();
         await Task.Delay(500);
-        _ = Dialogs.Settings(this);
-        await Task.Delay(1500);
+        shell?.ShowSettings("gifts");
+        await Task.Delay(2500);
         await Capture(Path.Combine(dir, "8-settings.png"));
         Sheet.CloseTop();
         await Task.Delay(500);

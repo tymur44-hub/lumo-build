@@ -22,10 +22,10 @@ public sealed class BirthdayBar : Grid
         sp.Children.Add(T.Icon("", 18, T.White));
         var col = new StackPanel();
         col.Children.Add(text);
-        col.Children.Add(T.Txt("Нажмите, чтобы поздравить", 11.5, T.B(0xE6FFFFFF)));
+        col.Children.Add(T.Txt("Нажмите, чтобы подарить подарок", 11.5, T.B(0xE6FFFFFF)));
         sp.Children.Add(col);
         Children.Add(sp);
-        Tapped += (_, _) => { if (today.Count > 0) open(today[0].Id); };
+        Tapped += async (_, _) => { if (today.Count > 0 && today[0].PeerId is string pid) await Gifts.ShowShop(pid); };
         Loaded += (_, _) => { Store.ChatsChanged += Upd; Upd(); };
         Unloaded += (_, _) => Store.ChatsChanged -= Upd;
     }

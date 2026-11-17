@@ -118,7 +118,7 @@ public static class Dialogs
 
     static string PrivName(string v) => v switch { "contacts" => "Мои контакты", "none" => "Никто", _ => "Все" };
 
-    static async Task<UIElement> PrivacyPanel()
+    internal static async Task<UIElement> PrivacyPanel()
     {
         await Store.LoadMe();
         var me = Store.Me!;
@@ -173,7 +173,7 @@ public static class Dialogs
         return sp;
     }
 
-    static async Task<UIElement> DevicesPanel()
+    internal static async Task<UIElement> DevicesPanel()
     {
         var sp = new StackPanel { Spacing = 8 };
         sp.Children.Add(T.Txt("Где выполнен вход в ваш аккаунт", 12, T.Muted, bold: true));
@@ -207,7 +207,7 @@ public static class Dialogs
         return sp;
     }
 
-    static async Task<UIElement> WalletPanel()
+    internal static async Task<UIElement> WalletPanel()
     {
         var sp = new StackPanel { Spacing = 12 };
         var me = Store.Me;
@@ -246,7 +246,7 @@ public static class Dialogs
         return sp;
     }
 
-    static UIElement NotifyPanel()
+    internal static UIElement NotifyPanel()
     {
         var sp = new StackPanel { Spacing = 10 };
         var on = new ToggleSwitch { Header = "Уведомления о новых сообщениях", IsOn = Prefs.GetBool("notify_on", true), OnContent = "Включены", OffContent = "Выключены" };
