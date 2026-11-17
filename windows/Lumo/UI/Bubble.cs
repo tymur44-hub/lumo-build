@@ -154,7 +154,7 @@ public sealed class BubbleView : Grid
             case "voice": return new VoiceView(m, mine);
             case "game": return GameCard(m);
             case "dice": return ThrowCard(m);
-            case "file": return FileView(m, fg);
+            case "file": return Music.IsAudio(m.FileName) && !m.Pending ? new AudioView(m, mine, fg) : FileView(m, fg);
             case "call":
             {
                 var sp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
@@ -307,7 +307,8 @@ public sealed class BubbleView : Grid
             if (mt.Index > pos) p.Inlines.Add(new Run { Text = text[pos..mt.Index] });
             if (mt.Groups[1].Success && Uri.TryCreate(mt.Value.TrimEnd('.', ',', ')', '!', '?'), UriKind.Absolute, out var u))
             {
-                var h = new Hyperlink { NavigateUri = u, Foreground = T.A2 };
+                var h = new Hyperlink { Foreground = T.A2 };
+                var uu = u; h.Click += (_, _) => Browser.Open(uu);   // во встроенном браузере
                 h.Inlines.Add(new Run { Text = mt.Value });
                 p.Inlines.Add(h);
             }
@@ -349,8 +350,32 @@ public sealed class BubbleView : Grid
             }
             g.Tapped += (_, e) => { e.Handled = true; owner.ShowVideo(m, false); };
         }
-        if (m.Pending) g.Children.Add(new ProgressRing { IsActive = true, Width = 34, Height = 34, Foreground = T.White });
+        if (m.Pending) g.Children.Add(UploadBadge(m.Id));
         return g;
+    }
+
+    /// <summary>Колечко отправки поверх фото/видео: проценты и мегабайты</summary>
+    static FrameworkElement UploadBadge(int id)
+    {
+        var sp = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Spacing = 6 };
+        var box = new Border { Background = T.B(0x77000000), CornerRadius = new CornerRadius(14), Padding = new Thickness(14, 10, 14, 10), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = sp };
+        var ringG = new Grid { Width = 50, Height = 50, HorizontalAlignment = HorizontalAlignment.Center };
+        var ring = new ProgressRing { IsActive = true, IsIndeterminate = true, Width = 50, Height = 50, Foreground = T.White, Maximum = 1 };
+        var pct = T.Txt("", 12, T.White, bold: true); pct.HorizontalAlignment = HorizontalAlignment.Center; pct.VerticalAlignment = VerticalAlignment.Center;
+        ringG.Children.Add(ring); ringG.Children.Add(pct);
+        var mb = T.Txt("", 11, T.White); mb.HorizontalAlignment = HorizontalAlignment.Center;
+        sp.Children.Add(ringG); sp.Children.Add(mb);
+        var tm = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        tm.Tick += (_, _) =>
+        {
+            if (!Store.Up.TryGetValue(id, out var u)) return;
+            ring.IsIndeterminate = false; ring.Value = u.F;
+            pct.Text = $"{(int)(u.F * 100)}%";
+            mb.Text = Fmt.Size((long)(u.Total * u.F)) + " / " + Fmt.Size(u.Total);
+        };
+        tm.Start();
+        box.Unloaded += (_, _) => tm.Stop();
+        return box;
     }
 
     FrameworkElement FileView(Message m, Brush fg)
@@ -369,6 +394,18 @@ public sealed class BubbleView : Grid
         sp.Children.Add(T.Txt(m.FileName, 14, fg, bold: true, lines: 1));
         var size = T.Txt(m.FileSize is long s ? Fmt.Size(s) : "", 12.5, mine ? T.OutMuted : T.Muted);
         sp.Children.Add(size);
+        if (m.Pending)
+        {
+            // отправка: проценты и мегабайты
+            ring.Visibility = Visibility.Visible; ring.IsActive = true; ic.Visibility = Visibility.Collapsed;
+            var tm = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+            tm.Tick += (_, _) =>
+            {
+                if (Store.Up.TryGetValue(m.Id, out var u)) { ring.IsIndeterminate = false; ring.Value = u.F; size.Text = $"{(int)(u.F * 100)}% · {Fmt.Size((long)(u.Total * u.F))} из {Fmt.Size(u.Total)}"; }
+            };
+            tm.Start();
+            g.Unloaded += (_, _) => tm.Stop();
+        }
         Grid.SetColumn(sp, 1); g.Children.Add(sp);
         g.Tapped += async (_, e) =>
         {
@@ -454,9 +491,16 @@ public sealed class VoiceView : Grid
         Grid.SetColumn(sp, 1); Children.Add(sp);
     }
 
+    public static void StopAll()
+    {
+        player?.Pause();
+        if (playing != null) { playing.icon.Glyph = "\uE768"; playing.bar.Value = 0; playing = null; }
+    }
+
     void Toggle()
     {
         if (m.MediaUrl == null) return;
+        if (Music.Playing) Music.Pause();   // голосовое — музыку на паузу
         if (player == null)
         {
             player = new Windows.Media.Playback.MediaPlayer();

@@ -483,6 +483,9 @@ public static class Store
         }
     }
 
+    /// <summary>Отправка: доля (0..1) и общий размер — для колечка с процентами и мегабайтами</summary>
+    public static readonly Dictionary<int, (double F, long Total)> Up = new();
+
     /// <summary>Отправить файл с диска: фото, видео, голосовое или документ. Большие файлы — частями по 45 МБ.</summary>
     public static async Task SendFile(string chatId, string path, string? caption = null, int? replyTo = null, bool asFile = false)
     {
@@ -505,9 +508,12 @@ public static class Store
         }
         var temp = Message.NewPending(chatId, me, kind, caption, meta.Clone(), replyTo, path);
         SetList(chatId, Msgs(chatId).Append(temp).ToList());
+        var total = fi.Length;
+        Up[temp.Id] = (0, total);
         try
         {
             const int chunk = 45 * 1024 * 1024;
+            long done = 0;
             string url;
             if (fi.Length > chunk)
             {
@@ -519,14 +525,18 @@ public static class Store
                     int n = 0;
                     while (n < chunk) { var r = await fs.ReadAsync(buf.AsMemory(n, chunk - n)); if (r <= 0) break; n += r; }
                     if (n == 0) break;
-                    parts.Add(await Api.Upload(n == chunk ? buf : buf[..n], ext + ".p" + i, "application/octet-stream"));
+                    var bas = done; var nn = n;
+                    parts.Add(await Api.Upload(n == chunk ? buf : buf[..n], ext + ".p" + i, "application/octet-stream",
+                        new Progress<double>(v => Up[temp.Id] = ((bas + v * nn) / Math.Max(1, total), total))));
+                    done += n;
                     i++;
                     if (n < chunk) break;
                 }
                 meta["parts"] = parts;
                 url = parts[0]!.GetValue<string>();
             }
-            else url = await Api.Upload(await File.ReadAllBytesAsync(path), ext.Length == 0 ? "bin" : ext, type);
+            else url = await Api.Upload(await File.ReadAllBytesAsync(path), ext.Length == 0 ? "bin" : ext, type, new Progress<double>(v => Up[temp.Id] = (v, total)));
+            Up[temp.Id] = (1, total);
             await Send(chatId, kind, caption, url, meta, replyTo, pendingId: temp.Id);
         }
         catch (Exception e)
@@ -534,6 +544,7 @@ public static class Store
             SetList(chatId, Msgs(chatId).Where(x => x.Id != temp.Id).ToList());
             Say("Ошибка загрузки: " + e.Message);
         }
+        finally { Up.Remove(temp.Id); }
     }
 
     /// <summary>Отправить готовые байты (вставка из буфера, запись голоса)</summary>
@@ -542,9 +553,10 @@ public static class Store
         var me = MyId; if (me == null) return;
         var temp = Message.NewPending(chatId, me, kind, caption, meta.Clone(), replyTo);
         SetList(chatId, Msgs(chatId).Append(temp).ToList());
+        Up[temp.Id] = (0, data.LongLength);
         try
         {
-            var url = await Api.Upload(data, ext, Mime(ext));
+            var url = await Api.Upload(data, ext, Mime(ext), new Progress<double>(v => Up[temp.Id] = (v, data.LongLength)));
             await Send(chatId, kind, caption, url, meta, replyTo, pendingId: temp.Id);
         }
         catch (Exception e)
@@ -552,6 +564,7 @@ public static class Store
             SetList(chatId, Msgs(chatId).Where(x => x.Id != temp.Id).ToList());
             Say("Ошибка загрузки: " + e.Message);
         }
+        finally { Up.Remove(temp.Id); }
     }
 
     public static string Mime(string ext) => ext switch

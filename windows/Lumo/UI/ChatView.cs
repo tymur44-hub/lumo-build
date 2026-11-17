@@ -103,7 +103,10 @@ public sealed class ChatView : Grid
         var unpin = T.IconButton("\uE711", "Открепить", async () => await Store.Pin(null, ChatId), 30, 12);
         Grid.SetColumn(unpin, 2); pg.Children.Add(unpin);
         pinBar.Child = pg;
-        Grid.SetRow(pinBar, 1); Children.Add(pinBar);
+        var topBox = new StackPanel();
+        topBox.Children.Add(new MiniPlayerBar(true));
+        topBox.Children.Add(pinBar);
+        Grid.SetRow(topBox, 1); Children.Add(topBox);
 
         // ----- переписка -----
         var area = new Grid { AllowDrop = true, Background = T.ChatBg };
@@ -210,8 +213,13 @@ public sealed class ChatView : Grid
 
     public static readonly Dictionary<string, string> Drafts = new();
 
+    /// <summary>Где остановился в чате: вернулся в течение 2 минут — туда же, позже — в конец</summary>
+    static readonly Dictionary<string, (double FromBottom, DateTime At)> spots = new();
+
     public void Detach()
     {
+        var fromBottom = sv.ScrollableHeight - sv.VerticalOffset;
+        if (fromBottom > 200) spots[ChatId] = (fromBottom, DateTime.UtcNow); else spots.Remove(ChatId);
         Store.MessagesChanged -= OnMessages;
         Store.ReactionsChanged -= OnReaction;
         Store.ChatsChanged -= OnChats;
@@ -308,7 +316,17 @@ public sealed class ChatView : Grid
         foreach (var kv in keep) bubbles[kv.Key] = kv.Value;
         msgs.Children.Clear();
         foreach (var c in children) msgs.Children.Add(c);
-        if (firstLoad && list.Count > 0) { firstLoad = false; ScrollBottom(true); }
+        if (firstLoad && list.Count > 0)
+        {
+            firstLoad = false;
+            if (spots.Remove(ChatId, out var sp) && (DateTime.UtcNow - sp.At).TotalSeconds <= 120)
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                {
+                    sv.UpdateLayout();
+                    sv.ChangeView(null, Math.Max(0, sv.ScrollableHeight - sp.FromBottom), null, true);
+                });
+            else ScrollBottom(true);
+        }
     }
 
     public void ScrollBottom(bool instant)

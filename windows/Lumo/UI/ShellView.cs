@@ -53,12 +53,17 @@ public sealed class ShellView : Grid
         var newBtn = T.IconButton("\uE710", "Новый чат, группа или канал", () => { });
         newBtn.Click += (_, _) => NewMenu().ShowAt(newBtn);
         tools.Children.Add(newBtn);
+        tools.Children.Add(T.IconButton("\uE717", "Звонки", async () => await CallsSheet.Show(Open)));
         tools.Children.Add(T.IconButton("\uE713", "Настройки", async () => await Dialogs.Settings(win)));
         Grid.SetColumn(tools, 2); head.Children.Add(tools);
         left.Children.Add(head);
 
         search.Margin = new Thickness(12, 0, 12, 8);
-        Grid.SetRow(search, 1); left.Children.Add(search);
+        var topBox = new StackPanel();
+        topBox.Children.Add(new MiniPlayerBar(false));
+        topBox.Children.Add(new BirthdayBar(Open));
+        topBox.Children.Add(search);
+        Grid.SetRow(topBox, 1); left.Children.Add(topBox);
 
         Grid.SetRow(stories, 2); left.Children.Add(stories);
         stories.Open += i => ShowStories(i);
