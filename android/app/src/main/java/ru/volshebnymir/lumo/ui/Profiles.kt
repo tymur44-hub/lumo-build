@@ -761,14 +761,8 @@ fun EditProfileScreen() {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.TopCenter).padding(top = 4.dp)) {
                     Box(Modifier.bouncy { photoMenu = true }) {
                         Avatar(listOf(first, last).joinToString(" ").trim(), me?.avatarUrl, me?.color ?: 0, 120.dp)
-                        androidx.compose.material3.DropdownMenu(photoMenu, { photoMenu = false }) {
-                            androidx.compose.material3.DropdownMenuItem(text = { Text("Выбрать фото") }, leadingIcon = { Icon(Icons.Filled.Photo, null) },
-                                onClick = { photoMenu = false; pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
-                            if (!me?.avatarUrl.isNullOrEmpty()) androidx.compose.material3.DropdownMenuItem(text = { Text("Удалить фото", color = p.danger) },
-                                leadingIcon = { Icon(Icons.Filled.Delete, null, tint = p.danger) },
-                                onClick = { photoMenu = false; scope.launch { runCatching { AppModel.setAvatar(null) } } })
-                        }
                     }
+                    if (photoMenu) AvatarPickerDialog { photoMenu = false }
                     Text("Изменить фотографию", color = p.a1, fontSize = 18.sp, modifier = Modifier.padding(top = 12.dp).bouncy { photoMenu = true })
                 }
                 Box(Modifier.align(Alignment.TopEnd).size(52.dp).clip(CircleShape).background(p.accent).bouncy { save() }, contentAlignment = Alignment.Center) {

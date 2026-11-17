@@ -87,9 +87,9 @@ fun AlbumGrid(items: List<Message>, onOpen: (Message) -> Unit) {
 
 // ---------------- шторка «скрепки»: галерея с выбором нескольких фото ----------------
 
-private class GalItem(val uri: Uri, val video: Boolean, val dur: Long)
+internal class GalItem(val uri: Uri, val video: Boolean, val dur: Long)
 
-private fun loadGallery(ctx: Context): List<GalItem> {
+internal fun loadGallery(ctx: Context): List<GalItem> {
     val out = mutableListOf<GalItem>()
     val files = MediaStore.Files.getContentUri("external")
     val type = MediaStore.Files.FileColumns.MEDIA_TYPE
@@ -117,7 +117,7 @@ private fun loadGallery(ctx: Context): List<GalItem> {
     return out
 }
 
-private fun galPerms(): Array<String> =
+internal fun galPerms(): Array<String> =
     if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
     else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 
@@ -267,7 +267,7 @@ fun AttachSheet(
     }
 }
 
-private fun ContextCompatCheck(ctx: Context, perm: String) =
+internal fun ContextCompatCheck(ctx: Context, perm: String) =
     androidx.core.content.ContextCompat.checkSelfPermission(ctx, perm) == PackageManager.PERMISSION_GRANTED
 
 // ---------------- удаление чата: у себя / у всех ----------------

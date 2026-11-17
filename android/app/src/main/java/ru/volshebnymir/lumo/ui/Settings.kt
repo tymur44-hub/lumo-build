@@ -82,6 +82,8 @@ fun SettingsScreen() {
     var inviteDlg by remember { mutableStateOf(false) }
     if (inviteDlg) InviteDialog { inviteDlg = false }
     LaunchedEffect(Unit) { AppModel.loadExtras() }
+    var avatarPicker by remember { mutableStateOf(false) }
+    if (avatarPicker) AvatarPickerDialog { avatarPicker = false }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u == null) return@rememberLauncherForActivityResult
         scope.launch {
@@ -122,7 +124,7 @@ fun SettingsScreen() {
             Divider()
             SettingsRow(Icons.Filled.Palette, p.a1, "Изменить цвет профиля", titleColor = p.a1) { styleDlg = true }
             Divider()
-            SettingsRow(Icons.Filled.CameraAlt, p.a1, "Изменить фотографию", titleColor = p.a1) { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+            SettingsRow(Icons.Filled.CameraAlt, p.a1, "Изменить фотографию", titleColor = p.a1) { avatarPicker = true }
         }
         var limitDlg by remember { mutableStateOf(false) }
         if (limitDlg) AlertDialog(onDismissRequest = { limitDlg = false }, containerColor = p.panel,

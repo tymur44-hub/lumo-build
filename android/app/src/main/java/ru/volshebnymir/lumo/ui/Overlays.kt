@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -499,6 +500,64 @@ fun qrBitmap(text: String, size: Int = 720): Bitmap {
     return Bitmap.createBitmap(px, size, size, Bitmap.Config.ARGB_8888)
 }
 
+private val QR_BG: List<List<Color>> = listOf(
+    listOf(Color(0xFF6C5CE7), Color(0xFFA66CFF)),
+    listOf(Color(0xFF0FB9B1), Color(0xFF2D98DA)),
+    listOf(Color(0xFFFF6B9D), Color(0xFFFF9A5A)),
+    listOf(Color(0xFF20BF6B), Color(0xFF0FB9B1)),
+    listOf(Color(0xFF1E1F3B), Color(0xFF3B3F7A)),
+    listOf(Color(0xFFF7B731), Color(0xFFFA8231)),
+    listOf(Color(0xFFEB3B5A), Color(0xFF8854D0)),
+    listOf(Color(0xFF45AAF2), Color(0xFFA5B1FF)),
+)
+private val QR_EMOJI = listOf("", "\u2764\uFE0F", "\uD83D\uDD25", "\u2B50", "\uD83D\uDE0E", "\uD83C\uDF89", "\uD83D\uDE80", "\uD83C\uDF08", "\uD83D\uDC8E", "\uD83C\uDF38", "\uD83D\uDC7E", "\uD83C\uDFA7", "\uD83D\uDC31", "\uD83C\uDF40", "\u26A1", "\uD83E\uDD84")
+
+/** Эмодзи на QR: появляется «каплей жидкого стекла» и мягко покачивается */
+@Composable
+private fun LiquidEmoji(e: String, size: androidx.compose.ui.unit.Dp) {
+    val appear = remember(e) { androidx.compose.animation.core.Animatable(0.1f) }
+    LaunchedEffect(e) { appear.animateTo(1f, androidx.compose.animation.core.spring(0.45f, androidx.compose.animation.core.Spring.StiffnessLow)) }
+    val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "lq")
+    val rot by inf.animateFloat(-4f, 4f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1600), androidx.compose.animation.core.RepeatMode.Reverse), label = "r")
+    val sq by inf.animateFloat(0.97f, 1.03f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1100), androidx.compose.animation.core.RepeatMode.Reverse), label = "s")
+    Box(Modifier.size(size).graphicsLayer { scaleX = appear.value * sq; scaleY = appear.value * (2f - sq); rotationZ = rot }
+        .clip(CircleShape)
+        .background(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.75f), Color.White.copy(alpha = 0.25f))))
+        .border(1.5.dp, Brush.linearGradient(listOf(Color.White, Color.White.copy(alpha = 0.2f))), CircleShape),
+        contentAlignment = Alignment.Center) {
+        Text(e, fontSize = (size.value * 0.5f).sp)
+        // блик капли
+        Box(Modifier.align(Alignment.TopStart).padding(start = size * 0.2f, top = size * 0.14f).size(size * 0.28f, size * 0.14f).clip(CircleShape).background(Color.White.copy(alpha = 0.8f)))
+    }
+}
+
+/** Картинка карточки для «Поделиться»: PNG с фоном, кодом, именем и эмодзи */
+private fun qrCardBitmap(link: String, name: String, user: String, bg: List<Color>, emoji: String): Bitmap {
+    val w = 1080; val h = 1440
+    val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val c = android.graphics.Canvas(out)
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    paint.shader = android.graphics.LinearGradient(0f, 0f, w.toFloat(), h.toFloat(), bg[0].toArgb(), bg[1].toArgb(), android.graphics.Shader.TileMode.CLAMP)
+    c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), paint)
+    paint.shader = null; paint.color = AColor.WHITE
+    val card = android.graphics.RectF(120f, 220f, w - 120f, h - 200f)
+    c.drawRoundRect(card, 80f, 80f, paint)
+    val qr = qrBitmap(link, 660)
+    c.drawBitmap(qr, (w - 660) / 2f, 330f, null)
+    paint.color = 0xFF14163A.toInt(); paint.textAlign = android.graphics.Paint.Align.CENTER
+    paint.textSize = 64f; paint.typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+    c.drawText(name, w / 2f, 1080f, paint)
+    paint.textSize = 46f; paint.color = 0xFF7276A0.toInt(); paint.typeface = android.graphics.Typeface.DEFAULT
+    c.drawText("@$user", w / 2f, 1150f, paint)
+    paint.textSize = 40f; paint.color = AColor.WHITE
+    c.drawText("Lumo", w / 2f, h - 110f, paint)
+    if (emoji.isNotEmpty()) {
+        paint.color = AColor.WHITE; c.drawCircle(w - 170f, 250f, 95f, paint)
+        paint.textSize = 100f; c.drawText(emoji, w - 170f, 285f, paint)
+    }
+    return out
+}
+
 @Composable
 fun MyQRScreen(onClose: () -> Unit) {
     val p = P
@@ -506,24 +565,70 @@ fun MyQRScreen(onClose: () -> Unit) {
     val me = AppModel.me
     val link = AppModel.profileLink
     val bmp = remember(link) { qrBitmap(link) }
+    val pref = remember { ctx.getSharedPreferences("lumo_qr", 0) }
+    var bg by remember { mutableIntStateOf(pref.getInt("bg", 0).coerceIn(0, QR_BG.size - 1)) }
+    var emoji by remember { mutableStateOf(pref.getString("emoji", "") ?: "") }
+    LaunchedEffect(bg, emoji) { pref.edit().putInt("bg", bg).putString("emoji", emoji).apply() }
+    val c0 by androidx.compose.animation.animateColorAsState(QR_BG[bg][0], androidx.compose.animation.core.tween(450), label = "c0")
+    val c1 by androidx.compose.animation.animateColorAsState(QR_BG[bg][1], androidx.compose.animation.core.tween(450), label = "c1")
+    fun shareImage() {
+        runCatching {
+            val f = java.io.File(ctx.cacheDir, "lumo-qr.png")
+            f.outputStream().use { qrCardBitmap(link, me?.name ?: "", me?.username ?: "", QR_BG[bg], emoji).compress(Bitmap.CompressFormat.PNG, 100, it) }
+            val u = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+            ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("image/png")
+                .putExtra(android.content.Intent.EXTRA_STREAM, u).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), "Поделиться QR-кодом").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure { AppModel.say("Не удалось подготовить картинку") }
+    }
     BackHandler { onClose() }
-    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(p.a1, p.a2))).clickable(remember { MutableInteractionSource() }, null) {}) {
-        RoundIcon(Icons.Filled.Close, tint = Color.White, bg = Color.Black.copy(alpha = 0.2f), modifier = Modifier.statusBarsPadding().padding(10.dp)) { onClose() }
-        Column(Modifier.align(Alignment.Center).padding(30.dp).clip(RoundedCornerShape(28.dp)).background(Color.White).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Avatar(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, 64.dp)
-            Spacer(Modifier.height(8.dp))
-            Text("@" + (me?.username ?: ""), color = Color(0xFF14163A), fontWeight = FontWeight.Black, fontSize = 20.sp)
-            Spacer(Modifier.height(12.dp))
-            Image(bmp.asImageBitmap(), null, Modifier.size(240.dp))
-            Spacer(Modifier.height(10.dp))
-            Text("Покажите код, чтобы открыть мой профиль. Кнопка «Сканировать» — открыть чужой профиль или войти на компьютере", color = Color(0xFF7276A0), fontSize = 13.sp, textAlign = TextAlign.Center)
-        }
-        Row(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Pill("Поделиться ссылкой", true) {
-                runCatching { ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
-                    .putExtra(android.content.Intent.EXTRA_TEXT, "Я в Lumo — напиши мне: $link"), "Поделиться").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(c0, c1))).clickable(remember { MutableInteractionSource() }, null) {}) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                RoundIcon(Icons.Filled.Close, tint = Color.White, bg = Color.Black.copy(alpha = 0.2f)) { onClose() }
+                Spacer(Modifier.weight(1f))
+                RoundIcon(Icons.Filled.QrCodeScanner, tint = Color.White, bg = Color.Black.copy(alpha = 0.2f)) { onClose(); Ui.qrScan = true }
             }
-            Pill("Сканировать", true) { onClose(); Ui.qrScan = true }
+            Spacer(Modifier.weight(1f))
+            Box {
+                Column(Modifier.padding(horizontal = 34.dp).clip(RoundedCornerShape(30.dp)).background(Color.White).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Avatar(me?.name ?: "", me?.avatarUrl, me?.color ?: 0, 64.dp)
+                    Text(me?.name ?: "", color = Color(0xFF14163A), fontWeight = FontWeight.Black, fontSize = 20.sp, modifier = Modifier.padding(top = 8.dp))
+                    Text("@" + (me?.username ?: ""), color = Color(0xFF7276A0), fontSize = 15.sp)
+                    Box(Modifier.padding(top = 12.dp), contentAlignment = Alignment.Center) {
+                        Image(bmp.asImageBitmap(), null, Modifier.size(230.dp))
+                    }
+                }
+                androidx.compose.animation.AnimatedVisibility(emoji.isNotEmpty(), Modifier.align(Alignment.TopEnd).padding(end = 18.dp).offset(y = (-18).dp),
+                    enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.scaleOut() + androidx.compose.animation.fadeOut()) {
+                    LiquidEmoji(emoji, 62.dp)
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            Text("Фон", color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().padding(start = 20.dp, bottom = 6.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                QR_BG.forEachIndexed { i, g ->
+                    val sel by androidx.compose.animation.core.animateFloatAsState(if (i == bg) 1f else 0f, androidx.compose.animation.core.spring(0.6f), label = "bs$i")
+                    Box(Modifier.size(44.dp).graphicsLayer { scaleX = 1f + 0.12f * sel; scaleY = 1f + 0.12f * sel }.clip(CircleShape).background(Brush.linearGradient(g))
+                        .border((2 + sel * 1.5f).dp, Color.White.copy(alpha = 0.5f + 0.5f * sel), CircleShape).bouncy { bg = i })
+                }
+            }
+            Text("Эмодзи", color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 14.dp, bottom = 6.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                QR_EMOJI.forEach { e ->
+                    Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = if (e == emoji) 0.45f else 0.18f)).bouncy { emoji = e }, contentAlignment = Alignment.Center) {
+                        if (e.isEmpty()) Icon(Icons.Filled.Block, null, tint = Color.White, modifier = Modifier.size(20.dp)) else Text(e, fontSize = 22.sp)
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(26.dp)).background(Color.White).bouncy { shareImage() }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Icon(Icons.Filled.Share, null, tint = c0, modifier = Modifier.size(20.dp))
+                    Text("  Поделиться", color = c0, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+                Box(Modifier.size(52.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.25f)).bouncy { copy(ctx, link); AppModel.say("Ссылка скопирована") }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Link, null, tint = Color.White)
+                }
+            }
         }
     }
 }
