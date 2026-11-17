@@ -219,6 +219,14 @@ public sealed class MainWindow : Window
         shell?.ShowSettings("qr");
         await Task.Delay(3000);
         await Capture(Path.Combine(dir, "9-qr.png"));
+        shell?.ShowSettings("privacy");
+        await Task.Delay(2500);
+        await Capture(Path.Combine(dir, "10-privacy.png"));
+        shell?.CloseSettings();
+        await Task.Delay(500);
+        shell?.ShowSettings();
+        await Task.Delay(1500);
+        await Capture(Path.Combine(dir, "11-menu.png"));
         Sheet.CloseTop();
         await Task.Delay(500);
         CallHost.I?.DemoRing();

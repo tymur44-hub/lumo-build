@@ -45,7 +45,7 @@ public sealed class SettingsPage : Grid
         ColumnDefinitions.Add(menuCol); ColumnDefinitions.Add(splitCol); ColumnDefinitions.Add(detailCol);
 
         // ---- меню: профиль и разделы ----
-        var menu = new StackPanel { Spacing = 12, Padding = new Thickness(18, 10, 18, 28), MaxWidth = 620, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var menu = new StackPanel { Spacing = 12, Padding = new Thickness(18, 10, 18, 28), HorizontalAlignment = HorizontalAlignment.Left };
         var topBar = new Grid { Margin = new Thickness(0, 0, 0, 4) };
         var back = new Button { Background = T.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(8, 6, 12, 6), CornerRadius = new CornerRadius(12) };
         var bsp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -84,7 +84,7 @@ public sealed class SettingsPage : Grid
             new Item[]
             {
                 new("notify", "\uEA8F", 0xFFFF5B5B, "Уведомления и звуки", "Сообщения, текст, панель задач", () => Task.FromResult(Dialogs.NotifyPanel())),
-                new("privacy", "\uE72E", 0xFF8E8EA8, "Конфиденциальность", "Время захода, звонки, блокировки", Dialogs.PrivacyPanel),
+                new("privacy", "\uE72E", 0xFF8E8EA8, "Конфиденциальность", "Время захода, звонки, блокировки", PrivacyPage.Make),
                 new("data", "\uE8B7", 0xFF4CC764, "Данные и память", "Кэш файлов на этом компьютере", DataPanel),
             },
             new Item[]
@@ -99,7 +99,14 @@ public sealed class SettingsPage : Grid
             },
         };
         foreach (var g in groups) menu.Children.Add(Group(g));
-        var left = new ScrollViewer { Content = menu, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var left = new ScrollViewer { Content = menu, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Disabled };
+        // ширину меню задаём явно: всегда по центру своей колонки и никогда не шире неё
+        left.SizeChanged += (_, e) =>
+        {
+            var w = e.NewSize.Width;
+            menu.Width = Math.Max(260, Math.Min(620, w));
+            menu.Margin = new Thickness(Math.Max(0, (w - menu.Width) / 2), 0, 0, 0);
+        };
         Children.Add(left);
 
         // ---- разделитель: тянем — меняем ширину ----
@@ -252,11 +259,22 @@ public sealed class SettingsPage : Grid
         if (current != key) return;
         if (el is FrameworkElement fe && fe.Parent is Panel pp) pp.Children.Remove(fe);
         body.Children.Clear();
-        UIElement view = el is IFillPage ? el : new ScrollViewer
+        UIElement view = el;
+        if (el is not IFillPage)
         {
-            Content = new Border { Padding = new Thickness(28, 4, 28, 28), MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Stretch, Child = el },
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-        };
+            // содержимое раздела всегда точно по ширине панели (не шире 760) и по центру
+            var holder = new Border { Padding = new Thickness(28, 4, 28, 28), HorizontalAlignment = HorizontalAlignment.Left, Child = el };
+            var sv = new ScrollViewer { Content = holder, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Disabled };
+            void Fit(double w)
+            {
+                var cw = Math.Max(240, Math.Min(760, w - 16));
+                holder.Width = cw;
+                holder.Margin = new Thickness(Math.Max(0, (w - 16 - cw) / 2), 0, 0, 0);
+            }
+            sv.SizeChanged += (_, e) => Fit(e.NewSize.Width);
+            if (body.ActualWidth > 0) Fit(body.ActualWidth);
+            view = sv;
+        }
         if (wasOpen) { view.Opacity = 0; view.RenderTransform = new TranslateTransform(); }
         body.Children.Add(view);
         if (wasOpen) Fade(view, true, 24);

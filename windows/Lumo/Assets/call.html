@@ -9,7 +9,11 @@
 html,body{height:100%;background:transparent;color:var(--text);font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif;overflow:hidden;user-select:none}
 #call{position:fixed;inset:0;display:none;background:radial-gradient(120% 90% at 50% 0%,#2a1f6b 0%,#14153a 45%,#0c0d1a 100%)}
 #call.on{display:block}
-#rv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;display:none}
+#rv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:transparent;display:none;transition:opacity .3s}
+#rv.fit{object-fit:contain}
+#rvbg{position:absolute;inset:-6%;width:112%;height:112%;object-fit:cover;filter:blur(38px) brightness(.55) saturate(1.2);display:none;pointer-events:none}
+#fitbtn{position:absolute;left:18px;top:18px;z-index:5;display:none;border:0;border-radius:14px;padding:8px 12px;background:rgba(0,0,0,.35);color:#fff;font:600 12.5px "Segoe UI",sans-serif;cursor:pointer;backdrop-filter:blur(8px)}
+#call.vid #fitbtn{display:block}
 #lv{position:absolute;right:18px;top:18px;width:220px;aspect-ratio:4/3;object-fit:cover;border-radius:16px;background:#000;display:none;box-shadow:0 8px 30px rgba(0,0,0,.45);transform:scaleX(-1);border:1px solid rgba(255,255,255,.15)}
 #who{position:absolute;left:0;right:0;top:16%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px}
 #av{width:140px;height:140px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:700;color:#fff;background-size:cover;background-position:center;box-shadow:0 10px 40px rgba(124,92,255,.35)}
@@ -35,7 +39,7 @@ html,body{height:100%;background:transparent;color:var(--text);font-family:"Sego
 #call.vid #min{left:auto;right:250px}
 #grid{position:absolute;inset:70px 24px 130px 24px;display:none;gap:12px;grid-auto-rows:1fr}
 #call.grp #grid{display:grid}
-#call.grp #who,#call.grp #rv,#call.grp #lv{display:none!important}
+#call.grp #who,#call.grp #rv,#call.grp #rvbg,#call.grp #fitbtn,#call.grp #lv{display:none!important}
 .tile{position:relative;border-radius:18px;overflow:hidden;background:#1a1c36;display:flex;align-items:center;justify-content:center;border:2px solid transparent;transition:border-color .2s}
 .tile.sp{border-color:var(--ok)}
 .tile video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
@@ -49,7 +53,9 @@ html,body{height:100%;background:transparent;color:var(--text);font-family:"Sego
 </head>
 <body>
 <div id="call">
+  <video id="rvbg" autoplay playsinline muted></video>
   <video id="rv" autoplay playsinline></video>
+  <button id="fitbtn" title="Двойной щелчок по видео — то же самое">Заполнить окно</button>
   <audio id="ra" autoplay></audio>
   <video id="lv" autoplay playsinline muted></video>
   <button class="b" id="min" title="Свернуть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg></button>
@@ -217,13 +223,30 @@ async function acceptCall(){
 }
 function rejectCall(){ if(!C.st) return; sig(C.peer,{t:'reject'}); sig(ME.id,{t:'taken'}); endCall('rejected',true); }
 function hangup(){ if(!C.st) return; sig(C.peer,{t:C.st==='calling'?'cancel':'hangup'}); endCall(C.t0?'ended':'missed'); }
+/* Видео собеседника: если кадр вертикальный (звонят с телефона) или сильно не совпадает с окном — показываем целиком,
+   а по краям — размытая копия; кнопка или двойной щелчок переключают «целиком / заполнить окно» */
+let fitMode='auto';
+function fitVideo(){
+  const rv=$('#rv'), bg=$('#rvbg'), b=$('#fitbtn'); if(!rv) return;
+  const vw=rv.videoWidth, vh=rv.videoHeight, box=rv.getBoundingClientRect();
+  let fit=false;
+  if(fitMode==='fit') fit=true;
+  else if(fitMode==='auto' && vw && vh && box.width && box.height){ const vr=vw/vh, br=box.width/box.height; fit=Math.max(vr,br)/Math.min(vr,br)>1.25; }
+  rv.classList.toggle('fit',fit);
+  bg.style.display=fit&&rv.style.display!=='none'?'block':'none';
+  if(b) b.textContent=fit?'Заполнить окно':'Показать целиком';
+}
+function toggleFit(){ const rv=$('#rv'); fitMode=rv.classList.contains('fit')?'fill':'fit'; fitVideo(); }
+addEventListener('resize',fitVideo);
+(document.readyState==='loading'?(f=>document.addEventListener('DOMContentLoaded',f)):(f=>f()))(()=>{ const rv=$('#rv'); if(!rv) return; rv.addEventListener('resize',fitVideo); rv.addEventListener('loadedmetadata',fitVideo); rv.addEventListener('dblclick',toggleFit); const b=$('#fitbtn'); if(b) b.onclick=e=>{e.stopPropagation();toggleFit()}; });
+
 function endCall(status,remote=false){
   if(!C.st) return;
   const wasCaller=C.role==='caller', dur=C.t0?Math.round((Date.now()-C.t0)/1000):0, chatId=C.chatId, video=C.video;
   stopRing(); if(C.callId) doneCalls.add(C.callId);
   clearInterval(C.reRing); clearTimeout(C.timeoutT); clearTimeout(C.inT); clearInterval(C.timer); clearInterval(C.hb); clearInterval(C.watch); clearTimeout(C.rT);
   try{ C.pc&&C.pc.close(); }catch{} try{ C.local&&C.local.getTracks().forEach(t=>t.stop()); }catch{}
-  ['#rv','#lv','#ra'].forEach(s=>{ const v=$(s); try{ v.pause(); v.srcObject=null; }catch{} });
+  ['#rv','#rvbg','#lv','#ra'].forEach(s=>{ const v=$(s); try{ v.pause(); v.srcObject=null; }catch{} }); fitMode='auto'; try{$('#rvbg').style.display='none'}catch{}
   $('#code').style.display='none';
   Object.assign(C,{st:null,pc:null,local:null,remote:null,t0:0,peer:null,callId:null,pendingOffer:null,iceQ:[],secCid:null,secP:null,reconn:false,everUp:false,peerCamOff:false});
   if(remote&&status==='ended') toast('Звонок завершён');
@@ -264,7 +287,8 @@ function callUI(){
   const rv=$('#rv'), lv=$('#lv'), ra=$('#ra');
   const remoteVid=!!(C.remote&&C.remote.getVideoTracks().length&&!C.peerCamOff);
   if(C.remote){ if(ra.srcObject!==C.remote){ ra.srcObject=C.remote; ra.play().catch(()=>{}); } }
-  if(remoteVid){ if(rv.srcObject!==C.remote){ rv.srcObject=C.remote; rv.muted=true; rv.play().catch(()=>{}); } rv.style.display='block'; } else rv.style.display='none';
+  const rbg=$('#rvbg');
+  if(remoteVid){ if(rv.srcObject!==C.remote){ rv.srcObject=C.remote; rv.muted=true; rv.play().catch(()=>{}); rbg.srcObject=C.remote; rbg.play().catch(()=>{}); } rv.style.display='block'; fitVideo(); } else { rv.style.display='none'; rbg.style.display='none'; }
   const localVid=!!(C.local&&C.local.getVideoTracks().length&&!C.camOff);
   if(localVid){ if(lv.srcObject!==C.local){ lv.srcObject=C.local; lv.play().catch(()=>{}); } lv.style.display='block'; } else lv.style.display='none';
   box.classList.toggle('vid',remoteVid);
