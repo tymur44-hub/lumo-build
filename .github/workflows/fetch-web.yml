@@ -1,0 +1,13 @@
+name: fetch-web
+on: { workflow_dispatch: {} }
+permissions: { contents: write }
+jobs:
+  get:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sfL "https://foniukmpiukuwpcdvdhp.supabase.co/functions/v1/lumo?t=$(date +%s)" -o web.js
+          ls -la web.js; head -c 200 web.js
+          gh release delete web-snapshot -y -R ${{ github.repository }} || true
+          gh release create web-snapshot web.js -R ${{ github.repository }} -t web-snapshot -n "снимок веб-версии"
+        env: { GH_TOKEN: "${{ github.token }}" }
