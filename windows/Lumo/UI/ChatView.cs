@@ -79,7 +79,7 @@ public sealed class ChatView : Grid
             tools.Children.Add(T.IconButton("\uE717", "Аудиозвонок", () => { var c = Store.Chat(ChatId); if (c != null) CallHost.I?.Start(c, false); }));
             tools.Children.Add(T.IconButton("\uE714", "Видеозвонок", () => { var c = Store.Chat(ChatId); if (c != null) CallHost.I?.Start(c, true); }));
             var giftTo = cc.PeerId;
-            tools.Children.Add(T.IconButton("\uE88C", "Подарить подарок", async () => await Gifts.ShowShop(giftTo)));
+            tools.Children.Add(T.IconButton("\uF133", "Подарить подарок", async () => await Gifts.ShowShop(giftTo)));
         }
         if (cc != null && cc.Type == "group")
             tools.Children.Add(T.IconButton("\uE717", "Групповой звонок", () => { var c = Store.Chat(ChatId); if (c != null) CallHost.I?.StartGroup(c); }));
