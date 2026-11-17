@@ -55,7 +55,7 @@ public static class Gifts
             _ = Load(src, svg);
             img.Source = src;
         }
-        else return new Border { Width = size, Height = size, Child = T.Icon("", size * 0.5, T.White) };
+        else return new Border { Width = size, Height = size, Child = T.Icon("\uF133", size * 0.5, T.White) };
         return img;
     }
     static async Task Load(SvgImageSource src, string svg)

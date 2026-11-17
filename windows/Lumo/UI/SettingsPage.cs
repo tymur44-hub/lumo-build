@@ -63,7 +63,7 @@ public sealed class SettingsPage : Grid
             new Item[]
             {
                 new("wallet", "", 0xFFF5B942, "Люмены и Premium", "Баланс, ежедневный бонус", Dialogs.WalletPanel),
-                new("gifts", "", 0xFF2BC4A8, "Подарки", "Коллекционные подарки за люмены", GiftsPanel),
+                new("gifts", "\uF133", 0xFF2BC4A8, "Подарки", "Коллекционные подарки за люмены", GiftsPanel),
             },
             new Item[]
             {

@@ -19,7 +19,7 @@ public sealed class BirthdayBar : Grid
         Background = T.Grad(0xFFFF7AB6, 0xFFFF9D4D);
         Visibility = Visibility.Collapsed; Opacity = 0;
         var sp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        sp.Children.Add(T.Icon("", 18, T.White));
+        sp.Children.Add(T.Icon("\uF133", 18, T.White));
         var col = new StackPanel();
         col.Children.Add(text);
         col.Children.Add(T.Txt("Нажмите, чтобы подарить подарок", 11.5, T.B(0xE6FFFFFF)));
