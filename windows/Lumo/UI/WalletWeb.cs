@@ -167,7 +167,7 @@ h1{margin:0;text-align:center;font-size:27px;font-weight:800}
 .balc .n{font-size:42px;font-weight:800;letter-spacing:-.5px}.balc .gem{width:36px;height:36px}
 .balc .l{color:var(--muted);font-size:14.5px;margin-top:-2px}
 .btns{display:flex;gap:10px;margin-top:14px}
-.btn{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:48px;border:0;border-radius:14px;font:700 15.5px inherit;font-family:inherit;cursor:pointer;transition:transform .15s,filter .15s,box-shadow .2s}
+.btn{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:48px;border:0;border-radius:14px;font-weight:700;font-size:15.5px;font-family:inherit;cursor:pointer;transition:transform .15s,filter .15s,box-shadow .2s}
 .btn:active{transform:scale(.96)}.btn svg{width:18px;height:18px}
 .pri{color:#fff;background:linear-gradient(135deg,var(--a1),var(--a2))}.pri:hover{filter:brightness(1.1);box-shadow:0 8px 24px rgba(124,92,255,.45)}
 .sec{color:#a996ff;background:rgba(124,92,255,.15)}.sec:hover{background:rgba(124,92,255,.22)}
@@ -184,7 +184,7 @@ h1{margin:0;text-align:center;font-size:27px;font-weight:800}
 .prem .t{flex:1}.prem b{font-size:16px}.prem span{display:block;font-size:13px;color:#d6d0ff;margin-top:2px}
 .prem .btn{flex:none;height:40px;padding:0 16px;font-size:14px}
 .seg{display:flex;background:var(--panel2);border-radius:999px;padding:3px;margin:22px 0 10px;position:relative}
-.seg button{flex:1;position:relative;z-index:1;border:0;background:none;height:34px;border-radius:999px;color:var(--muted);font:600 14px inherit;font-family:inherit;cursor:pointer;transition:color .2s}
+.seg button{flex:1;position:relative;z-index:1;border:0;background:none;height:34px;border-radius:999px;color:var(--muted);font-weight:600;font-size:14px;font-family:inherit;cursor:pointer;transition:color .2s}
 .seg button.on{color:var(--text)}.seg .ind{position:absolute;top:3px;bottom:3px;border-radius:999px;background:var(--panel);box-shadow:0 1px 4px rgba(0,0,0,.3);transition:left .3s cubic-bezier(.2,.9,.3,1.1),width .3s}
 .op{display:flex;align-items:center;gap:12px;padding:10px 14px;animation:in .35s ease both}
 .op+.op{border-top:1px solid var(--line)}
@@ -217,7 +217,7 @@ h1{margin:0;text-align:center;font-size:27px;font-weight:800}
 .more{display:flex;align-items:center;justify-content:center;gap:5px;margin:12px auto 0;color:#a996ff;font-weight:600;font-size:15px;cursor:pointer;width:max-content;padding:6px 10px;border-radius:10px}
 .more:hover{background:rgba(124,92,255,.12)}
 .inp{display:flex;align-items:center;gap:10px;height:52px;padding:0 16px;border-radius:16px;background:var(--panel);margin-top:12px}
-.inp input{flex:1;border:0;outline:0;background:none;color:var(--text);font:600 16px inherit;font-family:inherit}.inp input::placeholder{color:var(--muted);font-weight:400}
+.inp input{flex:1;border:0;outline:0;background:none;color:var(--text);font-weight:600;font-size:16px;font-family:inherit}.inp input::placeholder{color:var(--muted);font-weight:400}
 .inp .gem{width:24px;height:24px}.inp span{color:var(--muted)}
 .wide{width:100%;margin-top:12px}
 .note{display:flex;gap:8px;color:var(--muted);font-size:12.5px;line-height:1.45;margin-top:14px}.note svg{width:17px;height:17px;flex:none;fill:#2bd67b}
@@ -280,7 +280,7 @@ function draw(){const d=D;const st=d.streak>0?`Серия ${d.streak} дн. по
  <div class="card"><div class="it"><div class="ic" style="background:#2bd67b">${I.shield}</div><div><b>Оплата работает</b><span>Банковской картой через ЮMoney прямо в Lumo. Люмены и Premium зачисляются автоматически, обычно за минуту.</span></div></div></div>
  <div class="seg" id="seg"><span class="ind" id="ind"></span><button>Все операции</button><button>Зачисления</button><button>Списания</button></div>
  <div id="ops">${ops()}</div>`;
- document.getElementById('bBuy').onclick=buySheet;
+ document.getElementById('bBuy').onclick=()=>buySheet();
  document.getElementById('bClaim').onclick=()=>{if(!D.canClaim)return;post({t:'claim'})};
  document.getElementById('bFriend').onclick=()=>post({t:'friend'});
  document.getElementById('bPrem').onclick=()=>premSheet();

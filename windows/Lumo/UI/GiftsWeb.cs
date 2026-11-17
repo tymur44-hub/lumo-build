@@ -140,7 +140,7 @@ body{padding:6px 28px 40px;overflow-x:hidden}
 .bal .n{font-weight:800;font-size:17px;color:var(--gold)}.bal .l{font-size:11px;color:var(--muted);line-height:1}.bal .ar{color:var(--muted);font-size:14px;margin-left:2px}
 .gem{width:22px;height:22px;filter:drop-shadow(0 0 6px rgba(255,154,61,.55))}
 .tabs{position:relative;display:inline-flex;background:var(--panel);border-radius:14px;padding:4px;margin-bottom:20px}
-.tabs button{position:relative;z-index:1;border:0;background:none;color:var(--muted);font:600 14px inherit;font-family:inherit;padding:9px 20px;cursor:pointer;transition:color .2s}
+.tabs button{position:relative;z-index:1;border:0;background:none;color:var(--muted);font-weight:600;font-size:14px;font-family:inherit;padding:9px 20px;cursor:pointer;transition:color .2s}
 .tabs button.on{color:#fff}.tabs .ind{position:absolute;top:4px;bottom:4px;border-radius:11px;background:linear-gradient(135deg,var(--a1),var(--a2));transition:left .35s cubic-bezier(.2,.9,.3,1.2),width .35s cubic-bezier(.2,.9,.3,1.2)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px}
 .card{position:relative;border-radius:22px;padding:14px 14px 16px;background:var(--panel);overflow:hidden;cursor:default;transition:transform .25s cubic-bezier(.2,.9,.3,1.3),box-shadow .25s;opacity:0;transform:translateY(16px) scale(.97);animation:in .5s cubic-bezier(.2,.9,.3,1.1) forwards}
@@ -163,13 +163,13 @@ body{padding:6px 28px 40px;overflow-x:hidden}
 .meta{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:0 2px}
 .pill{font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:9px;color:#fff;text-transform:uppercase;letter-spacing:.3px}
 .bar{height:4px;border-radius:2px;background:rgba(255,255,255,.08);margin:10px 2px 0;overflow:hidden}.bar i{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--a1),var(--a2))}
-.buy{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:12px;border:0;border-radius:14px;padding:10px;font:700 14px inherit;font-family:inherit;color:#fff;background:linear-gradient(135deg,var(--a1),var(--a2));cursor:pointer;transition:transform .15s,filter .15s,box-shadow .2s}
+.buy{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:12px;border:0;border-radius:14px;padding:10px;font-weight:700;font-size:14px;font-family:inherit;color:#fff;background:linear-gradient(135deg,var(--a1),var(--a2));cursor:pointer;transition:transform .15s,filter .15s,box-shadow .2s}
 .buy:hover{filter:brightness(1.12);box-shadow:0 8px 22px rgba(124,92,255,.45)}.buy:active{transform:scale(.95)}
 .buy[disabled]{background:var(--panel2);color:var(--muted);cursor:default;box-shadow:none;filter:none}
 .buy .gem{width:17px;height:17px;filter:none}
 .serial{position:absolute;top:10px;right:10px;z-index:2;font-size:11px;font-weight:800;padding:3px 8px;border-radius:9px;background:rgba(0,0,0,.45);backdrop-filter:blur(6px)}
 .hidden .stage{filter:grayscale(.7) brightness(.6)}.hid{position:absolute;top:10px;left:10px;z-index:2;font-size:11px;padding:3px 8px;border-radius:9px;background:rgba(0,0,0,.45)}
-.acts{display:flex;gap:8px;margin-top:12px}.acts button{flex:1;border:0;border-radius:12px;padding:9px 6px;font:600 12.5px inherit;font-family:inherit;color:var(--text);background:var(--panel2);cursor:pointer;transition:background .15s,transform .15s}
+.acts{display:flex;gap:8px;margin-top:12px}.acts button{flex:1;border:0;border-radius:12px;padding:9px 6px;font-weight:600;font-size:12.5px;font-family:inherit;color:var(--text);background:var(--panel2);cursor:pointer;transition:background .15s,transform .15s}
 .acts button:hover{background:#262856}.acts button:active{transform:scale(.95)}.acts .sell{color:#ffcf6a}
 .empty{text-align:center;padding:60px 20px;color:var(--muted)}.empty .big{width:120px;height:120px;margin:0 auto 14px;animation:float 3.6s ease-in-out infinite}
 .empty b{display:block;color:var(--text);font-size:17px;margin-bottom:6px}
