@@ -77,7 +77,7 @@ public static class Dialogs
             ("Профиль", () => Task.FromResult<UIElement>(sp)),
             ("Приватность", () => PrivacyPanel()),
             ("Устройства", () => DevicesPanel()),
-            ("Люмены", () => WalletPanel()),
+            ("Люмены", () => Task.FromResult<UIElement>(new WalletWeb())),
             ("Уведомления", () => Task.FromResult(NotifyPanel())),
         };
         var segBtns = new List<Button>();

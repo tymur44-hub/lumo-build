@@ -216,6 +216,9 @@ public sealed class MainWindow : Window
         shell?.ShowSettings("gifts");
         await Task.Delay(2500);
         await Capture(Path.Combine(dir, "8-settings.png"));
+        shell?.ShowSettings("wallet");
+        await Task.Delay(3500);
+        await Capture(Path.Combine(dir, "13-wallet.png"));
         shell?.ShowSettings("qr");
         await Task.Delay(3000);
         await Capture(Path.Combine(dir, "9-qr.png"));

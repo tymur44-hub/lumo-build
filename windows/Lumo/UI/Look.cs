@@ -85,7 +85,7 @@ public sealed class LookWeb : Grid, IFillPage
         var n = m.Int("n") ?? 0;
         if (m.Bool("premium") && Store.Me?.Premium != true)
         {
-            Plaque.Show("", "Lumo Premium", "Эти обои доступны с подпиской Premium — оформить её можно в приложении на телефоне.");
+            Plaque.Show("", "Lumo Premium", "Эти обои доступны с подпиской Premium — оформите её в Настройках, раздел «Люмены и Premium», оплата картой прямо в Lumo.");
             return;
         }
         Look.SetWall(n, n >= 1000 ? remote.FirstOrDefault(x => x.Id == n)?.Url : null);

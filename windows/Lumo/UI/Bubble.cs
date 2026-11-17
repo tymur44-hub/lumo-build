@@ -285,11 +285,21 @@ public sealed class BubbleView : Grid
                 btn.Click += async (_, _) =>
                 {
                     if (web != null && m.SenderId != null) { WebOverlay.I?.OpenMini(m.SenderId, web); return; }
-                    if (url != null) { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch { } return; }
+                    if (url != null)
+                    {
+                        // оплата — в окне оплаты внутри Lumo, остальные ссылки — во встроенном браузере
+                        if (Uri.TryCreate(url, UriKind.Absolute, out var uu) && uu.Host.EndsWith("yoomoney.ru")) Pay.Open(url, Pay.OrderFrom(url));
+                        else if (uu != null) Browser.Open(uu);
+                        return;
+                    }
                     if (data == null) return;
                     try
                     {
-                        var r = await Api.Raw("POST", "/functions/v1/lumo-bots/cb", body: J.O(("message_id", m.Id), ("data", data)));
+                        var body = J.O(("message_id", m.Id), ("data", data));
+                        if (data.StartsWith("pay_")) body["inline"] = true;
+                        var r = await Api.Raw("POST", "/functions/v1/lumo-bots/cb", body: body);
+                        var pu = r.Str("pay_url");
+                        if (pu != null) { Pay.Open(pu, r.Str("order_id")); return; }
                         var t = r.Str("toast"); if (t != null) Store.Say(t);
                     }
                     catch { Store.Say("Не удалось выполнить действие"); }

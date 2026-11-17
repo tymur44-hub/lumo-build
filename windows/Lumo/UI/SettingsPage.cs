@@ -90,7 +90,7 @@ public sealed class SettingsPage : Grid
             },
             new Item[]
             {
-                new("wallet", "\uE8C7", 0xFFF5B942, "Люмены и Premium", "Баланс, ежедневный бонус", Dialogs.WalletPanel),
+                new("wallet", "\uE8C7", 0xFFF5B942, "Люмены и Premium", "Баланс, пополнение картой, Premium", () => Task.FromResult<UIElement>(new WalletWeb(() => Select("gifts")))),
                 new("gifts", "\uF133", 0xFF2BC4A8, "Подарки", "Коллекционные подарки за люмены", () => Task.FromResult<UIElement>(new GiftsWeb(null, () => Select("wallet")))),
             },
             new Item[]

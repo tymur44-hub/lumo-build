@@ -136,7 +136,7 @@ public static class StatusPicker
     public static async Task Show()
     {
         var me = Store.Me;
-        if (me?.Premium != true) { Plaque.Show("", "Lumo Premium", "Эмодзи-статус доступен с подпиской Premium — оформить её можно в приложении на телефоне."); return; }
+        if (me?.Premium != true) { Plaque.Show("", "Lumo Premium", "Эмодзи-статус доступен с подпиской Premium — оформите её в Настройках, раздел «Люмены и Premium», оплата картой прямо в Lumo."); return; }
         var sp = new StackPanel { Spacing = 12 };
         sp.Children.Add(T.Txt("Значок показывается рядом с вашим именем. Анимированные двигаются у всех, кто пользуется Lumo.", 12.5, T.Muted));
         var grid = new VariableSizedWrapGrid { Orientation = Orientation.Horizontal, ItemWidth = 76, ItemHeight = 66 };
