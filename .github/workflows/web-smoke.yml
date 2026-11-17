@@ -1,0 +1,22 @@
+name: web-smoke
+on: { workflow_dispatch: {} }
+permissions: { contents: write }
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          npm i playwright@1.47.2 >/dev/null 2>&1 && npx playwright install chromium >/dev/null 2>&1
+          cat > s.js <<'J'
+          const {chromium}=require('playwright');
+          (async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:420,height:860}});
+          const errs=[];p.on('pageerror',e=>errs.push(e.message));
+          await p.goto('https://lumomess.ru/?t='+Date.now(),{waitUntil:'load',timeout:60000});await p.waitForTimeout(9000);
+          const v=await p.evaluate(()=>({lp:typeof window.lumoPay,lx:!!window.__lx,title:document.title}));
+          console.log(JSON.stringify(v));console.log('ERRORS:'+JSON.stringify(errs));
+          await p.screenshot({path:'smoke.png'});await b.close();})();
+          J
+          node s.js | tee out.txt
+          gh release delete web-smoke -y -R ${{ github.repository }} || true
+          gh release create web-smoke smoke.png out.txt -R ${{ github.repository }} -t web-smoke -n smoke
+        env: { GH_TOKEN: "${{ github.token }}" }
