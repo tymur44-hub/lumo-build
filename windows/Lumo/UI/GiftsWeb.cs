@@ -44,8 +44,9 @@ public sealed class GiftsWeb : Grid, IFillPage
     static JsonObject GiftJson(string id, string name, string rarity)
     {
         var j = new JsonObject { ["id"] = id, ["name"] = name, ["rarity"] = rarity, ["rarityName"] = Gifts.RarityName(rarity) };
-        var png = Path.Combine(AppContext.BaseDirectory, "Assets", "gifts", "gift_" + id + ".png");
-        if (File.Exists(png)) j["img"] = "https://lumo.app.local/gifts/gift_" + id + ".png";
+        // анимированный рисунок, как в мобильной версии (SVG с анимацией)
+        var svgFile = Path.Combine(AppContext.BaseDirectory, "Assets", "gifts", "gift_" + id + ".svg");
+        if (File.Exists(svgFile)) j["img"] = "https://lumo.app.local/gifts/gift_" + id + ".svg";
         else if (Gifts.Svg(id) is string svg) j["img"] = "data:image/svg+xml;base64," + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(svg));
         return j;
     }
@@ -129,7 +130,7 @@ body{padding:6px 28px 40px;overflow-x:hidden}
 .bal{display:flex;align-items:center;gap:8px;padding:9px 14px 9px 10px;border-radius:16px;background:linear-gradient(135deg,rgba(245,185,66,.18),rgba(245,185,66,.06));border:1px solid rgba(245,185,66,.35);cursor:pointer;transition:transform .18s,box-shadow .18s}
 .bal:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(245,185,66,.25)}.bal:active{transform:scale(.96)}
 .bal .n{font-weight:800;font-size:17px;color:var(--gold)}.bal .l{font-size:11px;color:var(--muted);line-height:1}.bal .ar{color:var(--muted);font-size:14px;margin-left:2px}
-.gem{width:22px;height:22px;filter:drop-shadow(0 0 6px rgba(245,185,66,.6))}
+.gem{width:22px;height:22px;filter:drop-shadow(0 0 6px rgba(255,154,61,.55))}
 .tabs{position:relative;display:inline-flex;background:var(--panel);border-radius:14px;padding:4px;margin-bottom:20px}
 .tabs button{position:relative;z-index:1;border:0;background:none;color:var(--muted);font:600 14px inherit;font-family:inherit;padding:9px 20px;cursor:pointer;transition:color .2s}
 .tabs button.on{color:#fff}.tabs .ind{position:absolute;top:4px;bottom:4px;border-radius:11px;background:linear-gradient(135deg,var(--a1),var(--a2));transition:left .35s cubic-bezier(.2,.9,.3,1.2),width .35s cubic-bezier(.2,.9,.3,1.2)}
@@ -137,12 +138,12 @@ body{padding:6px 28px 40px;overflow-x:hidden}
 .card{position:relative;border-radius:22px;padding:14px 14px 16px;background:var(--panel);overflow:hidden;cursor:default;transition:transform .25s cubic-bezier(.2,.9,.3,1.3),box-shadow .25s;opacity:0;transform:translateY(16px) scale(.97);animation:in .5s cubic-bezier(.2,.9,.3,1.1) forwards}
 .card:hover{transform:translateY(-4px) scale(1.02);box-shadow:0 14px 40px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.07)}
 @keyframes in{to{opacity:1;transform:none}}
-.stage{position:relative;height:150px;border-radius:16px;display:flex;align-items:center;justify-content:center;overflow:hidden}
-.stage::before{content:"";position:absolute;inset:-40%;background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.28),transparent 55%);animation:pulse 3.2s ease-in-out infinite}
+.stage{position:relative;aspect-ratio:1;border-radius:18px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.stage.noart::before{content:"";position:absolute;inset:-40%;background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.28),transparent 55%);animation:pulse 3.2s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:.55;transform:scale(.9)}50%{opacity:1;transform:scale(1.05)}}
-.stage img{position:relative;width:118px;height:118px;object-fit:contain;filter:drop-shadow(0 10px 18px rgba(0,0,0,.45));animation:float 3.6s ease-in-out infinite}
+.stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 @keyframes float{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-9px) rotate(2deg)}}
-.card:hover .stage img{animation-duration:1.8s}
+
 .shine::after{content:"";position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-18deg);animation:shine 3.8s ease-in-out infinite}
 @keyframes shine{0%,60%{left:-60%}100%{left:130%}}
 .spark{position:absolute;width:4px;height:4px;border-radius:50%;background:#fff;opacity:0;animation:tw 2.4s ease-in-out infinite}
@@ -157,7 +158,7 @@ body{padding:6px 28px 40px;overflow-x:hidden}
 .buy{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:12px;border:0;border-radius:14px;padding:10px;font:700 14px inherit;font-family:inherit;color:#fff;background:linear-gradient(135deg,var(--a1),var(--a2));cursor:pointer;transition:transform .15s,filter .15s,box-shadow .2s}
 .buy:hover{filter:brightness(1.12);box-shadow:0 8px 22px rgba(124,92,255,.45)}.buy:active{transform:scale(.95)}
 .buy[disabled]{background:var(--panel2);color:var(--muted);cursor:default;box-shadow:none;filter:none}
-.buy .gem{width:16px;height:16px}
+.buy .gem{width:17px;height:17px;filter:none}
 .serial{position:absolute;top:10px;right:10px;z-index:2;font-size:11px;font-weight:800;padding:3px 8px;border-radius:9px;background:rgba(0,0,0,.45);backdrop-filter:blur(6px)}
 .hidden .stage{filter:grayscale(.7) brightness(.6)}.hid{position:absolute;top:10px;left:10px;z-index:2;font-size:11px;padding:3px 8px;border-radius:9px;background:rgba(0,0,0,.45)}
 .acts{display:flex;gap:8px;margin-top:12px}.acts button{flex:1;border:0;border-radius:12px;padding:9px 6px;font:600 12.5px inherit;font-family:inherit;color:var(--text);background:var(--panel2);cursor:pointer;transition:background .15s,transform .15s}
@@ -172,13 +173,13 @@ canvas#fx{position:fixed;inset:0;pointer-events:none;z-index:50}
 .err{color:#ff7a90;padding:30px;text-align:center}
 </style></head><body>
 <div class="top"><h2 id="who">Коллекционные подарки за люмены</h2>
-<div class="bal" id="bal" title="Открыть люмены"><svg class="gem" viewBox="0 0 24 24"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#f5a623"/></linearGradient></defs><path fill="url(#g)" d="M12 2l3.5 4H21l-9 16L3 6h5.5z"/><path fill="#fff" opacity=".45" d="M8.5 6L12 2l3.5 4z"/></svg>
+<div class="bal" id="bal" title="Открыть люмены"><svg class="gem" viewBox="0 0 24 24"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset=".5" stop-color="#ff9a3d"/><stop offset="1" stop-color="#ff5e8a"/></linearGradient></defs><polygon points="12.00,0.48 21.98,6.24 21.98,17.76 12.00,23.52 2.02,17.76 2.02,6.24" fill="url(#lg)" stroke="rgba(255,255,255,.4)" stroke-width="1.08" stroke-linejoin="round"/><polygon points="12.00,5.04 13.27,10.73 18.96,12.00 13.27,13.27 12.00,18.96 10.73,13.27 5.04,12.00 10.73,10.73" fill="#fff"/></svg>
 <div><div class="n" id="balN">…</div><div class="l">люменов</div></div><span class="ar">›</span></div></div>
 <div class="tabs" id="tabs"><span class="ind" id="ind"></span><button data-t="shop" class="on">Магазин</button><button data-t="mine">Мои подарки</button></div>
 <div id="list"><div class="load"><i></i><i></i><i></i></div></div>
 <canvas id="fx"></canvas><div class="toast" id="toast"></div>
 <script>
-const gem='<svg class="gem" viewBox="0 0 24 24"><path fill="#fff" d="M12 2l3.5 4H21l-9 16L3 6h5.5z"/></svg>';
+const gem='<svg class="gem" viewBox="0 0 24 24"><polygon points="12.00,0.48 21.98,6.24 21.98,17.76 12.00,23.52 2.02,17.76 2.02,6.24" fill="url(#lg)" stroke="rgba(255,255,255,.5)" stroke-width="1.08" stroke-linejoin="round"/><polygon points="12.00,5.04 13.27,10.73 18.96,12.00 13.27,13.27 12.00,18.96 10.73,13.27 5.04,12.00 10.73,10.73" fill="#fff"/></svg>';
 const post=o=>{try{window.chrome.webview.postMessage(JSON.stringify(o))}catch(e){}};
 let D=null,tab='shop';
 const fmt=n=>Number(n).toLocaleString('ru-RU');
@@ -186,6 +187,7 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const rare=r=>['legendary','mythic','ultra'].includes(r);
 function sparks(r){if(!rare(r))return'';let s='';for(let i=0;i<7;i++)s+=`<span class="spark" style="left:${8+Math.random()*84}%;top:${8+Math.random()*80}%;animation-delay:${(Math.random()*2.4).toFixed(2)}s"></span>`;return s}
 function art(g){return g.img?`<img src="${g.img}" alt="">`:`<svg viewBox="0 0 24 24" width="80" height="80"><path fill="#fff" d="M20 7h-2.2A3 3 0 0012 3.8 3 3 0 006.2 7H4a1 1 0 00-1 1v3a1 1 0 001 1h1v8a1 1 0 001 1h12a1 1 0 001-1v-8h1a1 1 0 001-1V8a1 1 0 00-1-1z"/></svg>`}
+function stage(g){return g.img?`<div class="stage">${art(g)}</div>`:`<div class="stage noart r-${g.rarity} ${rare(g.rarity)?'shine':''}">${sparks(g.rarity)}${art(g)}</div>`}
 function indicator(){const b=document.querySelector('.tabs button.on');const ind=document.getElementById('ind');ind.style.left=b.offsetLeft+'px';ind.style.width=b.offsetWidth+'px'}
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));indicator();draw()});
 document.getElementById('bal').onclick=()=>post({t:'wallet'});
@@ -195,7 +197,7 @@ function draw(){
   if(!D.catalog.length){L.innerHTML='<div class="empty"><b>Магазин пуст</b>Скоро здесь появятся новые подарки</div>';return}
   L.innerHTML='<div class="grid">'+D.catalog.map((g,i)=>{const sold=g.supply>0&&g.left<=0,can=!sold&&D.balance>=g.price;
    const pct=g.supply>0?Math.max(3,Math.round(g.left/g.supply*100)):100;
-   return `<div class="card" style="animation-delay:${i*45}ms"><div class="stage r-${g.rarity} ${rare(g.rarity)?'shine':''}">${sparks(g.rarity)}${art(g)}</div>
+   return `<div class="card" style="animation-delay:${i*45}ms">${stage(g)}
    <div class="name">${esc(g.name)}</div><div class="meta"><span class="pill r-${g.rarity}">${esc(g.rarityName)}</span>${g.supply>0?`<span>осталось ${fmt(g.left)} из ${fmt(g.supply)}</span>`:''}</div>
    ${g.supply>0?`<div class="bar"><i style="width:${pct}%"></i></div>`:''}
    <button class="buy" data-id="${esc(g.id)}" ${can?'':'disabled'} title="${can?'':(sold?'':'Не хватает люменов')}">${sold?'Раскуплено':gem+fmt(g.price)}</button></div>`}).join('')+'</div>';
@@ -203,7 +205,7 @@ function draw(){
  }else{
   if(!D.mine.length){L.innerHTML=`<div class="empty"><div class="big">${art({})}</div><b>Пока нет подарков</b>Купите первый в магазине — он появится здесь и в вашем профиле</div>`;return}
   L.innerHTML='<div class="grid">'+D.mine.map((g,i)=>`<div class="card ${g.hidden?'hidden':''}" style="animation-delay:${i*45}ms"><span class="serial">№${fmt(g.serial)}${g.supply?' из '+fmt(g.supply):''}</span>${g.hidden?'<span class="hid">скрыт</span>':''}
-   <div class="stage r-${g.rarity} ${rare(g.rarity)?'shine':''}">${sparks(g.rarity)}${art(g)}</div>
+   ${stage(g)}
    <div class="name">${esc(g.name)}</div><div class="meta">${g.from?'от '+esc(g.from):esc(g.rarityName)}</div>
    <div class="acts"><button data-a="hide" data-id="${g.owned}" data-h="${g.hidden?0:1}">${g.hidden?'Показать':'Скрыть'}</button>${g.sell?`<button class="sell" data-a="sell" data-id="${g.owned}">Продать · ${fmt(g.sell)}</button>`:''}</div></div>`).join('')+'</div>';
   L.querySelectorAll('.acts button').forEach(b=>b.onclick=()=>{b.disabled=true;post(b.dataset.a==='hide'?{t:'hide',id:+b.dataset.id,hidden:b.dataset.h==='1'}:{t:'sell',id:+b.dataset.id})});

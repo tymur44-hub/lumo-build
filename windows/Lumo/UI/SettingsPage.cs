@@ -22,6 +22,8 @@ public sealed class SettingsPage : Grid
     readonly Dictionary<string, Grid> rows = new();
     readonly AvatarView heroAv = new(76);
     readonly TextBlock heroName = T.Txt("", 18, bold: true, lines: 1), heroUser = T.Txt("", 13, T.Muted, lines: 1);
+    readonly StackPanel heroNameRow = new() { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+    readonly ContentControl heroEmoji = new() { VerticalAlignment = VerticalAlignment.Center };
     string? current;
 
     record Item(string Key, string Glyph, uint Color, string Title, string Sub, Func<Task<UIElement>>? Page, Action? Act = null);
@@ -58,8 +60,9 @@ public sealed class SettingsPage : Grid
         var hero = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 6) };
         heroAv.HorizontalAlignment = HorizontalAlignment.Center;
         hero.Children.Add(heroAv);
-        heroName.HorizontalAlignment = HorizontalAlignment.Center; heroUser.HorizontalAlignment = HorizontalAlignment.Center;
-        hero.Children.Add(heroName); hero.Children.Add(heroUser);
+        heroUser.HorizontalAlignment = HorizontalAlignment.Center;
+        heroNameRow.Children.Add(heroName); heroNameRow.Children.Add(heroEmoji);
+        hero.Children.Add(heroNameRow); hero.Children.Add(heroUser);
         var heroBtns = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
         heroBtns.Children.Add(Pill("\uE722", "Фото", ChangePhoto));
         heroBtns.Children.Add(Pill("\uE70F", "Изменить", () => Select("profile")));
@@ -73,6 +76,7 @@ public sealed class SettingsPage : Grid
             {
                 new("profile", "\uE77B", 0xFF7C5CFF, "Мой профиль", "Имя, юзернейм, о себе", ProfilePanel),
                 new("qr", "\uED14", 0xFF22A6FF, "QR-код", "Ваш код и ссылка на профиль", () => Task.FromResult<UIElement>(new QrWeb())),
+                new("status", "\uE76E", 0xFFA35BFF, "Эмодзи-статус", "Значок рядом с вашим именем", null, async () => { await StatusPicker.Show(); RefreshHero(); }),
                 new("saved", "\uE734", 0xFF3A7BFF, "Избранное", "Заметки и сохранённые сообщения", null, OpenSaved),
                 new("calls", "\uE717", 0xFF2BD67B, "Недавние звонки", "Недавние и пропущенные", null, () => _ = CallsSheet.Show(id => { shell.CloseSettings(); shell.Open(id); })),
                 new("devices", "\uE7F8", 0xFFFF9F1A, "Устройства", "Активные сеансы", Dialogs.DevicesPanel),
@@ -107,6 +111,7 @@ public sealed class SettingsPage : Grid
         detail.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         detail.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         var head = new Grid { Padding = new Thickness(28, 18, 16, 10) };
+
         head.Children.Add(pageTitle);
         var close = T.IconButton("\uE711", "Закрыть раздел (Esc)", CloseDetail);
         close.HorizontalAlignment = HorizontalAlignment.Right; head.Children.Add(close);
@@ -189,6 +194,7 @@ public sealed class SettingsPage : Grid
         heroName.Text = me.Name + (me.Premium ? "  ★" : "");
         heroName.Text = me.Name;
         heroUser.Text = "@" + me.Username;
+        heroEmoji.Content = me.Premium && !string.IsNullOrEmpty(me.EmojiStatus) ? new StatusEmoji(me.EmojiStatus, 22) : null;
     }
 
     FrameworkElement Pill(string glyph, string text, Action act)
@@ -248,7 +254,7 @@ public sealed class SettingsPage : Grid
         body.Children.Clear();
         UIElement view = el is IFillPage ? el : new ScrollViewer
         {
-            Content = new Border { Padding = new Thickness(28, 4, 28, 28), MaxWidth = 820, HorizontalAlignment = HorizontalAlignment.Left, Child = el },
+            Content = new Border { Padding = new Thickness(28, 4, 28, 28), MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Stretch, Child = el },
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
         if (wasOpen) { view.Opacity = 0; view.RenderTransform = new TranslateTransform(); }
@@ -261,7 +267,7 @@ public sealed class SettingsPage : Grid
     Task<UIElement> ProfilePanel()
     {
         var me = Store.Me!;
-        var sp = new StackPanel { Spacing = 12, MaxWidth = 520, HorizontalAlignment = HorizontalAlignment.Left };
+        var sp = new StackPanel { Spacing = 12 };
         var first = new TextBox { Header = "Имя", Text = me.FirstName };
         var last = new TextBox { Header = "Фамилия", Text = me.LastName };
         var user = new TextBox { Header = "Юзернейм", Text = me.Username };
@@ -286,7 +292,7 @@ public sealed class SettingsPage : Grid
 
     Task<UIElement> DataPanel()
     {
-        var sp = new StackPanel { Spacing = 12, MaxWidth = 520, HorizontalAlignment = HorizontalAlignment.Left };
+        var sp = new StackPanel { Spacing = 12 };
         long size = 0; int files = 0;
         try { foreach (var f in new DirectoryInfo(Media.CacheDir).EnumerateFiles("*", SearchOption.AllDirectories)) { size += f.Length; files++; } } catch { }
         var card = new Border { Background = T.Panel2, CornerRadius = new CornerRadius(14), Padding = new Thickness(16) };
@@ -313,7 +319,7 @@ public sealed class SettingsPage : Grid
 
     Task<UIElement> AboutPanel()
     {
-        var sp = new StackPanel { Spacing = 12, MaxWidth = 520, HorizontalAlignment = HorizontalAlignment.Left };
+        var sp = new StackPanel { Spacing = 12 };
         var logo = new Border { Width = 64, Height = 64, CornerRadius = new CornerRadius(18), Background = T.Accent, HorizontalAlignment = HorizontalAlignment.Left, Child = T.Txt("L", 30, T.White, bold: true) };
         ((TextBlock)logo.Child).HorizontalAlignment = HorizontalAlignment.Center; ((TextBlock)logo.Child).VerticalAlignment = VerticalAlignment.Center;
         sp.Children.Add(logo);
@@ -348,14 +354,7 @@ public sealed class SettingsPage : Grid
 
     async void ChangePhoto()
     {
-        var p = new Windows.Storage.Pickers.FileOpenPicker();
-        WinRT.Interop.InitializeWithWindow.Initialize(p, win.Hwnd);
-        foreach (var e in new[] { ".jpg", ".jpeg", ".png", ".webp" }) p.FileTypeFilter.Add(e);
-        var f = await p.PickSingleFileAsync();
-        if (f == null) return;
-        var ext = Path.GetExtension(f.Path).TrimStart('.').ToLowerInvariant();
-        var err = await Store.SetAvatar(await File.ReadAllBytesAsync(f.Path), ext, Store.Mime(ext));
-        if (err != null) Store.Say(err); else { RefreshHero(); Store.Say("Фото обновлено"); }
+        if (await AvatarCrop.PickAndSet(win)) RefreshHero();
     }
 
     void CopyLink()

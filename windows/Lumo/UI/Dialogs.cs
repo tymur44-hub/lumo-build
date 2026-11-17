@@ -266,9 +266,39 @@ public static class Dialogs
     {
         var sp = new StackPanel { Spacing = 8, Width = 380, HorizontalAlignment = HorizontalAlignment.Center };
         var av = new AvatarView(96) { HorizontalAlignment = HorizontalAlignment.Center };
-        var name = T.Txt(c.DisplayName, 20, bold: true); name.HorizontalAlignment = HorizontalAlignment.Center; name.TextAlignment = TextAlignment.Center;
+        var name = T.Txt(c.DisplayName, 20, bold: true); name.TextAlignment = TextAlignment.Center;
+        var nameRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+        nameRow.Children.Add(name);
         var stat = T.Txt(Store.Status(c), 13, T.Muted); stat.HorizontalAlignment = HorizontalAlignment.Center;
-        sp.Children.Add(av); sp.Children.Add(name); sp.Children.Add(stat);
+        // фото: по нажатию плавно увеличивается (не на весь экран), повторное нажатие — обратно
+        var avHost = new Grid { Width = 96, Height = 96, HorizontalAlignment = HorizontalAlignment.Center };
+        avHost.Children.Add(av);
+        var bigImg = new Microsoft.UI.Xaml.Controls.Image { Stretch = Microsoft.UI.Xaml.Media.Stretch.UniformToFill, Opacity = 0 };
+        var bigBox = new Border { CornerRadius = new CornerRadius(48), Child = bigImg, IsHitTestVisible = false };
+        avHost.Children.Add(bigBox);
+        string? photoUrl = c.DisplayAvatar;
+        bool big = false;
+        avHost.Tapped += (_, _) =>
+        {
+            if (photoUrl == null) return;
+            big = !big;
+            if (big && bigImg.Source == null) bigImg.Source = T.Bitmap(photoUrl, 720);
+            var from = avHost.ActualWidth; var to = big ? 300.0 : 96.0;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            EventHandler<object>? tick = null;
+            tick = (_, _) =>
+            {
+                var t = Math.Min(1, sw.Elapsed.TotalMilliseconds / 320); var e = 1 - Math.Pow(1 - t, 3);
+                var v = from + (to - from) * e;
+                avHost.Width = v; avHost.Height = v;
+                bigBox.CornerRadius = new CornerRadius(big ? 48 - 26 * e : 22 + 26 * e);
+                bigImg.Opacity = big ? e : 1 - e;
+                av.Opacity = big ? 1 - e : e;
+                if (t >= 1) Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= tick;
+            };
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += tick;
+        };
+        sp.Children.Add(avHost); sp.Children.Add(nameRow); sp.Children.Add(stat);
         av.Set(c.DisplayName, c.DisplayAvatar, c.DisplayColor);
         var details = new StackPanel { Spacing = 10, Margin = new Thickness(0, 12, 0, 0) };
         sp.Children.Add(details);
@@ -285,7 +315,9 @@ public static class Dialogs
             if (p != null)
             {
                 av.Set(p.Name, p.AvatarUrl, p.Color, Store.Online.Contains(p.Id));
-                if (p.Verified) name.Text = Store.DisplayName(p.Id) + "  ·  подтверждён";
+                photoUrl = p.AvatarUrl ?? photoUrl;
+                if (!string.IsNullOrEmpty(p.EmojiStatus) && p.Premium) nameRow.Children.Add(new StatusEmoji(p.EmojiStatus, 24));
+                if (p.Verified || c.PeerVerified) nameRow.Children.Add(VerifiedMark.Make(c.PeerBot ? "бот" : "профиль", 18));
                 if (Store.Aliases.ContainsKey(p.Id) && p.Name.Length > 0 && p.Name != Store.DisplayName(p.Id)) Row("Имя в Lumo", p.Name);
                 if (p.Username.Length > 0) Row("Юзернейм", "@" + p.Username);
                 if (p.Bio.Length > 0) Row("О себе", p.Bio);
@@ -294,6 +326,7 @@ public static class Dialogs
         }
         else
         {
+            if (c.PeerVerified) nameRow.Children.Add(VerifiedMark.Make(c.IsChannel ? "канал" : "группа", 18));
             if (!string.IsNullOrEmpty(c.Username)) Row("Ссылка", Config.SITE + c.Username);
             if (!string.IsNullOrEmpty(c.Description)) Row("Описание", c.Description);
         }

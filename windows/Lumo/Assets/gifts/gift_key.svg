@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800"><style>
+:root{--e:cubic-bezier(.45,0,.55,1)}
+[class]{transform-box:fill-box}
+.tw{animation:tw 4s var(--e) infinite;transform-origin:center}
+@keyframes tw{0%,100%{opacity:.1;transform:scale(.5)}50%{opacity:1;transform:scale(1.3)}}
+.tw2{animation:tw 2s var(--e) infinite;transform-origin:center}
+.bob{animation:bob 4s var(--e) infinite}
+@keyframes bob{0%,100%{transform:translateY(10px)}50%{transform:translateY(-14px)}}
+.rays{animation:rays 4s linear infinite;transform-origin:400px 360px;transform-box:view-box}
+@keyframes rays{to{transform:rotate(45deg)}}
+.halo{animation:halo 4s var(--e) infinite;transform-origin:center}
+@keyframes halo{0%,100%{opacity:.55;transform:scale(.92)}50%{opacity:1;transform:scale(1.1)}}
+.rise{animation:rise 4s linear infinite;opacity:0}
+@keyframes rise{0%{opacity:0;transform:translate(0,0) scale(.4)}12%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(1)}}
+.sweep{animation:sweep 4s var(--e) infinite}
+@keyframes sweep{0%,35%{transform:translateX(-420px)}75%,100%{transform:translateX(420px)}}
+.spin{animation:spin 8s linear infinite;transform-origin:center}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinr{animation:spin 4s linear infinite reverse;transform-origin:center}
+.breathe{animation:br 4s var(--e) infinite;transform-origin:center}
+@keyframes br{0%,100%{transform:scale(.94)}50%{transform:scale(1.06)}}
+.sway{animation:sway 4s var(--e) infinite;transform-origin:center}
+@keyframes sway{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(6deg)}}
+.flash{animation:flash 4s var(--e) infinite}
+@keyframes flash{0%,100%{opacity:0}50%{opacity:.8}}
+.flash2{animation:flash 4s var(--e) infinite;animation-delay:-1s}
+.flash3{animation:flash 4s var(--e) infinite;animation-delay:-2s}
+.flash4{animation:flash 4s var(--e) infinite;animation-delay:-3s}
+.ring{animation:ring 4s ease-out infinite;transform-origin:center}
+@keyframes ring{0%{opacity:.7;transform:scale(.3)}100%{opacity:0;transform:scale(1.6)}}
+.lid{animation:lid 4s var(--e) infinite;transform-origin:0% 100%}
+@keyframes lid{0%,100%{transform:rotate(0)}20%,80%{transform:rotate(-42deg)}}
+.pearl{animation:pearl 4s var(--e) infinite}
+@keyframes pearl{0%,100%{transform:translateY(40px) scale(.9)}25%,75%{transform:translateY(-34px) scale(1.05)}}
+.pglow{animation:pg 4s var(--e) infinite}
+@keyframes pg{0%,100%{opacity:0}30%,70%{opacity:1}}
+.trail{animation:trail 1s ease-in-out infinite;transform-origin:right center}
+@keyframes trail{0%,100%{transform:scaleX(1)}50%{transform:scaleX(1.12)}}
+.ember{animation:ember 2s linear infinite;opacity:0}
+@keyframes ember{0%{opacity:0;transform:translate(0,0) scale(.5)}15%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.1)}}
+.petal{animation:petal 4s var(--e) infinite;transform-origin:50% 100%}
+@keyframes petal{0%,100%{transform:rotate(var(--a)) scale(.82)}50%{transform:rotate(var(--a)) scale(1.06)}}
+</style>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4d3410"/><stop offset="1" stop-color="#1c1204"/></linearGradient>
+<radialGradient id="gl" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffc247" stop-opacity=".8"/><stop offset="1" stop-color="#ffc247" stop-opacity="0"/></radialGradient>
+<radialGradient id="ray" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(400 360) scale(520)"><stop offset="0" stop-color="#ffc247" stop-opacity=".9"/><stop offset="1" stop-color="#ffc247" stop-opacity="0"/></radialGradient>
+<radialGradient id="vig" cx=".5" cy=".45" r=".75"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></radialGradient>
+<filter id="blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="16"/></filter>
+<filter id="blur4" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter>
+<linearGradient id="rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".5" stop-color="#fff" stop-opacity=".06"/><stop offset="1" stop-color="#fff" stop-opacity=".5"/></linearGradient>
+<linearGradient id="shine" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+
+</defs>
+<rect width="800" height="800" rx="64" fill="url(#bg)"/>
+<g class="rays" opacity=".35"><polygon points="400,360 918,318 918,402" fill="url(#ray)"/><polygon points="400,360 796,697 737,756" fill="url(#ray)"/><polygon points="400,360 442,878 358,878" fill="url(#ray)"/><polygon points="400,360 63,756 4,697" fill="url(#ray)"/><polygon points="400,360 -118,402 -118,318" fill="url(#ray)"/><polygon points="400,360 4,23 63,-36" fill="url(#ray)"/><polygon points="400,360 358,-158 442,-158" fill="url(#ray)"/><polygon points="400,360 737,-36 796,23" fill="url(#ray)"/></g>
+<circle class="halo" cx="400" cy="360" r="330" fill="url(#gl)"/>
+<polygon class="tw2" style="animation-delay:-0.90s" points="334.1,351.7 337.0,362.3 347.6,365.2 337.0,368.0 334.1,378.7 331.3,368.0 320.7,365.2 331.3,362.3" fill="#fff3c0"/><polygon class="tw2" style="animation-delay:-2.77s" points="61.0,105.9 61.8,109.1 65.0,110.0 61.8,110.9 61.0,114.1 60.1,110.9 56.9,110.0 60.1,109.1" fill="#fff3c0"/><polygon class="tw2" style="animation-delay:-0.29s" points="312.5,271.4 314.9,280.6 324.1,283.0 314.9,285.5 312.5,294.6 310.0,285.5 300.9,283.0 310.0,280.6" fill="#ffd36b"/><polygon class="tw" style="animation-delay:-1.08s" points="645.9,405.1 647.0,409.2 651.1,410.3 647.0,411.4 645.9,415.6 644.8,411.4 640.7,410.3 644.8,409.2" fill="#fff3c0"/><polygon class="tw" style="animation-delay:-1.38s" points="267.1,592.8 269.9,603.1 280.1,605.9 269.9,608.6 267.1,618.9 264.3,608.6 254.1,605.9 264.3,603.1" fill="#ffd36b"/><polygon class="tw2" style="animation-delay:-2.99s" points="109.0,319.6 110.3,324.4 115.1,325.7 110.3,327.0 109.0,331.8 107.7,327.0 102.9,325.7 107.7,324.4" fill="#fff3c0"/><polygon class="tw" style="animation-delay:-2.95s" points="599.1,51.5 602.2,63.0 613.7,66.1 602.2,69.2 599.1,80.6 596.0,69.2 584.6,66.1 596.0,63.0" fill="#ffd36b"/><polygon class="tw2" style="animation-delay:-2.52s" points="540.2,533.7 542.9,543.9 553.1,546.7 542.9,549.4 540.2,559.6 537.5,549.4 527.3,546.7 537.5,543.9" fill="#ffd36b"/><polygon class="tw2" style="animation-delay:-2.47s" points="464.8,357.8 466.2,362.9 471.3,364.3 466.2,365.7 464.8,370.9 463.4,365.7 458.2,364.3 463.4,362.9" fill="#ffd36b"/><polygon class="tw" style="animation-delay:-3.53s" points="740.8,475.5 742.3,481.1 747.9,482.6 742.3,484.1 740.8,489.6 739.3,484.1 733.8,482.6 739.3,481.1" fill="#fff3c0"/><polygon class="tw2" style="animation-delay:-2.25s" points="457.6,392.2 459.8,400.2 467.7,402.3 459.8,404.4 457.6,412.4 455.5,404.4 447.5,402.3 455.5,400.2" fill="#ffd36b"/><polygon class="tw" style="animation-delay:-4.00s" points="331.3,251.3 332.4,255.5 336.5,256.6 332.4,257.7 331.3,261.8 330.2,257.7 326.0,256.6 330.2,255.5" fill="#fff3c0"/><polygon class="tw" style="animation-delay:-3.73s" points="587.7,436.3 589.7,443.6 596.9,445.5 589.7,447.5 587.7,454.7 585.8,447.5 578.5,445.5 585.8,443.6" fill="#fff3c0"/><polygon class="tw2" style="animation-delay:-0.30s" points="569.3,32.1 571.7,40.9 580.5,43.2 571.7,45.6 569.3,54.4 566.9,45.6 558.2,43.2 566.9,40.9" fill="#fff3c0"/><polygon class="tw" style="animation-delay:-1.12s" points="353.4,137.3 355.5,145.0 363.1,147.0 355.5,149.1 353.4,156.8 351.3,149.1 343.6,147.0 351.3,145.0" fill="#fff3c0"/><polygon class="tw2" style="animation-delay:-0.26s" points="731.9,192.8 732.9,196.5 736.6,197.5 732.9,198.5 731.9,202.3 730.9,198.5 727.2,197.5 730.9,196.5" fill="#ffd36b"/><polygon class="tw" style="animation-delay:-1.27s" points="393.6,273.4 395.2,279.1 400.9,280.7 395.2,282.3 393.6,288.0 392.1,282.3 386.3,280.7 392.1,279.1" fill="#ffd36b"/><polygon class="tw2" style="animation-delay:-2.60s" points="134.8,113.9 136.0,118.2 140.3,119.4 136.0,120.6 134.8,124.9 133.7,120.6 129.4,119.4 133.7,118.2" fill="#ffd36b"/><polygon class="tw2" style="animation-delay:-2.98s" points="696.6,76.6 699.6,87.6 710.5,90.5 699.6,93.5 696.6,104.5 693.7,93.5 682.7,90.5 693.7,87.6" fill="#fff3c0"/><polygon class="tw2" style="animation-delay:-0.29s" points="402.3,252.8 403.2,256.3 406.7,257.2 403.2,258.1 402.3,261.6 401.3,258.1 397.9,257.2 401.3,256.3" fill="#fff3c0"/><polygon class="tw2" style="animation-delay:-0.53s" points="235.6,281.9 236.8,286.3 241.2,287.5 236.8,288.6 235.6,293.0 234.5,288.6 230.1,287.5 234.5,286.3" fill="#ffd36b"/><polygon class="tw2" style="animation-delay:-0.58s" points="706.4,254.2 707.5,258.3 711.6,259.5 707.5,260.6 706.4,264.7 705.2,260.6 701.1,259.5 705.2,258.3" fill="#ffd36b"/><polygon class="tw2" style="animation-delay:-2.30s" points="43.4,580.4 45.2,587.1 51.9,588.9 45.2,590.7 43.4,597.4 41.7,590.7 35.0,588.9 41.7,587.1" fill="#ffd36b"/><polygon class="tw" style="animation-delay:-0.63s" points="495.3,601.7 497.3,609.3 504.9,611.3 497.3,613.3 495.3,620.9 493.3,613.3 485.7,611.3 493.3,609.3" fill="#fff3c0"/><polygon class="tw" style="animation-delay:-2.43s" points="146.3,630.7 147.9,636.8 153.9,638.4 147.9,640.0 146.3,646.1 144.6,640.0 138.6,638.4 144.6,636.8" fill="#fff3c0"/><polygon class="tw2" style="animation-delay:-2.13s" points="159.9,361.3 160.9,365.1 164.8,366.2 160.9,367.2 159.9,371.0 158.9,367.2 155.1,366.2 158.9,365.1" fill="#fff3c0"/><polygon class="tw" style="animation-delay:-2.72s" points="76.8,560.2 78.6,566.8 85.3,568.6 78.6,570.4 76.8,577.0 75.0,570.4 68.4,568.6 75.0,566.8" fill="#ffd36b"/><polygon class="tw2" style="animation-delay:-0.07s" points="536.1,222.6 538.4,230.9 546.6,233.1 538.4,235.3 536.1,243.6 533.9,235.3 525.6,233.1 533.9,230.9" fill="#ffd36b"/><polygon class="tw" style="animation-delay:-2.25s" points="612.9,106.1 613.8,109.4 617.1,110.3 613.8,111.2 612.9,114.5 612.0,111.2 608.7,110.3 612.0,109.4" fill="#fff3c0"/><polygon class="tw2" style="animation-delay:-3.55s" points="657.6,589.5 658.8,594.0 663.3,595.2 658.8,596.4 657.6,601.0 656.4,596.4 651.9,595.2 656.4,594.0" fill="#ffd36b"/>
+<g class="bob"><g transform="translate(400 370) rotate(-35)"><g class="sway"><rect x="-450" y="-300" width="900" height="600" fill="none"/>
+<circle cx="-120" cy="0" r="110" fill="#ffc247" opacity=".5" filter="url(#blur)" class="halo"/>
+<circle cx="-120" cy="0" r="86" fill="none" stroke="#ffd36b" stroke-width="34"/>
+<circle cx="-120" cy="0" r="86" fill="none" stroke="#fff3c0" stroke-width="6" opacity=".7"/>
+<rect x="-40" y="-17" width="290" height="34" rx="14" fill="#ffc247"/><rect x="-40" y="-17" width="290" height="12" rx="6" fill="#fff3c0" opacity=".65"/>
+<rect x="160" y="10" width="30" height="62" rx="8" fill="#ffb02e"/><rect x="215" y="10" width="30" height="44" rx="8" fill="#ffb02e"/>
+<polygon class="breathe" points="-120,-24 -96,0 -120,24 -144,0" fill="#ff5e8a"/>
+<clipPath id="kc"><path clip-rule="evenodd" d="M-120 -103 A103 103 0 1 1 -120 103 A103 103 0 1 1 -120 -103 Z M-120 -69 A69 69 0 1 0 -120 69 A69 69 0 1 0 -120 -69 Z"/><rect x="-40" y="-17" width="290" height="34" rx="14"/><rect x="160" y="10" width="30" height="62" rx="8"/><rect x="215" y="10" width="30" height="44" rx="8"/></clipPath>
+<g clip-path="url(#kc)"><g class="sweep"><polygon points="-60,-120 -10,-120 30,120 -20,120" fill="url(#shine)" opacity=".8"/></g></g>
+</g></g></g>
+<g transform="translate(400 370)"><g class="tw" style="animation-delay:-.5s"><polygon points="210.0,-180.0 215.7,-155.7 240.0,-150.0 215.7,-144.3 210.0,-120.0 204.3,-144.3 180.0,-150.0 204.3,-155.7" fill="#fff"/></g></g>
+<circle class="ember" style="--dx:40px;--dy:90px;animation-delay:-0.00s;animation-duration:3s" cx="300" cy="290" r="3" fill="#fff3c0"/><circle class="ember" style="--dx:-52px;--dy:100px;animation-delay:-0.33s;animation-duration:3s" cx="320" cy="310" r="5" fill="#fff3c0"/><circle class="ember" style="--dx:64px;--dy:110px;animation-delay:-0.66s;animation-duration:3s" cx="340" cy="330" r="7" fill="#fff3c0"/><circle class="ember" style="--dx:-76px;--dy:120px;animation-delay:-0.99s;animation-duration:3s" cx="360" cy="290" r="3" fill="#fff3c0"/><circle class="ember" style="--dx:88px;--dy:130px;animation-delay:-1.32s;animation-duration:3s" cx="380" cy="310" r="5" fill="#fff3c0"/><circle class="ember" style="--dx:-100px;--dy:140px;animation-delay:-1.65s;animation-duration:3s" cx="400" cy="330" r="7" fill="#fff3c0"/><circle class="ember" style="--dx:112px;--dy:150px;animation-delay:-1.98s;animation-duration:3s" cx="420" cy="290" r="3" fill="#fff3c0"/><circle class="ember" style="--dx:-124px;--dy:160px;animation-delay:-2.31s;animation-duration:3s" cx="440" cy="310" r="5" fill="#fff3c0"/><circle class="ember" style="--dx:136px;--dy:170px;animation-delay:-2.64s;animation-duration:3s" cx="460" cy="330" r="7" fill="#fff3c0"/><circle class="ember" style="--dx:-148px;--dy:180px;animation-delay:-2.97s;animation-duration:3s" cx="480" cy="290" r="3" fill="#fff3c0"/><circle class="ember" style="--dx:160px;--dy:190px;animation-delay:-3.30s;animation-duration:3s" cx="500" cy="310" r="5" fill="#fff3c0"/><circle class="ember" style="--dx:-172px;--dy:200px;animation-delay:-3.63s;animation-duration:3s" cx="520" cy="330" r="7" fill="#fff3c0"/>
+<rect width="800" height="800" rx="64" fill="url(#vig)"/>
+<rect x="14" y="14" width="772" height="772" rx="56" fill="none" stroke="url(#rim)" stroke-width="3"/>
+<text x="400" y="708" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-weight="800" font-size="46" fill="#fff">Золотой ключ</text>
+<text x="400" y="750" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="24" fill="#fff" opacity=".7" letter-spacing="4">МИФИЧЕСКИЙ</text>
+</svg>

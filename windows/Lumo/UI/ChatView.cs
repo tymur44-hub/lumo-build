@@ -21,6 +21,9 @@ public sealed class ChatView : Grid
     readonly TextBlock title = T.Txt("", 16, bold: true, lines: 1);
     readonly TextBlock status = T.Txt("", 12.5, T.Muted, lines: 1);
     readonly FontIcon verified = T.Icon("\uE930", 14, T.A2);
+    readonly ContentControl emojiBox = new() { VerticalAlignment = VerticalAlignment.Center };
+    string? shownEmoji;
+    static readonly HashSet<string> askedProfiles = new();
     readonly ScrollViewer sv = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     readonly StackPanel msgs = new() { Padding = new Thickness(0, 10, 0, 12) };
     readonly Dictionary<int, BubbleView> bubbles = new();
@@ -67,7 +70,8 @@ public sealed class ChatView : Grid
         head.Children.Add(av);
         var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 1, Background = T.Transparent };
         var tr = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        tr.Children.Add(title); verified.VerticalAlignment = VerticalAlignment.Center; tr.Children.Add(verified);
+        tr.Children.Add(title); tr.Children.Add(emojiBox); verified.VerticalAlignment = VerticalAlignment.Center; tr.Children.Add(verified);
+        verified.Tapped += (_, e) => { e.Handled = true; var cc0 = Store.Chat(ChatId); Plaque.Verified(cc0?.IsChannel == true ? "канал" : cc0?.IsPrivate == false ? "группа" : cc0?.PeerBot == true ? "бот" : "профиль"); };
         info.Children.Add(tr); info.Children.Add(status);
         Grid.SetColumn(info, 1); head.Children.Add(info);
         info.Tapped += (_, _) => ShowInfo();
@@ -255,7 +259,11 @@ public sealed class ChatView : Grid
         var self = c.IsPrivate && (c.PeerId == null || c.PeerId == Store.MyId);
         if (self) av.SetIcon("\uE734", T.Accent); else av.Set(c.DisplayName, c.DisplayAvatar, c.DisplayColor, c.PeerId != null && Store.Online.Contains(c.PeerId));
         title.Text = self ? "Избранное" : c.DisplayName;
-        verified.Visibility = c.PeerVerified ? Visibility.Visible : Visibility.Collapsed;
+        var pp = c.PeerId != null ? Store.Profiles.GetValueOrDefault(c.PeerId) : null;
+        verified.Visibility = c.PeerVerified || pp?.Verified == true ? Visibility.Visible : Visibility.Collapsed;
+        var em = c.IsPrivate && pp?.Premium == true && !string.IsNullOrEmpty(pp.EmojiStatus) ? pp.EmojiStatus : null;
+        if (em != shownEmoji) { shownEmoji = em; emojiBox.Content = em != null ? new StatusEmoji(em, 18) : null; }
+        if (c.IsPrivate && c.PeerId != null && pp == null && askedProfiles.Add(c.PeerId)) _ = Task.Run(async () => { await Store.GetProfile(c.PeerId); DispatcherQueue.TryEnqueue(Header); });
         status.Text = Store.Status(c);
         status.Foreground = Store.TypingText(ChatId) != null || status.Text == "в сети" ? T.A2 : T.Muted;
         if (!c.CanPost)

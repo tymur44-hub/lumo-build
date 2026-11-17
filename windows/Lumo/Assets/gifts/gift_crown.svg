@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800"><style>
+:root{--e:cubic-bezier(.45,0,.55,1)}
+[class]{transform-box:fill-box}
+.cr-float{animation:crfloat 6s var(--e) infinite;transform-origin:center}
+@keyframes crfloat{0%,100%{transform:translateY(10px) rotate(-2.5deg)}50%{transform:translateY(-16px) rotate(2.5deg)}}
+.cr-halo{animation:crhalo 3s var(--e) infinite;transform-origin:400px 380px;transform-box:view-box}
+@keyframes crhalo{0%,100%{opacity:.55;transform:scale(.92)}50%{opacity:1;transform:scale(1.08)}}
+.cr-rays{animation:crspin 12s linear infinite;transform-origin:400px 380px;transform-box:view-box}
+@keyframes crspin{to{transform:rotate(360deg)}}
+.cr-rays2{animation:crspin2 6s linear infinite;transform-origin:400px 380px;transform-box:view-box}
+@keyframes crspin2{to{transform:rotate(-180deg)}}
+.cr-gem{animation:crgem 2s var(--e) infinite;transform-origin:center}
+@keyframes crgem{0%,100%{transform:scale(1);filter:brightness(1)}50%{transform:scale(1.14);filter:brightness(1.35)}}
+.cr-sweep{animation:crsweep 3s var(--e) infinite}
+@keyframes crsweep{0%,30%{transform:translateX(-420px)}70%,100%{transform:translateX(420px)}}
+.cr-tw{animation:crtw 2s var(--e) infinite;transform-origin:center}
+@keyframes crtw{0%,100%{opacity:.1;transform:scale(.4)}50%{opacity:1;transform:scale(1.25)}}
+.cr-rise{animation:crrise 3s linear infinite;opacity:0}
+@keyframes crrise{0%{opacity:0;transform:translateY(0) scale(.6)}20%{opacity:1}100%{opacity:0;transform:translateY(-260px) scale(.2)}}
+.cr-ring{animation:crring 3s ease-out infinite;transform-origin:400px 380px;transform-box:view-box}
+@keyframes crring{0%{opacity:.6;transform:scale(.45)}100%{opacity:0;transform:scale(1.5)}}
+</style>
+<defs>
+<linearGradient id="crbg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a0f5c"/><stop offset=".55" stop-color="#1c0830"/><stop offset="1" stop-color="#07040f"/></linearGradient>
+<radialGradient id="crgl" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ff7af0" stop-opacity=".95"/><stop offset=".45" stop-color="#ff2ec4" stop-opacity=".45"/><stop offset="1" stop-color="#ff2ec4" stop-opacity="0"/></radialGradient>
+<linearGradient id="crgold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6cf"/><stop offset=".35" stop-color="#ffd84f"/><stop offset=".75" stop-color="#f2a100"/><stop offset="1" stop-color="#b86a00"/></linearGradient>
+<linearGradient id="crgoldHi" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fffdf0"/><stop offset="1" stop-color="#ffd84f" stop-opacity="0"/></linearGradient>
+<radialGradient id="crpink" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffe3fc"/><stop offset=".45" stop-color="#ff5fe0"/><stop offset="1" stop-color="#9c008e"/></radialGradient>
+<radialGradient id="crblue" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#eafaff"/><stop offset=".45" stop-color="#4fd3ff"/><stop offset="1" stop-color="#00649a"/></radialGradient>
+<linearGradient id="crray" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".0"/><stop offset=".5" stop-color="#ffd6f6" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<linearGradient id="crshine" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<radialGradient id="crvig" cx=".5" cy=".45" r=".75"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></radialGradient>
+<linearGradient id="crrim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb8f2" stop-opacity=".95"/><stop offset=".5" stop-color="#fff" stop-opacity=".08"/><stop offset="1" stop-color="#ffd84f" stop-opacity=".7"/></linearGradient>
+<filter id="crblur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter>
+<clipPath id="crbody"><path d="M-170 120 L-200 -110 L-95 -10 L-50 -175 L0 -40 L50 -175 L95 -10 L200 -110 L170 120 Z"/></clipPath>
+</defs>
+<rect width="800" height="800" rx="64" fill="url(#crbg)"/>
+<g class="cr-rays" opacity=".9">
+<g fill="url(#crray)">
+<polygon points="392,380 408,380 420,-40 380,-40"/><polygon points="392,380 408,380 420,-40 380,-40" transform="rotate(30 400 380)"/><polygon points="392,380 408,380 420,-40 380,-40" transform="rotate(60 400 380)"/><polygon points="392,380 408,380 420,-40 380,-40" transform="rotate(90 400 380)"/><polygon points="392,380 408,380 420,-40 380,-40" transform="rotate(120 400 380)"/><polygon points="392,380 408,380 420,-40 380,-40" transform="rotate(150 400 380)"/><polygon points="392,380 408,380 420,-40 380,-40" transform="rotate(180 400 380)"/><polygon points="392,380 408,380 420,-40 380,-40" transform="rotate(210 400 380)"/><polygon points="392,380 408,380 420,-40 380,-40" transform="rotate(240 400 380)"/><polygon points="392,380 408,380 420,-40 380,-40" transform="rotate(270 400 380)"/><polygon points="392,380 408,380 420,-40 380,-40" transform="rotate(300 400 380)"/><polygon points="392,380 408,380 420,-40 380,-40" transform="rotate(330 400 380)"/>
+</g></g>
+<g class="cr-rays2" opacity=".5"><g fill="url(#crray)">
+<polygon points="396,380 404,380 412,60 388,60" transform="rotate(15 400 380)"/><polygon points="396,380 404,380 412,60 388,60" transform="rotate(75 400 380)"/><polygon points="396,380 404,380 412,60 388,60" transform="rotate(135 400 380)"/><polygon points="396,380 404,380 412,60 388,60" transform="rotate(195 400 380)"/><polygon points="396,380 404,380 412,60 388,60" transform="rotate(255 400 380)"/><polygon points="396,380 404,380 412,60 388,60" transform="rotate(315 400 380)"/>
+</g></g>
+<circle class="cr-halo" cx="400" cy="380" r="290" fill="url(#crgl)"/>
+<circle class="cr-ring" cx="400" cy="380" r="200" fill="none" stroke="#ffc6f4" stroke-width="5"/>
+<g fill="#fff">
+<path class="cr-tw" style="animation-delay:-.2s" d="M120 120 l7 19 19 7 -19 7 -7 19 -7 -19 -19 -7 19 -7z"/>
+<path class="cr-tw" style="animation-delay:-1.1s" d="M672 150 l6 16 16 6 -16 6 -6 16 -6 -16 -16 -6 16 -6z"/>
+<path class="cr-tw" style="animation-delay:-.6s" d="M640 520 l5 13 13 5 -13 5 -5 13 -5 -13 -13 -5 13 -5z"/>
+<path class="cr-tw" style="animation-delay:-1.6s" d="M150 500 l5 14 14 5 -14 5 -5 14 -5 -14 -14 -5 14 -5z"/>
+<circle class="cr-tw" style="animation-delay:-.9s" cx="560" cy="90" r="5"/>
+<circle class="cr-tw" style="animation-delay:-1.4s" cx="230" cy="250" r="4"/>
+<circle class="cr-tw" style="animation-delay:-.3s" cx="610" cy="330" r="4"/>
+</g>
+<g class="cr-float">
+<g transform="translate(400,400)">
+<ellipse cx="0" cy="40" rx="230" ry="150" fill="#ff9be9" opacity=".35" filter="url(#crblur)"/>
+<path d="M-170 120 L-200 -110 L-95 -10 L-50 -175 L0 -40 L50 -175 L95 -10 L200 -110 L170 120 Z" fill="url(#crgold)" stroke="#7a3d00" stroke-width="7" stroke-linejoin="round"/>
+<path d="M-170 120 L-200 -110 L-150 -62 L-140 120 Z" fill="url(#crgoldHi)" opacity=".7"/>
+<path d="M-95 -10 L-50 -175 L-38 -128 L-80 -2 Z" fill="#fffbe6" opacity=".45"/>
+<g clip-path="url(#crbody)"><g class="cr-sweep"><polygon points="-130,-200 -60,-200 40,200 -30,200" fill="url(#crshine)" opacity=".75"/></g></g>
+<rect x="-185" y="104" width="370" height="64" rx="18" fill="url(#crgold)" stroke="#7a3d00" stroke-width="7"/>
+<rect x="-175" y="110" width="350" height="18" rx="9" fill="#fffbe6" opacity=".55"/>
+<g class="cr-gem"><circle cx="0" cy="-30" r="34" fill="url(#crpink)" stroke="#6a0060" stroke-width="5"/><circle cx="-11" cy="-42" r="9" fill="#fff" opacity=".8"/></g>
+<circle cx="-112" cy="30" r="20" fill="url(#crblue)" stroke="#003e60" stroke-width="4"/><circle cx="-118" cy="23" r="5" fill="#fff" opacity=".8"/>
+<circle cx="112" cy="30" r="20" fill="url(#crblue)" stroke="#003e60" stroke-width="4"/><circle cx="106" cy="23" r="5" fill="#fff" opacity=".8"/>
+<circle cx="-200" cy="-110" r="18" fill="url(#crpink)" stroke="#6a0060" stroke-width="4"/>
+<circle cx="200" cy="-110" r="18" fill="url(#crpink)" stroke="#6a0060" stroke-width="4"/>
+<circle cx="-50" cy="-175" r="16" fill="#fffbe6" stroke="#7a3d00" stroke-width="4"/>
+<circle cx="50" cy="-175" r="16" fill="#fffbe6" stroke="#7a3d00" stroke-width="4"/>
+<circle cx="-110" cy="136" r="11" fill="url(#crpink)"/><circle cx="0" cy="136" r="14" fill="url(#crblue)"/><circle cx="110" cy="136" r="11" fill="url(#crpink)"/>
+</g></g>
+<g fill="#ffd6f6">
+<circle class="cr-rise" style="animation-delay:-.2s" cx="300" cy="610" r="6"/>
+<circle class="cr-rise" style="animation-delay:-1.1s" cx="400" cy="620" r="5"/>
+<circle class="cr-rise" style="animation-delay:-2.0s" cx="500" cy="612" r="6"/>
+<circle class="cr-rise" style="animation-delay:-.7s" cx="350" cy="625" r="4" fill="#ffe9a0"/>
+<circle class="cr-rise" style="animation-delay:-1.6s" cx="455" cy="628" r="4" fill="#ffe9a0"/>
+</g>
+<rect width="800" height="800" rx="64" fill="url(#crvig)"/>
+<rect x="14" y="14" width="772" height="772" rx="56" fill="none" stroke="url(#crrim)" stroke-width="3"/>
+<text x="400" y="708" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-weight="800" font-size="46" fill="#fff">Корона Люмо</text>
+<text x="400" y="750" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="24" fill="#ff8ae3" letter-spacing="4">БОЖЕСТВЕННЫЙ</text>
+</svg>
