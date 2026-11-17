@@ -198,7 +198,7 @@ function draw(){
    return `<div class="card" style="animation-delay:${i*45}ms"><div class="stage r-${g.rarity} ${rare(g.rarity)?'shine':''}">${sparks(g.rarity)}${art(g)}</div>
    <div class="name">${esc(g.name)}</div><div class="meta"><span class="pill r-${g.rarity}">${esc(g.rarityName)}</span>${g.supply>0?`<span>осталось ${fmt(g.left)} из ${fmt(g.supply)}</span>`:''}</div>
    ${g.supply>0?`<div class="bar"><i style="width:${pct}%"></i></div>`:''}
-   <button class="buy" data-id="${esc(g.id)}" ${can?'':'disabled'}>${sold?'Раскуплено':gem+fmt(g.price)+(can?'':' · мало люменов')}</button></div>`}).join('')+'</div>';
+   <button class="buy" data-id="${esc(g.id)}" ${can?'':'disabled'} title="${can?'':(sold?'':'Не хватает люменов')}">${sold?'Раскуплено':gem+fmt(g.price)}</button></div>`}).join('')+'</div>';
   L.querySelectorAll('.buy:not([disabled])').forEach(b=>b.onclick=()=>{b.disabled=true;b.innerHTML='<span class="load" style="padding:0"><i></i><i></i><i></i></span>';post({t:'buy',id:b.dataset.id})});
  }else{
   if(!D.mine.length){L.innerHTML=`<div class="empty"><div class="big">${art({})}</div><b>Пока нет подарков</b>Купите первый в магазине — он появится здесь и в вашем профиле</div>`;return}
