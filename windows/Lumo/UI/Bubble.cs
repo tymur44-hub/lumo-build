@@ -25,7 +25,7 @@ public sealed class BubbleView : Grid
 
     public BubbleView(Message m, ChatView owner, bool showName, bool tail)
     {
-        M = m; this.owner = owner; Sig = Signature(m);
+        M = m; this.owner = owner; Sig = Signature(m) + "|" + showName + tail + "|a" + (owner.Albums.TryGetValue(m.Id, out var alb) ? string.Join(",", alb.Select(x => x.Id.ToString() + x.Pending)) : "");
         mine = m.SenderId == Store.MyId && m.SenderId != null;
         var chat = Store.Chat(m.ChatId);
         if (chat?.IsChannel == true && chat.CanPost) mine = m.SenderId == Store.MyId;
@@ -131,6 +131,13 @@ public sealed class BubbleView : Grid
             case "video":
             {
                 var sp = new StackPanel { Spacing = 6 };
+                if (owner.Albums.TryGetValue(m.Id, out var grp) && grp.Count > 1)
+                {
+                    sp.Children.Add(AlbumGrid(grp));
+                    var cap = grp.Select(x => x.Body).FirstOrDefault(b => !string.IsNullOrEmpty(b));
+                    if (cap != null) sp.Children.Add(RichText(cap, fg));
+                    return sp;
+                }
                 sp.Children.Add(MediaFrame(m));
                 if (!string.IsNullOrEmpty(m.Body)) sp.Children.Add(RichText(m.Body, fg));
                 return sp;
@@ -339,8 +346,7 @@ public sealed class BubbleView : Grid
         }
         else
         {
-            var thumb = m.Meta.Str("thumb") ?? m.Meta.Str("poster");
-            if (thumb != null) g.Children.Add(new Image { Source = T.Bitmap(thumb, (int)(w * 2)), Stretch = Stretch.UniformToFill });
+            g.Children.Add(VideoPreview.Make(m, w));
             var pl = new Border { Width = 54, Height = 54, CornerRadius = new CornerRadius(27), Background = T.B(0x99000000), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = T.Icon("\uE768", 22, T.White) };
             g.Children.Add(pl);
             if (m.Duration > 0)
@@ -352,6 +358,59 @@ public sealed class BubbleView : Grid
         }
         if (m.Pending) g.Children.Add(UploadBadge(m.Id));
         return g;
+    }
+
+    static int[] AlbumRows(int n) => n switch
+    {
+        2 => new[] { 2 }, 3 => new[] { 1, 2 }, 4 => new[] { 2, 2 }, 5 => new[] { 2, 3 }, 6 => new[] { 3, 3 },
+        7 => new[] { 1, 3, 3 }, 8 => new[] { 2, 3, 3 }, 9 => new[] { 3, 3, 3 }, _ => new[] { 2, 2, 3, 3 },
+    };
+
+    /// <summary>Сетка альбома: фото и видео одним блоком</summary>
+    FrameworkElement AlbumGrid(List<Message> items)
+    {
+        const double width = 380, gap = 2;
+        var shown = items.Take(10).ToList();
+        var rs = AlbumRows(shown.Count);
+        var col = new StackPanel { Spacing = gap, Width = width, CornerRadius = new CornerRadius(12) };
+        int idx = 0;
+        foreach (var n in rs)
+        {
+            var h = n == 1 ? 260 : n == 2 ? 170 : 116;
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = gap };
+            for (int c = 0; c < n && idx < shown.Count; c++, idx++)
+            {
+                var m = shown[idx];
+                var cw = (width - gap * (n - 1)) / n;
+                var cell = new Grid { Width = cw, Height = h, Background = T.B(0x33000000) };
+                if (m.Kind == "image")
+                {
+                    BitmapImage? src = null;
+                    if (m.MediaUrl != null) src = T.Bitmap(m.MediaUrl, (int)(cw * 2));
+                    else if (m.LocalPath != null) try { src = new BitmapImage(new Uri(m.LocalPath)); } catch { }
+                    cell.Children.Add(new Image { Source = src, Stretch = Stretch.UniformToFill });
+                    cell.Tapped += (_, e) => { e.Handled = true; owner.ShowImage(m); };
+                }
+                else
+                {
+                    cell.Children.Add(VideoPreview.Make(m, cw));
+                    cell.Children.Add(new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Background = T.B(0x99000000), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = T.Icon("\uE768", 16, T.White) });
+                    if (m.Duration > 0)
+                        cell.Children.Add(new Border { Background = T.B(0x99000000), CornerRadius = new CornerRadius(7), Padding = new Thickness(5, 1, 5, 1), Margin = new Thickness(6), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Child = T.Txt(Fmt.Duration(m.Duration), 11, T.White) });
+                    cell.Tapped += (_, e) => { e.Handled = true; owner.ShowVideo(m, false); };
+                }
+                if (m.Pending) cell.Children.Add(UploadBadge(m.Id));
+                row.Children.Add(cell);
+            }
+            col.Children.Add(row);
+        }
+        if (items.Count > 10)
+        {
+            // остальное — «+N» поверх последней ячейки
+            var last = (Grid)((StackPanel)col.Children[^1]).Children[^1];
+            last.Children.Add(new Border { Background = T.B(0x88000000), Child = new TextBlock { Text = "+" + (items.Count - 10), FontSize = 22, FontWeight = Microsoft.UI.Text.FontWeights.Bold, Foreground = T.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
+        }
+        return new Border { CornerRadius = new CornerRadius(12), Child = col };
     }
 
     /// <summary>Колечко отправки поверх фото/видео: проценты и мегабайты</summary>
@@ -523,5 +582,54 @@ public sealed class VoiceView : Grid
         player.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(Net.Px(m.MediaUrl)!));
         player.Play();
         icon.Glyph = "\uE769";
+    }
+}
+
+
+/// <summary>Превью видео: картинка из meta.thumb, а если её нет — первый кадр самого видео (подгружается только начало)</summary>
+public static class VideoPreview
+{
+    static readonly Dictionary<string, BitmapImage> frames = new();
+    static int active;
+
+    public static FrameworkElement Make(Message m, double w)
+    {
+        var thumb = m.Meta.Str("thumb") ?? m.Meta.Str("poster");
+        if (thumb != null) return new Image { Source = T.Bitmap(thumb, (int)(w * 2)), Stretch = Stretch.UniformToFill };
+        var url = m.MediaUrl;
+        if (url == null) return new Grid();
+        var host = new Grid();
+        if (frames.TryGetValue(url, out var cached)) { host.Children.Add(new Image { Source = cached, Stretch = Stretch.UniformToFill }); return host; }
+        Windows.Media.Playback.MediaPlayer? mp = null;
+        host.Loaded += (_, _) =>
+        {
+            if (mp != null || active > 8) return;
+            active++;
+            try
+            {
+                mp = new Windows.Media.Playback.MediaPlayer { IsMuted = true, AutoPlay = false };
+                var el = new MediaPlayerElement { Stretch = Stretch.UniformToFill, AreTransportControlsEnabled = false, IsHitTestVisible = false };
+                el.SetMediaPlayer(mp);
+                host.Children.Add(el);
+                var done = false;
+                mp.PlaybackSession.PositionChanged += (s, _) =>
+                {
+                    if (done || s.Position.TotalMilliseconds < 80) return;
+                    done = true;
+                    host.DispatcherQueue.TryEnqueue(() => { try { mp?.Pause(); } catch { } });
+                };
+                mp.MediaOpened += (_, _) => host.DispatcherQueue.TryEnqueue(() => { try { mp?.Play(); } catch { } });
+                mp.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(Net.Px(url)!));
+            }
+            catch { }
+        };
+        host.Unloaded += (_, _) =>
+        {
+            if (mp == null) return;
+            active = Math.Max(0, active - 1);
+            try { mp.Dispose(); } catch { }
+            mp = null; host.Children.Clear();
+        };
+        return host;
     }
 }

@@ -284,9 +284,27 @@ public sealed class ChatView : Grid
         if (Store.WindowActive) Store.MarkRead(ChatId);
     }
 
+    /// <summary>Альбомы: подряд идущие фото/видео с общим meta.album — одна сетка (по последнему сообщению)</summary>
+    public readonly Dictionary<int, List<Message>> Albums = new();
+
     void Render()
     {
-        var list = Store.Msgs(ChatId);
+        var raw = Store.Msgs(ChatId);
+        Albums.Clear();
+        var list = new List<Message>(raw.Count);
+        for (int k = 0; k < raw.Count;)
+        {
+            var m0 = raw[k];
+            var a = m0.Kind is "image" or "video" ? m0.Meta.Str("album") : null;
+            if (a == null) { list.Add(m0); k++; continue; }
+            var grp = new List<Message> { m0 };
+            int j = k + 1;
+            while (j < raw.Count && raw[j].Meta.Str("album") == a && raw[j].SenderId == m0.SenderId && raw[j].Kind is "image" or "video") { grp.Add(raw[j]); j++; }
+            var rep0 = grp[^1];
+            list.Add(rep0);
+            if (grp.Count > 1) Albums[rep0.Id] = grp;
+            k = j;
+        }
         var keep = new Dictionary<int, BubbleView>();
         var children = new List<UIElement>();
         DateTimeOffset? prevDay = null;
@@ -306,7 +324,7 @@ public sealed class ChatView : Grid
             var showName = prev == null || prev.SenderId != m.SenderId || prev.Kind == "system";
             var next = i + 1 < list.Count ? list[i + 1] : null;
             var tail = next == null || next.SenderId != m.SenderId || next.CreatedAt.LocalDateTime.Date != day || next.Kind == "system";
-            var sig = BubbleView.Signature(m) + "|" + showName + tail;
+            var sig = BubbleView.Signature(m) + "|" + showName + tail + "|a" + (Albums.TryGetValue(m.Id, out var al) ? string.Join(",", al.Select(x => x.Id.ToString() + x.Pending)) : "");
             BubbleView b;
             if (bubbles.TryGetValue(m.Id, out var old) && old.Sig == sig) b = old;
             else b = new BubbleView(m, this, showName, tail);

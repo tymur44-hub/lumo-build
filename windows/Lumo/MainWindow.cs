@@ -25,6 +25,7 @@ public sealed class MainWindow : Window
     readonly TextBlock toastText = new() { Foreground = T.Text, FontSize = 13, TextWrapping = TextWrapping.Wrap };
     readonly TextBlock titleText = new() { Text = "Lumo", FontSize = 12, Foreground = T.Muted, VerticalAlignment = VerticalAlignment.Center };
     ShellView? shell;
+    public ShellView? Shell => shell;
     bool loggedIn;
     public XamlRoot? Root => root.XamlRoot;
 
@@ -184,6 +185,7 @@ public sealed class MainWindow : Window
             shell?.ShowSettings();
             await Task.Delay(1500);
             await Capture(Path.Combine(dir, "2-profile.png"));
+            shell?.CloseSettings();
             Sheet.CloseTop();
             await Task.Delay(600);
             if (first != null) _ = Dialogs.ChatInfo(this, first);
@@ -214,6 +216,9 @@ public sealed class MainWindow : Window
         shell?.ShowSettings("gifts");
         await Task.Delay(2500);
         await Capture(Path.Combine(dir, "8-settings.png"));
+        shell?.ShowSettings("qr");
+        await Task.Delay(3000);
+        await Capture(Path.Combine(dir, "9-qr.png"));
         Sheet.CloseTop();
         await Task.Delay(500);
         CallHost.I?.DemoRing();

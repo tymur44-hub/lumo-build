@@ -164,6 +164,7 @@ public static class Store
     {
         if (uid == null) return "";
         if (uid == MyId) return Me?.Name ?? "Вы";
+        if (Aliases.TryGetValue(uid, out var al) && !(Profiles.GetValueOrDefault(uid)?.IsBot ?? false)) return al;
         if (Profiles.TryGetValue(uid, out var p)) return p.Name.Length > 0 ? p.Name : p.Username;
         var c = Chats.FirstOrDefault(x => x.PeerId == uid);
         return c?.PeerName ?? "Пользователь";
@@ -235,7 +236,8 @@ public static class Store
         try
         {
             var rows = (await Api.Rpc("lm_chats_v2")).Objects();
-            var list = rows.Select(ChatItem.From).ToList();
+            if ((DateTime.UtcNow - aliasesAt).TotalMinutes > 2) await ContactIds(true);
+            var list = rows.Select(ChatItem.From).Select(WithAlias).ToList();
             await E2E.Prefetch(list.Where(c => c.IsPrivate && c.PeerId != null).Select(c => c.PeerId!));
             foreach (var c in list.Where(c => c.IsPrivate && E2E.IsEnc(c.LastBody)))
             {
@@ -270,14 +272,29 @@ public static class Store
     }
 
     static List<string>? contacts;
-    /// <summary>Мои контакты (id пользователей)</summary>
+    /// <summary>Имена контактов как в телефоне (lm_contacts.alias): телефон — главный, ПК берёт имена оттуда</summary>
+    public static Dictionary<string, string> Aliases { get; private set; } = new();
+    static DateTime aliasesAt = DateTime.MinValue;
+
+    /// <summary>Мои контакты (id пользователей) и их имена из телефона</summary>
     public static async Task<List<string>> ContactIds(bool fresh = false)
     {
         if (contacts != null && !fresh) return contacts;
-        try { contacts = (await Api.Select("lm_contacts", Api.Q(("select", "contact_id")))).Select(r => r.Str("contact_id")).Where(x => x != null).Select(x => x!).ToList(); }
+        try
+        {
+            var rows = await Api.Select("lm_contacts", Api.Q(("select", "contact_id,alias")));
+            contacts = rows.Select(r => r.Str("contact_id")).Where(x => x != null).Select(x => x!).ToList();
+            var al = new Dictionary<string, string>();
+            foreach (var r in rows) if (r.Str("contact_id") is string id && r.Str("alias") is string a && a.Trim().Length > 0) al[id] = a.Trim();
+            Aliases = al; aliasesAt = DateTime.UtcNow;
+        }
         catch { contacts ??= new(); }
         return contacts;
     }
+
+    /// <summary>Подставить имена из телефона в список чатов</summary>
+    static ChatItem WithAlias(ChatItem c) =>
+        c.IsPrivate && c.PeerId != null && !c.PeerBot && Aliases.TryGetValue(c.PeerId, out var a) ? c with { PeerName = a } : c;
 
     public static async Task<List<SearchResult>> Search(string q)
     {

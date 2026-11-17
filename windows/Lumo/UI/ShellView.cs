@@ -234,14 +234,42 @@ public sealed class ShellView : Grid
         }
     }
 
-    /// <summary>Настройки — на всю правую часть окна</summary>
+    SettingsPage? settings;
+
+    /// <summary>Настройки — на всё окно, поверх списка чатов</summary>
+    bool escAdded;
     public void ShowSettings(string? section = null)
     {
-        chat?.Detach(); chat = null; openId = null; Store.OpenChatId = null;
-        list.SelectedItem = null;
-        var page = new SettingsPage(win, this);
-        right.Children.Clear(); right.Children.Add(page);
-        if (section != null) page.Select(section);
+        if (!escAdded)
+        {
+            escAdded = true;
+            var esc = new Microsoft.UI.Xaml.Input.KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
+            esc.Invoked += (_, e) => { if (settings == null || Sheet.IsOpen) return; e.Handled = true; settings.Back(); };
+            KeyboardAccelerators.Add(esc);
+        }
+        if (settings == null)
+        {
+            settings = new SettingsPage(win, this) { Opacity = 0, RenderTransform = new ScaleTransform { CenterX = 0, CenterY = 0 } };
+            Grid.SetColumnSpan(settings, 2);
+            Children.Add(settings);
+            var sb = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
+            var o = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(220), EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CubicEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut } };
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(o, settings); Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(o, "Opacity");
+            sb.Children.Add(o); sb.Begin();
+        }
+        if (section != null) settings.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => settings?.Select(section));
+    }
+
+    public void CloseSettings()
+    {
+        var s = settings; if (s == null) return;
+        settings = null;
+        var sb = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
+        var o = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(180) };
+        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(o, s); Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(o, "Opacity");
+        sb.Children.Add(o);
+        sb.Completed += (_, _) => Children.Remove(s);
+        sb.Begin();
     }
 
     public void CloseChat()

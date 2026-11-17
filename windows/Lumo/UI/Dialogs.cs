@@ -285,7 +285,8 @@ public static class Dialogs
             if (p != null)
             {
                 av.Set(p.Name, p.AvatarUrl, p.Color, Store.Online.Contains(p.Id));
-                if (p.Verified) name.Text = p.Name + "  ·  подтверждён";
+                if (p.Verified) name.Text = Store.DisplayName(p.Id) + "  ·  подтверждён";
+                if (Store.Aliases.ContainsKey(p.Id) && p.Name.Length > 0 && p.Name != Store.DisplayName(p.Id)) Row("Имя в Lumo", p.Name);
                 if (p.Username.Length > 0) Row("Юзернейм", "@" + p.Username);
                 if (p.Bio.Length > 0) Row("О себе", p.Bio);
                 if (p.Birthday is { Length: >= 10 } bd && DateTime.TryParse(bd[..10], out var b)) Row("День рождения", b.ToString("d MMMM yyyy", new System.Globalization.CultureInfo("ru-RU")));

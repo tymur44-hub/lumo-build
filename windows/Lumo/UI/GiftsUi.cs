@@ -15,6 +15,7 @@ public static class Gifts
 {
     public static List<Gift> Catalog { get; private set; } = new();
     static readonly Dictionary<string, string> art = new();
+    public static string? Svg(string id) => art.GetValueOrDefault(id);
 
     public static async Task LoadCatalog()
     {
@@ -88,35 +89,12 @@ public static class Gifts
         catch (Exception e) { Store.Say(e.Message); return false; }
     }
 
-    /// <summary>Магазин подарков — сразу для конкретного человека (to) или для выбора получателя</summary>
+    /// <summary>Магазин подарков для конкретного человека (из чата или по дню рождения)</summary>
     public static async Task ShowShop(string? to)
     {
-        var root = new StackPanel { Spacing = 12 };
-        var bal = T.Txt("", 13, T.B(0xFFF5B942), bold: true);
-        var who = to != null ? Store.DisplayName(to) : null;
-        root.Children.Add(T.Txt(who != null ? "Подарок для " + who : "Выберите подарок — себе или другу", 13, T.Muted));
-        root.Children.Add(bal);
-        var grid = new VariableSizedWrapGrid { Orientation = Orientation.Horizontal, ItemWidth = 150, ItemHeight = 200 };
-        root.Children.Add(grid);
-        var sheet = new Sheet { Title = "Подарки", Content = root, Width = 520 };
-        async Task Fill()
-        {
-            grid.Children.Clear();
-            grid.Children.Add(new ProgressRing { IsActive = true, Width = 26, Height = 26 });
-            if (Catalog.Count == 0) { try { await LoadCatalog(); } catch (Exception e) { Store.Say(e.Message); } }
-            var money = await Balance();
-            bal.Text = "Ваш баланс: " + money.ToString("N0", new System.Globalization.CultureInfo("ru-RU")) + " люменов";
-            grid.Children.Clear();
-            foreach (var g in Catalog) grid.Children.Add(Card(g, money, async () =>
-            {
-                var target = to;
-                if (target == null) { sheet.Hide(); await Task.Delay(200); target = await PickRecipient(); if (target == null) return; }
-                if (target == "") target = null;
-                if (await Buy(g, target)) { Catalog = new(); if (to != null) sheet.Hide(); else await ShowShop(null); }
-                else if (to != null) await Fill();
-            }));
-        }
-        _ = Fill();
+        Sheet? sheet = null;
+        var page = new GiftsWeb(to, () => { sheet?.Hide(); App.Win?.Shell?.ShowSettings("wallet"); }, () => sheet?.Hide()) { Height = 620 };
+        sheet = new Sheet { Title = "Подарки", Content = page, Width = 760 };
         await sheet.ShowAsync();
     }
 
@@ -137,7 +115,7 @@ public static class Gifts
     }
 
     /// <summary>Кому подарить: себе или собеседнику из личных чатов. "" — себе, null — отмена</summary>
-    static async Task<string?> PickRecipient()
+    public static async Task<string?> PickRecipient()
     {
         string? res = null;
         var list = new StackPanel { Spacing = 2 };

@@ -95,7 +95,7 @@ public record ChatItem(
         if (LastId == null) return IsChannel ? "Канал создан" : "Нет сообщений";
         if (LastDeleted) return "Сообщение удалено";
         var text = Message.PreviewText(LastKind ?? "text", decrypted ?? LastBody);
-        if (Type == "group" && LastSenderName != null && LastKind != "system") return (LastSender == myId ? "Вы" : LastSenderName) + ": " + text;
+        if (Type == "group" && LastSenderName != null && LastKind != "system") return (LastSender == myId ? "Вы" : LastSender != null && Store.Aliases.TryGetValue(LastSender, out var al) ? al : LastSenderName) + ": " + text;
         if (LastSender == myId && LastKind != "system" && LastKind != "call") return "Вы: " + text;
         return text;
     }

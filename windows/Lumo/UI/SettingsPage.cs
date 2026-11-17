@@ -6,6 +6,9 @@ using Microsoft.UI.Xaml.Media.Animation;
 
 namespace Lumo.UI;
 
+/// <summary>Раздел, который сам заполняет всю правую панель (веб-страница)</summary>
+public interface IFillPage { }
+
 /// <summary>
 /// Настройки для ПК: слева — карточка профиля и разделы с цветными иконками (как в мобильной версии),
 /// справа — содержимое выбранного раздела.
@@ -14,9 +17,8 @@ public sealed class SettingsPage : Grid
 {
     readonly MainWindow win;
     readonly ShellView shell;
-    readonly Grid content = new() { Padding = new Thickness(28, 20, 28, 20) };
     readonly TextBlock pageTitle = T.Txt("", 22, bold: true);
-    readonly ContentControl pageHost = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
+
     readonly Dictionary<string, Grid> rows = new();
     readonly AvatarView heroAv = new(76);
     readonly TextBlock heroName = T.Txt("", 18, bold: true, lines: 1), heroUser = T.Txt("", 13, T.Muted, lines: 1);
@@ -24,24 +26,44 @@ public sealed class SettingsPage : Grid
 
     record Item(string Key, string Glyph, uint Color, string Title, string Sub, Func<Task<UIElement>>? Page, Action? Act = null);
 
+    // раскладка: меню | разделитель | раздел
+    readonly ColumnDefinition menuCol = new() { Width = new GridLength(1, GridUnitType.Star) };
+    readonly ColumnDefinition splitCol = new() { Width = new GridLength(0) };
+    readonly ColumnDefinition detailCol = new() { Width = new GridLength(0) };
+    readonly Grid detail = new() { Background = T.ChatBg, Visibility = Visibility.Collapsed, Opacity = 0 };
+    readonly Grid body = new();
+    readonly SplitBar split;
+    double menuW = Math.Clamp(Prefs.GetLong("settings_menu_w", 420), 300, 900);
+    bool detailOpen;
+
     public SettingsPage(MainWindow w, ShellView s)
     {
         win = w; shell = s;
-        Background = T.ChatBg;
-        ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(340) });
-        ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Background = T.Panel;
+        ColumnDefinitions.Add(menuCol); ColumnDefinitions.Add(splitCol); ColumnDefinitions.Add(detailCol);
 
-        // ---- левая колонка: профиль и меню ----
-        var menu = new StackPanel { Spacing = 12, Padding = new Thickness(14, 16, 14, 24) };
+        // ---- меню: профиль и разделы ----
+        var menu = new StackPanel { Spacing = 12, Padding = new Thickness(18, 10, 18, 28), MaxWidth = 620, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var topBar = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        var back = new Button { Background = T.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(8, 6, 12, 6), CornerRadius = new CornerRadius(12) };
+        var bsp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        bsp.Children.Add(T.Icon("\uE72B", 14, T.A2)); bsp.Children.Add(T.Txt("Чаты", 14, T.A2, bold: true));
+        back.Content = bsp; back.Click += (_, _) => shell.CloseSettings();
+        ToolTipService.SetToolTip(back, "Вернуться к чатам (Esc)");
+        topBar.Children.Add(back);
+        var ttl = T.Txt("Настройки", 16, bold: true); ttl.HorizontalAlignment = HorizontalAlignment.Center; ttl.VerticalAlignment = VerticalAlignment.Center;
+        topBar.Children.Add(ttl);
+        menu.Children.Add(topBar);
+
         var hero = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 6) };
         heroAv.HorizontalAlignment = HorizontalAlignment.Center;
         hero.Children.Add(heroAv);
         heroName.HorizontalAlignment = HorizontalAlignment.Center; heroUser.HorizontalAlignment = HorizontalAlignment.Center;
         hero.Children.Add(heroName); hero.Children.Add(heroUser);
         var heroBtns = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
-        heroBtns.Children.Add(Pill("", "Фото", ChangePhoto));
-        heroBtns.Children.Add(Pill("", "Изменить", () => Select("profile")));
-        heroBtns.Children.Add(Pill("", "Ссылка", CopyLink));
+        heroBtns.Children.Add(Pill("\uE722", "Фото", ChangePhoto));
+        heroBtns.Children.Add(Pill("\uE70F", "Изменить", () => Select("profile")));
+        heroBtns.Children.Add(Pill("\uED14", "QR-код", () => Select("qr")));
         hero.Children.Add(heroBtns);
         menu.Children.Add(hero);
 
@@ -49,50 +71,115 @@ public sealed class SettingsPage : Grid
         {
             new Item[]
             {
-                new("profile", "", 0xFF7C5CFF, "Мой профиль", "Имя, юзернейм, о себе", ProfilePanel),
-                new("saved", "", 0xFF3A7BFF, "Избранное", "Заметки и сохранённые сообщения", null, OpenSaved),
-                new("calls", "", 0xFF2BD67B, "Недавние звонки", "Недавние и пропущенные", null, () => _ = CallsSheet.Show(shell.Open)),
-                new("devices", "", 0xFFFF9F1A, "Устройства", "Активные сеансы", Dialogs.DevicesPanel),
+                new("profile", "\uE77B", 0xFF7C5CFF, "Мой профиль", "Имя, юзернейм, о себе", ProfilePanel),
+                new("qr", "\uED14", 0xFF22A6FF, "QR-код", "Ваш код и ссылка на профиль", () => Task.FromResult<UIElement>(new QrWeb())),
+                new("saved", "\uE734", 0xFF3A7BFF, "Избранное", "Заметки и сохранённые сообщения", null, OpenSaved),
+                new("calls", "\uE717", 0xFF2BD67B, "Недавние звонки", "Недавние и пропущенные", null, () => _ = CallsSheet.Show(id => { shell.CloseSettings(); shell.Open(id); })),
+                new("devices", "\uE7F8", 0xFFFF9F1A, "Устройства", "Активные сеансы", Dialogs.DevicesPanel),
             },
             new Item[]
             {
-                new("notify", "", 0xFFFF5B5B, "Уведомления и звуки", "Сообщения, текст, панель задач", () => Task.FromResult(Dialogs.NotifyPanel())),
-                new("privacy", "", 0xFF8E8EA8, "Конфиденциальность", "Время захода, звонки, блокировки", Dialogs.PrivacyPanel),
-                new("data", "", 0xFF4CC764, "Данные и память", "Кэш файлов на этом компьютере", DataPanel),
+                new("notify", "\uEA8F", 0xFFFF5B5B, "Уведомления и звуки", "Сообщения, текст, панель задач", () => Task.FromResult(Dialogs.NotifyPanel())),
+                new("privacy", "\uE72E", 0xFF8E8EA8, "Конфиденциальность", "Время захода, звонки, блокировки", Dialogs.PrivacyPanel),
+                new("data", "\uE8B7", 0xFF4CC764, "Данные и память", "Кэш файлов на этом компьютере", DataPanel),
             },
             new Item[]
             {
-                new("wallet", "", 0xFFF5B942, "Люмены и Premium", "Баланс, ежедневный бонус", Dialogs.WalletPanel),
-                new("gifts", "\uF133", 0xFF2BC4A8, "Подарки", "Коллекционные подарки за люмены", GiftsPanel),
+                new("wallet", "\uE8C7", 0xFFF5B942, "Люмены и Premium", "Баланс, ежедневный бонус", Dialogs.WalletPanel),
+                new("gifts", "\uF133", 0xFF2BC4A8, "Подарки", "Коллекционные подарки за люмены", () => Task.FromResult<UIElement>(new GiftsWeb(null, () => Select("wallet")))),
             },
             new Item[]
             {
-                new("about", "", 0xFF8E8EA8, "О Lumo", "Версия " + Updater.VersionText + ", обновления", AboutPanel),
-                new("logout", "", 0xFFFF3B5C, "Выйти из аккаунта", "", null, Logout),
+                new("about", "\uE946", 0xFF8E8EA8, "О Lumo", "Версия " + Updater.VersionText + ", обновления", AboutPanel),
+                new("logout", "\uF3B1", 0xFFFF3B5C, "Выйти из аккаунта", "", null, Logout),
             },
         };
         foreach (var g in groups) menu.Children.Add(Group(g));
-        var left = new ScrollViewer { Content = menu, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Background = T.Panel, BorderBrush = T.Line, BorderThickness = new Thickness(0, 0, 1, 0) };
+        var left = new ScrollViewer { Content = menu, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Children.Add(left);
 
-        // ---- правая колонка ----
-        var rg = new Grid { RowSpacing = 14 };
-        rg.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        rg.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        var head = new Grid();
+        // ---- разделитель: тянем — меняем ширину ----
+        split = new SplitBar(dx => { menuW = Math.Clamp(menuW + dx, 300, Math.Max(300, ActualWidth - 380)); menuCol.Width = new GridLength(menuW); },
+                             () => Prefs.Set("settings_menu_w", (long)menuW)) { Visibility = Visibility.Collapsed };
+        SetColumn(split, 1); Children.Add(split);
+
+        // ---- раздел ----
+        detail.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        detail.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        var head = new Grid { Padding = new Thickness(28, 18, 16, 10) };
         head.Children.Add(pageTitle);
-        var close = T.IconButton("", "Закрыть настройки (Esc)", () => shell.CloseChat());
+        var close = T.IconButton("\uE711", "Закрыть раздел (Esc)", CloseDetail);
         close.HorizontalAlignment = HorizontalAlignment.Right; head.Children.Add(close);
-        rg.Children.Add(head);
-        var sv = new ScrollViewer { Content = pageHost, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        Grid.SetRow(sv, 1); rg.Children.Add(sv);
-        content.Children.Add(rg);
-        content.MaxWidth = 760; content.HorizontalAlignment = HorizontalAlignment.Left;
-        SetColumn(content, 1); Children.Add(content);
+        detail.Children.Add(head);
+        Grid.SetRow(body, 1); detail.Children.Add(body);
+        detail.RenderTransform = new TranslateTransform();
+        SetColumn(detail, 2); Children.Add(detail);
+
+        SizeChanged += (_, _) => { if (detailOpen && !animating) { menuW = Math.Clamp(menuW, 300, Math.Max(300, ActualWidth - 380)); menuCol.Width = new GridLength(menuW); } };
 
         RefreshHero();
         Loaded += async (_, _) => { await Store.LoadMe(); RefreshHero(); };
-        Select("profile");
+    }
+
+    // ---------- плавное открытие и закрытие раздела ----------
+    bool animating;
+
+    void AnimateMenu(double from, double to, Action? done)
+    {
+        animating = true;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        const double dur = 300;
+        EventHandler<object>? tick = null;
+        tick = (_, _) =>
+        {
+            var t = Math.Min(1, sw.Elapsed.TotalMilliseconds / dur);
+            var e = 1 - Math.Pow(1 - t, 3);
+            menuCol.Width = new GridLength(Math.Max(0, from + (to - from) * e));
+            if (t >= 1) { CompositionTarget.Rendering -= tick; animating = false; done?.Invoke(); }
+        };
+        CompositionTarget.Rendering += tick;
+    }
+
+    void Fade(UIElement el, bool show, double dx)
+    {
+        var sb = new Storyboard();
+        var o = new DoubleAnimation { To = show ? 1 : 0, Duration = TimeSpan.FromMilliseconds(show ? 300 : 200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(o, el); Storyboard.SetTargetProperty(o, "Opacity"); sb.Children.Add(o);
+        var x = new DoubleAnimation { From = show ? dx : 0, To = show ? 0 : dx, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(x, el.RenderTransform); Storyboard.SetTargetProperty(x, "X"); sb.Children.Add(x);
+        sb.Begin();
+    }
+
+    void OpenDetail()
+    {
+        if (detailOpen) return;
+        detailOpen = true;
+        var total = Math.Max(ActualWidth, 800);
+        menuW = Math.Clamp(menuW, 300, Math.Max(300, total - 380));
+        menuCol.Width = new GridLength(total);
+        splitCol.Width = new GridLength(6); detailCol.Width = new GridLength(1, GridUnitType.Star);
+        split.Visibility = Visibility.Visible; detail.Visibility = Visibility.Visible;
+        Fade(detail, true, 60);
+        AnimateMenu(total, menuW, null);
+    }
+
+    /// <summary>Esc: сначала закрываем раздел, потом сами настройки</summary>
+    public void Back() { if (detailOpen) CloseDetail(); else shell.CloseSettings(); }
+
+    public void CloseDetail()
+    {
+        if (!detailOpen || animating) return;
+        detailOpen = false; current = null;
+        foreach (var r in rows.Values) r.Background = T.Transparent;
+        Fade(detail, false, 60);
+        AnimateMenu(menuCol.ActualWidth, ActualWidth, () =>
+        {
+            if (detailOpen) return;
+            menuCol.Width = new GridLength(1, GridUnitType.Star);
+            splitCol.Width = new GridLength(0); detailCol.Width = new GridLength(0);
+            split.Visibility = Visibility.Collapsed; detail.Visibility = Visibility.Collapsed;
+            body.Children.Clear();
+        });
     }
 
     void RefreshHero()
@@ -146,18 +233,27 @@ public sealed class SettingsPage : Grid
     public async void Select(string key)
     {
         if (!pages.TryGetValue(key, out var p)) return;
+        if (current == key && detailOpen) return;
         current = key;
         foreach (var (k, r) in rows) r.Background = k == key ? T.Selected : T.Transparent;
         pageTitle.Text = p.Title;
-        pageHost.Content = new ProgressRing { IsActive = true, Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(4, 20, 0, 0) };
+        var wasOpen = detailOpen;
+        body.Children.Clear();
+        body.Children.Add(new ProgressRing { IsActive = true, Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(32, 20, 0, 0) });
+        OpenDetail();
         UIElement el;
         try { el = await p.Make(); } catch (Exception e) { el = T.Txt(e.Message, 13, T.Danger); }
         if (current != key) return;
         if (el is FrameworkElement fe && fe.Parent is Panel pp) pp.Children.Remove(fe);
-        el.Opacity = 0;
-        el.Transitions = new TransitionCollection { new EntranceThemeTransition { FromHorizontalOffset = 24 } };
-        pageHost.Content = el;
-        el.Opacity = 1;
+        body.Children.Clear();
+        UIElement view = el is IFillPage ? el : new ScrollViewer
+        {
+            Content = new Border { Padding = new Thickness(28, 4, 28, 28), MaxWidth = 820, HorizontalAlignment = HorizontalAlignment.Left, Child = el },
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        };
+        if (wasOpen) { view.Opacity = 0; view.RenderTransform = new TranslateTransform(); }
+        body.Children.Add(view);
+        if (wasOpen) Fade(view, true, 24);
     }
 
     // ---------- разделы ----------
@@ -186,19 +282,6 @@ public sealed class SettingsPage : Grid
         var enc = E2E.Status == E2E.State.Ready ? "Сквозное шифрование включено: ключ сохранён на этом компьютере" : "Ключ шифрования не восстановлен — личные чаты не читаются";
         sp.Children.Add(T.Txt(enc, 12, E2E.Status == E2E.State.Ready ? T.Muted : T.Danger));
         return Task.FromResult<UIElement>(sp);
-    }
-
-    async Task<UIElement> GiftsPanel()
-    {
-        var sp = new StackPanel { Spacing = 14 };
-        var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        var shop = T.Primary("Магазин подарков", () => { });
-        shop.Click += async (_, _) => { await Gifts.ShowShop(null); Select("gifts"); };
-        top.Children.Add(shop);
-        sp.Children.Add(top);
-        sp.Children.Add(T.Txt("Мои подарки", 13, T.Muted, bold: true));
-        sp.Children.Add(await Gifts.OwnedPanel(null, true));
-        return sp;
     }
 
     Task<UIElement> DataPanel()
@@ -286,11 +369,32 @@ public sealed class SettingsPage : Grid
     void OpenSaved()
     {
         var c = Store.Chats.FirstOrDefault(x => x.IsSaved);
-        if (c != null) shell.Open(c.Id); else Store.Say("Избранное появится после первого сохранённого сообщения");
+        if (c != null) { shell.CloseSettings(); shell.Open(c.Id); } else Store.Say("Избранное появится после первого сохранённого сообщения");
     }
 
     async void Logout()
     {
         if (await Dialogs.Confirm(win, "Выйти из аккаунта на этом компьютере?", "Выйти")) await Api.SignOut();
+    }
+}
+
+
+/// <summary>Разделитель между панелями: тянем мышью — меняем ширину</summary>
+public sealed class SplitBar : Grid
+{
+    double lastX; bool drag;
+    public SplitBar(Action<double> onDrag, Action onDone)
+    {
+        Background = T.Transparent; Width = 6;
+        Children.Add(new Border { Width = 1, Background = T.Line, HorizontalAlignment = HorizontalAlignment.Center });
+        var grip = new Border { Width = 4, Height = 44, CornerRadius = new CornerRadius(2), Background = T.B(0x33FFFFFF), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Opacity = 0 };
+        Children.Add(grip);
+        ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.SizeWestEast);
+        PointerEntered += (_, _) => grip.Opacity = 1;
+        PointerExited += (_, _) => { if (!drag) grip.Opacity = 0; };
+        PointerPressed += (_, e) => { drag = true; lastX = e.GetCurrentPoint(null).Position.X; CapturePointer(e.Pointer); e.Handled = true; };
+        PointerMoved += (_, e) => { if (!drag) return; var x = e.GetCurrentPoint(null).Position.X; onDrag(x - lastX); lastX = x; };
+        PointerReleased += (_, e) => { if (!drag) return; drag = false; ReleasePointerCapture(e.Pointer); grip.Opacity = 0; onDone(); };
+        PointerCaptureLost += (_, _) => { if (drag) { drag = false; onDone(); } };
     }
 }
