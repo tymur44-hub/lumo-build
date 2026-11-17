@@ -22,7 +22,7 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         AppModel.init(applicationContext)
         ru.volshebnymir.lumo.core.RemoteConfig.init(applicationContext)
-        AppModel.openUrl = { u -> runCatching { startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(u))) } }
+        AppModel.openUrl = { u -> ru.volshebnymir.lumo.ui.Browser.open(u) }
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         if (intent?.getBooleanExtra("demo", false) == true && !AppModel.loggedIn) ru.volshebnymir.lumo.core.Demo.load()
@@ -44,7 +44,11 @@ class MainActivity : FragmentActivity() {
         handle(intent)
         ru.volshebnymir.lumo.ui.AccountFlip.root = java.lang.ref.WeakReference(window.decorView)
         setContent {
-            LumoTheme { Root() }
+            LumoTheme {
+                // ссылки из сообщений — во встроенный браузер
+                androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalUriHandler provides ru.volshebnymir.lumo.ui.Browser.handler) { Root() }
+                ru.volshebnymir.lumo.ui.BrowserHost()
+            }
             ru.volshebnymir.lumo.ui.AccountFlip.Overlay()
             // во время звонка окно Lumo показывается поверх экрана блокировки и включает экран
             val inCall = ru.volshebnymir.lumo.core.Calls.state != ru.volshebnymir.lumo.core.Calls.State.Idle

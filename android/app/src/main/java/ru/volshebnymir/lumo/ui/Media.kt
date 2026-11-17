@@ -188,6 +188,7 @@ object Voice {
 
     fun toggle(m: Message) {
         val src = m.localPath ?: m.mediaUrl ?: return
+        if (Music.playing) Music.pause()   // голосовое — музыку на паузу
         if (current == m.id && mp != null) {
             val p = mp!!
             if (p.isPlaying) { p.pause(); playing = false } else { p.start(); playing = true }

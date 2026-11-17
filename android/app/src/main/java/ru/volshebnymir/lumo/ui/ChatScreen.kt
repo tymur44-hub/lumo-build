@@ -148,6 +148,14 @@ fun ChatScreen(chatId: String) {
         onDispose { w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
     }
     val list = rememberLazyListState()
+    // вышел из чата — запоминаем место; вернулся в течение 2 минут — туда же, позже — в конец
+    DisposableEffect(chatId) {
+        onDispose {
+            val first = list.layoutInfo.visibleItemsInfo.firstOrNull()
+            ChatSpots.save(chatId, if (list.firstVisibleItemIndex > 2 && first != null) first.key to list.firstVisibleItemScrollOffset else null)
+        }
+    }
+    var restore by remember(chatId) { mutableStateOf(ChatSpots.take(chatId)) }
     var loaded by remember { mutableStateOf(msgs.isNotEmpty()) }
     var flash by remember { mutableStateOf<Int?>(null) }
     var note by remember { mutableStateOf<NoteSession?>(null) }
@@ -225,7 +233,12 @@ fun ChatScreen(chatId: String) {
     val newest = msgs.lastOrNull()?.id
     LaunchedEffect(newest) {
         AppModel.markRead(chatId)
-        if (list.firstVisibleItemIndex <= 2 || msgs.lastOrNull()?.senderId == AppModel.myId) list.animateScrollToItem(0)
+        if (restore == null && (list.firstVisibleItemIndex <= 2 || msgs.lastOrNull()?.senderId == AppModel.myId)) list.animateScrollToItem(0)
+    }
+    LaunchedEffect(rows.size, restore) {
+        val r = restore ?: return@LaunchedEffect
+        val i = rows.indexOfFirst { it.key == r.first }
+        if (i >= 0) { restore = null; list.scrollToItem(i, r.second) }
     }
     // подгрузка старых
     LaunchedEffect(list, rows.size) {
@@ -267,6 +280,7 @@ fun ChatScreen(chatId: String) {
                 onDelete = { deleting = msgs.filter { it.id in selected }.takeIf { it.isNotEmpty() } },
             ) else ChatHeader(chatId, chat)
             NetStatusBar()
+            MiniPlayerBar(compact = true)
             if (chat?.type == "group") { val gstart = rememberGroupCallStarter(chatId, chat.displayName); GroupCallBanner(chatId) { gstart(false) } }
             PinnedBar(chat, chatId) { scrollTo(it) }
             PaidBar(chat, chatId)
@@ -281,6 +295,7 @@ fun ChatScreen(chatId: String) {
                                     if (selecting) { if (m.id in selected) selected.remove(m.id) else if (m.id > 0) selected.add(m.id) }
                                     else if (m.parts.isNotEmpty()) scope.launch { AppModel.fetchBig(ctx, m)?.let { MediaUtil.openLocal(ctx, it) } }
                                     else if (m.kind == "image" || m.kind == "video") viewer = m
+                                    else if (m.kind == "file" && Music.isAudio(m.fileName)) { if (Music.track?.id == m.id) Music.toggle() else Music.play(m, msgs) }
                                     else if (m.kind == "file") m.mediaUrl?.let { u -> scope.launch {
                                         // файл скачивается один раз и дальше открывается с телефона
                                         val f = ru.volshebnymir.lumo.core.FileStore.fetch(u, ru.volshebnymir.lumo.core.DataKind.File)
@@ -910,11 +925,15 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
         } else when (m.kind) {
             "image" -> {
                 val ratio = ((m.width ?: 1.0) / (m.height ?: 1.0)).toFloat().coerceIn(0.5f, 2f)
-                AutoPhoto(m.localPath ?: m.mediaUrl, m.fileSize, Modifier.width(260.dp).aspectRatio(ratio).clip(RoundedCornerShape(14.dp)))
+                Box(contentAlignment = Alignment.Center) {
+                    AutoPhoto(m.localPath ?: m.mediaUrl, m.fileSize, Modifier.width(260.dp).aspectRatio(ratio).clip(RoundedCornerShape(14.dp)))
+                    UploadOverlay(m.id)
+                }
             }
             "video" -> Box(Modifier.width(260.dp).aspectRatio(((m.width ?: 16.0) / (m.height ?: 9.0)).toFloat().coerceIn(0.56f, 1.8f)).clip(RoundedCornerShape(14.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
                 AsyncImage(m.localPath ?: m.mediaUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                Box(Modifier.size(50.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
+                if (AppModel.upProgress.containsKey(m.id)) UploadOverlay(m.id)
+                else Box(Modifier.size(50.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(32.dp))
                 }
             }
@@ -922,9 +941,14 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
             "voice" -> VoiceBubble(m, mine)
             "video_note" -> VideoNoteBubble(m)
             "sticker" -> if (m.meta.has("anim")) AnimatedEmoji(m.body ?: "", 96.dp) else if (!m.mediaUrl.isNullOrEmpty()) AsyncImage(m.mediaUrl, null, Modifier.size(150.dp)) else StickerBody(m.body, 96.dp)
-            "file" -> Row(verticalAlignment = Alignment.CenterVertically) {
+            "file" -> if (Music.isAudio(m.fileName)) AudioBubble(m, mine, fg, sub) else Row(verticalAlignment = Alignment.CenterVertically) {
+                val upF = AppModel.upProgress[m.id]
                 Box(Modifier.size(44.dp).clip(CircleShape).background(if (mine) Color.White.copy(alpha = 0.22f) else p.a1), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Description, null, tint = Color.White)
+                    if (upF != null) {
+                        val a by androidx.compose.animation.core.animateFloatAsState(upF, androidx.compose.animation.core.tween(250), label = "fu")
+                        androidx.compose.material3.CircularProgressIndicator(progress = { a.coerceAtLeast(0.03f) }, color = Color.White, strokeWidth = 3.dp, trackColor = Color.White.copy(alpha = 0.25f), modifier = Modifier.size(38.dp))
+                        Text("${(upF * 100).toInt()}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    } else Icon(Icons.Filled.Description, null, tint = Color.White)
                 }
                 Spacer(Modifier.width(10.dp))
                 var onPhone by remember(m.mediaUrl) { mutableStateOf(m.mediaUrl?.let { ru.volshebnymir.lumo.core.FileStore.local(it, ru.volshebnymir.lumo.core.DataKind.File) } != null) }
@@ -934,7 +958,9 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
                 }
                 Column(Modifier.widthIn(max = 200.dp)) {
                     Text(m.fileName, color = fg, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text((m.fileSize?.let { Fmt.size(it) } ?: "Файл") + if (onPhone) " · на телефоне" else "", color = sub, fontSize = 12.5.sp)
+                    val upF2 = AppModel.upProgress[m.id]; val upB = AppModel.upBytes[m.id]
+                    if (upF2 != null && upB != null) Text("${(upF2 * 100).toInt()}% · ${Fmt.size((upB * upF2).toLong())} из ${Fmt.size(upB)}", color = sub, fontSize = 12.5.sp)
+                    else Text((m.fileSize?.let { Fmt.size(it) } ?: "Файл") + if (onPhone) " · на телефоне" else "", color = sub, fontSize = 12.5.sp)
                 }
             }
             "call" -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1536,5 +1562,34 @@ private fun LockedMessage(chatId: String, fg: Color, mine: Boolean) {
             Spacer(Modifier.width(6.dp))
             Text("Запросить ключ заново", color = fg, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         }
+    }
+}
+
+
+/** Место в чате, где остановился (держим 2 минуты) */
+object ChatSpots {
+    private val spots = HashMap<String, Triple<Any, Int, Long>>()
+    fun save(chat: String, spot: Pair<Any, Int>?) {
+        if (spot == null) spots.remove(chat) else spots[chat] = Triple(spot.first, spot.second, System.currentTimeMillis())
+    }
+    fun take(chat: String): Pair<Any, Int>? {
+        val s = spots.remove(chat) ?: return null
+        return if (System.currentTimeMillis() - s.third <= 120_000) s.first to s.second else null
+    }
+}
+
+
+/** Колечко отправки поверх фото/видео: проценты и мегабайты */
+@Composable
+fun UploadOverlay(id: Int) {
+    val f = AppModel.upProgress[id] ?: return
+    val total = AppModel.upBytes[id]
+    val a by androidx.compose.animation.core.animateFloatAsState(f, androidx.compose.animation.core.tween(250), label = "up")
+    Column(Modifier.clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 14.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(contentAlignment = Alignment.Center) {
+            androidx.compose.material3.CircularProgressIndicator(progress = { a.coerceAtLeast(0.03f) }, color = Color.White, strokeWidth = 4.dp, trackColor = Color.White.copy(alpha = 0.28f), modifier = Modifier.size(54.dp))
+            Text("${(f * 100).toInt()}%", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        }
+        if (total != null) Text(Fmt.size((total * f).toLong()) + " / " + Fmt.size(total), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
     }
 }

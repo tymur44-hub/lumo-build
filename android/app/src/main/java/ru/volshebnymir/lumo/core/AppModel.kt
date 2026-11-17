@@ -360,6 +360,7 @@ object AppModel {
     }
 
     fun logout() {
+        ru.volshebnymir.lumo.ui.Music.stop()
         scope.launch {
             presence(false)
             Push.unregister(ctx)
@@ -869,6 +870,12 @@ object AppModel {
         }
     }
 
+    /** Отправка: сколько уже ушло (0..1) и общий размер — для колечка с процентами и мегабайтами */
+    val upProgress = androidx.compose.runtime.mutableStateMapOf<Int, Float>()
+    val upBytes = androidx.compose.runtime.mutableStateMapOf<Int, Long>()
+    private val mainH = android.os.Handler(android.os.Looper.getMainLooper())
+    private fun upTick(id: Int, f: Float) { mainH.post { if (upProgress.containsKey(id) && f > (upProgress[id] ?: 0f)) upProgress[id] = f } }
+
     fun sendMedia(chatId: String, kind: String, data: ByteArray, ext: String, contentType: String, meta: JSONObject,
                   body: String? = null, replyTo: Int? = null, local: String? = null) {
         val me = myId ?: return
@@ -877,13 +884,16 @@ object AppModel {
         scope.launch {
             try {
                 // видео с камеры сжимаем до 720p — меньше трафика у отправителя и получателей
+                upProgress[temp.id] = 0f; upBytes[temp.id] = data.size.toLong()
                 val small = if (kind == "video") VideoCompress.compress(ctx, data, ext) else null
-                val url = if (small != null) { meta.put("size", small.size); Api.upload(small, "mp4", "video/mp4") } else Api.upload(data, ext, contentType)
+                if (small != null) upBytes[temp.id] = small.size.toLong()
+                val url = if (small != null) { meta.put("size", small.size); Api.upload(small, "mp4", "video/mp4") { upTick(temp.id, it) } } else Api.upload(data, ext, contentType) { upTick(temp.id, it) }
+                upProgress[temp.id] = 1f
                 send(chatId, kind, body, url, meta, replyTo, pendingId = temp.id)
             } catch (e: Exception) {
                 messages[chatId] = (messages[chatId] ?: emptyList()).filter { it.id != temp.id }
                 say("Ошибка загрузки: " + (e.message ?: ""))
-            }
+            } finally { upProgress.remove(temp.id); upBytes.remove(temp.id) }
         }
     }
 
@@ -899,8 +909,10 @@ object AppModel {
         val temp = Message.pending(chatId, me, kind, null, meta, replyTo, null)
         messages[chatId] = (messages[chatId] ?: emptyList()) + temp
         scope.launch {
+            upProgress[temp.id] = 0f; upBytes[temp.id] = size
             try {
                 val parts = JSONArray()
+                var done = 0L
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     ctx.contentResolver.openInputStream(uri)?.use { ins ->
                         var i = 0
@@ -909,7 +921,9 @@ object AppModel {
                             var n = 0
                             while (n < bigChunk) { val r = ins.read(buf, n, bigChunk - n); if (r < 0) break; n += r }
                             if (n == 0) break
-                            parts.put(Api.upload(if (n == bigChunk) buf else buf.copyOf(n), "$ext.p$i", "application/octet-stream"))
+                            val base = done
+                            parts.put(Api.upload(if (n == bigChunk) buf else buf.copyOf(n), "$ext.p$i", "application/octet-stream") { f -> if (size > 0) upTick(temp.id, (base + f * n) / size.toFloat()) })
+                            done += n
                             i++
                             if (n < bigChunk) break
                         }
@@ -921,7 +935,7 @@ object AppModel {
             } catch (e: Exception) {
                 messages[chatId] = (messages[chatId] ?: emptyList()).filter { it.id != temp.id }
                 say("Ошибка загрузки: " + (e.message ?: ""))
-            }
+            } finally { upProgress.remove(temp.id); upBytes.remove(temp.id) }
         }
     }
 

@@ -441,6 +441,7 @@ fun ChatListScreen() {
     if (emojiDlg) EmojiPickerDialog { emojiDlg = false }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         NetStatusBar()
+        MiniPlayerBar()
         BirthdayBar()
         Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box {
