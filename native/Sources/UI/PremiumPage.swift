@@ -137,7 +137,7 @@ struct PremiumPageView: View {
     private let about: [(String, String)] = [
         ("Что это", "Lumo Premium — необязательная подписка с дополнительными возможностями для общения. Основные функции мессенджера остаются бесплатными."),
         ("Где работает", "Подписка привязана к вашему аккаунту и действует на всех устройствах: сайт, iOS, Android и Windows."),
-        ("Как оформить", "Оплата проходит через встроенного бота @lumo_premium прямо в Lumo. После оплаты значок и функции включаются сами."),
+        ("Как оформить", "Нажмите «Оформить Premium» и оплатите банковской картой через ЮMoney прямо в Lumo. После оплаты значок и функции включаются сами, обычно за минуту."),
         ("Безопасность", "Шифрование медиа остаётся бесплатным для всех. Premium не даёт доступа к чужим перепискам."),
         ("Скоро", "Функции с пометкой «в разработке» появятся в следующих обновлениях."),
     ]
@@ -236,7 +236,7 @@ struct PremiumPageView: View {
                 }
             }
             ShimmerButton(title: model.isPremium ? "Продлить подписку" : "Оформить Premium") {
-                if owner { Task { await model.openByUsername("lumo_premium") } } else { model.say("Оплата пока временно недоступна") }
+                Pay.shared.showPlans()
             }
             .padding(12).background(Theme.panel)
         }
@@ -245,7 +245,7 @@ struct PremiumPageView: View {
         .sheet(isPresented: $showEmoji) { EmojiStatusSheet() }
         .sheet(item: Binding(get: { detail.map { DetailIdx(i: $0) } }, set: { detail = $0?.i })) { d in
             PremiumDetailSheet(features: features, index: d.i, owner: owner) {
-                if owner { detail = nil; Task { await model.openByUsername("lumo_premium") } } else { model.say("Оплата пока временно недоступна") }
+                detail = nil; Pay.shared.showPlans()
             }
             .environmentObject(model)
         }
@@ -429,7 +429,7 @@ struct AppIconSheet: View {
     }
 
     private func pick(_ name: String?) {
-        if name != nil && !model.isPremium { model.say(premiumSoon); return }
+        if name != nil && !model.isPremium { model.askPremium(); return }
         UIApplication.shared.setAlternateIconName(name) { err in
             DispatchQueue.main.async {
                 if let err = err { model.say(err.localizedDescription) } else { cur = name }

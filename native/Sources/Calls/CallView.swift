@@ -240,7 +240,7 @@ struct CallView: View {
                             .transition(.scale.combined(with: .opacity))
                         roundButton("person.crop.rectangle.fill", color: Color.white.opacity(0.18), label: "Фон") {
                             if AppModel.shared.isPremium { AVCaptureDevice.showSystemUserInterface(.videoEffects) }
-                            else { AppModel.shared.say("Размытие фона — функция Lumo Premium (пока временно недоступна)") }
+                            else { AppModel.shared.askPremium() }
                         }
                         .transition(.scale.combined(with: .opacity))
                     }

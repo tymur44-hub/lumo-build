@@ -1,6 +1,6 @@
 import SwiftUI
 
-let premiumSoon = "Функция Lumo Premium. Оформление пока временно недоступно"
+let premiumSoon = "Это функция Lumo Premium"
 
 // MARK: - Модель: функции Premium
 
@@ -8,8 +8,14 @@ extension AppModel {
     var isPremium: Bool { me?.premium == true }
 
     /// Выполняет действие, только если у пользователя есть Premium; иначе сообщает, что функция пока недоступна
+    /// Функция Premium без подписки: подсказка и сразу окно оформления
+    func askPremium() {
+        say(premiumSoon)
+        Pay.shared.showPlans()
+    }
+
     func premium(_ action: () -> Void) {
-        if isPremium { action() } else { say(premiumSoon) }
+        if isPremium { action() } else { askPremium() }
     }
 
     func scheduleMessage(chatId: String, text: String, at: Date, replyTo: Int?) async -> Bool {
@@ -154,7 +160,7 @@ struct PremiumChatRows: View {
             .confirmationDialog("Исчезающие сообщения", isPresented: $showTTL, titleVisibility: .visible) {
                 ForEach([(0, "Выключить"), (3600, "1 час"), (86400, "1 день"), (604800, "1 неделя"), (2592000, "1 месяц")], id: \.0) { v in
                     Button(v.1) {
-                        if v.0 > 0 && !model.isPremium { model.say(premiumSoon); return }
+                        if v.0 > 0 && !model.isPremium { model.askPremium(); return }
                         Task { if await model.setChatTTL(chat.id, v.0) { ttl = v.0 } }
                     }
                 }

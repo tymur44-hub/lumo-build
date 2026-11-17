@@ -52,7 +52,7 @@ struct TranscribeButton: View {
 
     var body: some View {
         Button {
-            if !model.isPremium { model.say(premiumSoon); return }
+            if !model.isPremium { model.askPremium(); return }
             if text != nil { text = nil; return }
             guard let u = m.mediaURL, !busy else { return }
             busy = true

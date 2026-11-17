@@ -1073,7 +1073,7 @@ struct MsgPrivacyView: View {
         let cur = model.me?.privacy["msg_prem"] == "premium" ? "premium" : "all"
         return Button {
             UISelectionFeedbackGenerator().selectionChanged()
-            if value == "premium" && !model.isPremium { model.say(premiumSoon); return }
+            if value == "premium" && !model.isPremium { model.askPremium(); return }
             Task { await model.setPrivacyKey("msg_prem", value) }
         } label: {
             HStack(spacing: 14) {
@@ -1111,7 +1111,7 @@ struct MsgPrivacyView: View {
                         ForEach([(0, "Бесплатно"), (5, "5"), (10, "10"), (25, "25"), (50, "50"), (100, "100")], id: \.0) { v, t in
                             Button {
                                 UISelectionFeedbackGenerator().selectionChanged()
-                                if v > 0 && !model.isPremium { model.say(premiumSoon); return }
+                                if v > 0 && !model.isPremium { model.askPremium(); return }
                                 Task {
                                     do { _ = try await API.shared.rpc("lm_paid_set", ["p_price": v]); paidPrice = v; model.say(v == 0 ? "Платные сообщения выключены" : "Цена сообщения: \(v)") }
                                     catch { model.say(error.localizedDescription) }

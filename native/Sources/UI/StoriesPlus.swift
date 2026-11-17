@@ -154,7 +154,7 @@ struct StoryShareSheet: View {
     }
 
     private func setHours(_ h: Int) {
-        if model.isPremium { hours = h } else { model.say(premiumSoon) }
+        if model.isPremium { hours = h } else { model.askPremium() }
     }
 
     private func row(_ key: String, _ icon: String, _ tint: Color, _ title: String, _ sub: String, _ subTap: @escaping () -> Void) -> some View {

@@ -429,14 +429,14 @@ struct GiftShopSheet: View {
                     Text("Подарите \(name) доступ к дополнительным функциям Lumo.")
                         .font(.system(size: 15)).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(.horizontal, 28)
                     HStack(spacing: 10) {
-                        ForEach(Array([("3 месяца", Color(hex: 0x4CAF50), ""), ("6 месяцев", Color(hex: 0x22A6FF), "-35%"), ("1 год", Color(hex: 0xFF5B5B), "-40%")].enumerated()), id: \.offset) { _, t in
-                            Button { model.say("Подарок Premium в разработке") } label: {
+                        ForEach(Array([("1 месяц", Color(hex: 0x4CAF50), "", 1, "199 ₽"), ("6 месяцев", Color(hex: 0x22A6FF), "-38%", 6, "1 490 ₽"), ("1 год", Color(hex: 0xFF5B5B), "-58%", 12, "2 490 ₽")].enumerated()), id: \.offset) { _, t in
+                            Button { Pay.shared.showPlans(to: user, months: t.3) } label: {
                                 VStack(spacing: 4) {
                                     Image(systemName: "gift.fill").font(.system(size: 30)).foregroundColor(t.1).frame(width: 64, height: 64)
                                         .background(t.1.opacity(0.22), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                                     Text(t.0).font(.system(size: 15, weight: .black)).foregroundColor(Theme.text).padding(.top, 4)
                                     Text("Premium").font(.system(size: 13)).foregroundColor(Theme.muted)
-                                    Text("Скоро").font(.system(size: 13, weight: .bold)).foregroundColor(Theme.a1)
+                                    Text(t.4).font(.system(size: 13, weight: .bold)).foregroundColor(Theme.a1)
                                         .padding(.horizontal, 12).padding(.vertical, 5).background(Theme.a1.opacity(0.15), in: Capsule()).padding(.top, 4)
                                 }
                                 .frame(maxWidth: .infinity).padding(.vertical, 14)
@@ -453,7 +453,7 @@ struct GiftShopSheet: View {
                         }
                     }
                     .padding(.horizontal, 14).padding(.top, 6)
-                    Text("Оплата Premium ещё в разработке: как только она заработает, подарок можно будет отправить прямо отсюда.")
+                    Text("Оплата картой через ЮMoney прямо в Lumo. Premium включится у получателя сразу после оплаты.")
                         .font(.system(size: 12)).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(.horizontal, 24)
                     Text("Отправить подарок").font(.system(size: 26, weight: .black)).foregroundColor(Theme.text).padding(.top, 22)
                     Text("Дарите \(name) подарки, которые можно хранить в профиле.")
@@ -544,6 +544,7 @@ struct LumenInfoSheet: View {
                 row("paperplane", "Переводы в чате", "Отправляйте люмены другу прямо в переписке.")
                 row("lock", "Платные сообщения", "Установите цену, и незнакомцы смогут написать вам только за люмены.")
                 row("star", "Ежедневный бонус", "Заходите каждый день и получайте люмены, серия увеличивает награду.")
+                row("creditcard", "Покупка картой", "Пополняйте баланс банковской картой прямо в Lumo — люмены зачисляются автоматически.")
             }
             .padding(.horizontal, 22).padding(.top, 10)
             Spacer()

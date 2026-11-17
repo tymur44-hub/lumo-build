@@ -1810,8 +1810,9 @@ struct ProfileStyleView: View {
         }
         .sheet(isPresented: $pickStatus) { EmojiStatusSheet(onPick: { e in status = e.isEmpty ? nil : e }).environmentObject(model) }
         .alert("Lumo Premium", isPresented: $showPremium) {
-            Button("Понятно", role: .cancel) {}
-        } message: { Text("Узоры профиля доступны с подпиской Lumo Premium. Оформить её можно в настройках.") }
+            Button("Оформить") { Pay.shared.showPlans() }
+            Button("Не сейчас", role: .cancel) {}
+        } message: { Text("Узоры профиля доступны с подпиской Lumo Premium.") }
     }
 
     private func section<C: View>(_ t: String, @ViewBuilder _ c: () -> C) -> some View {

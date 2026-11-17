@@ -131,7 +131,7 @@ struct AppearanceView: View {
                                 .fill(LinearGradient(colors: [Color(hex: p.0), Color(hex: p.1)], startPoint: .topLeading, endPoint: .bottomTrailing))
                                 .frame(width: 40, height: 40)
                                 .overlay(Circle().stroke(Theme.text, lineWidth: look.accent == i ? 3 : 0).padding(-4))
-                                .onTapGesture { if Appearance.accentPremium(i) && !model.isPremium { model.say(premiumSoon) } else { look.accent = i } }
+                                .onTapGesture { if Appearance.accentPremium(i) && !model.isPremium { model.askPremium() } else { look.accent = i } }
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -158,7 +158,7 @@ struct AppearanceView: View {
                                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(look.wall == i ? Theme.a1 : Theme.line, lineWidth: look.wall == i ? 3 : 1))
                                 .overlay { if i == 0 { Text("Без фона").font(.caption.weight(.bold)).foregroundColor(Theme.muted) } }
                                 .overlay(alignment: .topTrailing) { if wallIsPremium(i) { Image(systemName: "star.fill").font(.system(size: 13)).foregroundColor(Color(hex: 0xffc247)).padding(8) } }
-                                .onTapGesture { if wallIsPremium(i) && !model.isPremium { model.say(premiumSoon) } else { look.wall = i } }
+                                .onTapGesture { if wallIsPremium(i) && !model.isPremium { model.askPremium() } else { look.wall = i } }
                         }
                     }
                     .padding(.horizontal, 14)

@@ -127,11 +127,19 @@ final class AppModel: ObservableObject {
     /// Нажатие кнопки под сообщением бота
     func botPress(_ m: Message, _ b: BotButton) {
         if let w = b.webApp, !w.isEmpty, let sid = m.senderId { miniApp = MiniAppReq(botId: sid, url: w); return }
-        if let u = b.url, let url = URL(string: u), url.scheme == "https" || url.scheme == "http" { UIApplication.shared.open(url); return }
+        if let u = b.url, let url = URL(string: u), url.scheme == "https" || url.scheme == "http" {
+            // оплата — в окне оплаты внутри Lumo, остальные ссылки — во встроенном браузере
+            if (url.host ?? "").hasSuffix("yoomoney.ru") { Pay.shared.open(url, order: URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "label" }?.value) }
+            else { InAppBrowser.shared.open(url) }
+            return
+        }
         guard let d = b.data else { return }
         Task {
             do {
-                let r = try await API.shared.botFunction("/cb", body: ["message_id": m.id, "data": d]) as? [String: Any]
+                var body: JSON = ["message_id": m.id, "data": d]
+                if d.hasPrefix("pay_") { body["inline"] = true }
+                let r = try await API.shared.botFunction("/cb", body: body) as? [String: Any]
+                if let s = r?["pay_url"] as? String, let u = URL(string: s) { Pay.shared.open(u, order: r?["order_id"] as? String); return }
                 if let t = r?["toast"] as? String { say(t) }
             } catch { say("Не удалось выполнить действие") }
         }
