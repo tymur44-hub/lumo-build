@@ -96,6 +96,17 @@ class MainActivity : FragmentActivity() {
             val need = listOfNotNull(Manifest.permission.RECORD_AUDIO.takeIf { !C.has(it) }, Manifest.permission.CAMERA.takeIf { C.video && !C.has(it) })
             if (need.isEmpty()) C.answer() else requestPermissions(need.toTypedArray(), 2)
         }
+        // ссылка на профиль: lumo://open#@username или https://lumomess.ru/#@username
+        i?.dataString?.let { d ->
+            Regex("#@([A-Za-z0-9_]{3,32})").find(d)?.groupValues?.get(1)?.let { u ->
+                i.data = null
+                AppModel.scope.launch {
+                    var n = 0
+                    while (!AppModel.loggedIn && n++ < 60) kotlinx.coroutines.delay(500)
+                    if (AppModel.loggedIn) { AppModel.tab = ru.volshebnymir.lumo.core.Tab.Chats; AppModel.openByUsername(u) }
+                }
+            }
+        }
         val chat = i?.getStringExtra("chat") ?: return
         i.removeExtra("chat")
         if (!AppModel.loggedIn) return

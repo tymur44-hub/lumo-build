@@ -70,7 +70,15 @@ fun TopBar(title: String, right: (@Composable () -> Unit)? = null) {
 private fun ProfileHead(name: String, url: String?, color: Int, status: String, statusOn: Boolean, uid: String? = null, onAvatar: () -> Unit) {
     val p = P
     Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.clickable(enabled = !url.isNullOrEmpty()) { onAvatar() }) { Avatar(name, url, color, 112.dp, storyUid = uid) }
+        // первое нажатие — фото плавно увеличивается прямо в профиле, второе — открывает на весь экран
+        var big by remember(url) { mutableStateOf(false) }
+        val sz by androidx.compose.animation.core.animateDpAsState(if (big) 300.dp else 112.dp, androidx.compose.animation.core.spring(0.78f, androidx.compose.animation.core.Spring.StiffnessMediumLow), label = "av")
+        val rad by androidx.compose.animation.core.animateDpAsState(if (big) 30.dp else 56.dp, androidx.compose.animation.core.spring(0.85f, androidx.compose.animation.core.Spring.StiffnessMediumLow), label = "avr")
+        Box(Modifier.size(sz).clip(RoundedCornerShape(rad)).clickable(enabled = !url.isNullOrEmpty()) { if (big) onAvatar() else big = true }, contentAlignment = Alignment.Center) {
+            if (sz > 114.dp && !url.isNullOrEmpty()) AsyncImage(url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            else Avatar(name, url, color, 112.dp, storyUid = uid)
+        }
+        if (big) Text("Нажмите ещё раз, чтобы открыть на весь экран", color = p.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp).clickable { big = false })
         Spacer(Modifier.height(12.dp))
         Text(name, color = p.text, fontWeight = FontWeight.Black, fontSize = 25.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 20.dp))
         if (status.isNotEmpty()) Text(status, color = if (statusOn) p.a2 else p.muted, fontSize = 15.sp)
