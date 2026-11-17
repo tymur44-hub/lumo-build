@@ -6,7 +6,7 @@ using Microsoft.UI.Xaml.Media;
 namespace Lumo.UI;
 
 /// <summary>Над списком чатов: у собеседника сегодня день рождения</summary>
-public sealed class BirthdayBar : Border
+public sealed class BirthdayBar : Grid
 {
     readonly TextBlock text = T.Txt("", 13.5, T.White, bold: true, lines: 1);
     readonly Action<string> open;
@@ -24,7 +24,7 @@ public sealed class BirthdayBar : Border
         col.Children.Add(text);
         col.Children.Add(T.Txt("Нажмите, чтобы поздравить", 11.5, T.B(0xE6FFFFFF)));
         sp.Children.Add(col);
-        Child = sp;
+        Children.Add(sp);
         Tapped += (_, _) => { if (today.Count > 0) open(today[0].Id); };
         Loaded += (_, _) => { Store.ChatsChanged += Upd; Upd(); };
         Unloaded += (_, _) => Store.ChatsChanged -= Upd;

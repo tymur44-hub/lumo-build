@@ -113,7 +113,7 @@ public static class Music
 }
 
 /// <summary>Плашка «играет музыка» — над списком чатов и под шапкой чата</summary>
-public sealed class MiniPlayerBar : Border
+public sealed class MiniPlayerBar : Grid
 {
     readonly TextBlock title = T.Txt("", 13.5, bold: true, lines: 1);
     readonly TextBlock sub = T.Txt("", 12, T.Muted, lines: 1);
@@ -142,7 +142,7 @@ public sealed class MiniPlayerBar : Border
         if (!compact) tools.Children.Add(T.IconButton("", "Закрыть", Music.Stop, 30, 11));
         Grid.SetColumn(tools, 2); g.Children.Add(tools);
         root.Children.Add(g); root.Children.Add(fill);
-        Child = root;
+        Children.Add(root);
         sp.Tapped += (_, _) => ShowPlayer();
         cover.Tapped += (_, _) => ShowPlayer();
         Loaded += (_, _) => { Music.Changed += Upd; Music.Tick += OnTick; Upd(); };
