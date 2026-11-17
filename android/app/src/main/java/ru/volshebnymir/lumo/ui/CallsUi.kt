@@ -23,6 +23,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -196,7 +197,7 @@ object CallsUi {
                     .shadow(16.dp, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp)).background(Color.Black)
                     .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
                     .pointerInput(Unit) {
-                        androidx.compose.foundation.gestures.detectDragGestures(
+                        detectDragGestures(
                             onDragEnd = {
                                 val baseX = if (corner % 2 == 0) 0f else maxX; val baseY = if (corner < 2) 50.dp.toPx() else maxY
                                 val l = baseX + drag.x < maxX / 2; val t = baseY + drag.y < maxY / 2
