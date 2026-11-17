@@ -13,6 +13,8 @@ import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -407,7 +409,7 @@ fun GiftShopDialog(to: String, onClose: () -> Unit) {
                         val tint = listOf(Color(0xFF4CAF50), Color(0xFF22A6FF), Color(0xFFFF5B5B))[i]
                         Box(Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).background(p.panel).bouncy { AppModel.say("Подарок Premium в разработке") }) {
                             Column(Modifier.fillMaxWidth().padding(vertical = 14.dp, horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(tint.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) { Text(e, fontSize = 36.sp) }
+                                Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(tint.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.CardGiftcard, null, tint = tint, modifier = Modifier.size(32.dp)) }
                                 Text(t, color = p.text, fontWeight = FontWeight.Black, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
                                 Text("Premium", color = p.muted, fontSize = 13.sp)
                                 Box(Modifier.padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(p.a1.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 5.dp)) {
@@ -433,11 +435,14 @@ fun GiftShopDialog(to: String, onClose: () -> Unit) {
                 Spacer(Modifier.navigationBarsPadding().height(30.dp))
             }
             RoundIcon(androidx.compose.material.icons.Icons.Filled.Close, bg = p.panel, modifier = Modifier.statusBarsPadding().padding(10.dp)) { onClose() }
-            Row(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            // баланс — кнопка: открывает люмены
+            Row(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp).clip(RoundedCornerShape(14.dp)).background(p.panel)
+                .bouncy { onClose(); AppModel.push(Screen.Wallet) }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(horizontalAlignment = Alignment.End) {
                     Text("Баланс", color = p.muted, fontSize = 13.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) { LumenIcon(18.dp); Spacer(Modifier.width(4.dp)); Text("${Lumens.balance}", color = p.text, fontWeight = FontWeight.Black, fontSize = 16.sp) }
                 }
+                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = p.muted, modifier = Modifier.size(18.dp))
             }
         }
     }

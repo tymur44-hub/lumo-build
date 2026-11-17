@@ -414,6 +414,7 @@ struct GiftShopSheet: View {
     @State private var pick: Gift?
     @State private var info = false
     @State private var rare = false
+    @State private var wallet = false
     var body: some View {
         let name = model.displayName(user)
         let pr = model.profiles[user]
@@ -431,7 +432,7 @@ struct GiftShopSheet: View {
                         ForEach(Array([("3 месяца", Color(hex: 0x4CAF50), ""), ("6 месяцев", Color(hex: 0x22A6FF), "-35%"), ("1 год", Color(hex: 0xFF5B5B), "-40%")].enumerated()), id: \.offset) { _, t in
                             Button { model.say("Подарок Premium в разработке") } label: {
                                 VStack(spacing: 4) {
-                                    Text("🎁").font(.system(size: 36)).frame(width: 64, height: 64)
+                                    Image(systemName: "gift.fill").font(.system(size: 30)).foregroundColor(t.1).frame(width: 64, height: 64)
                                         .background(t.1.opacity(0.22), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                                     Text(t.0).font(.system(size: 15, weight: .black)).foregroundColor(Theme.text).padding(.top, 4)
                                     Text("Premium").font(.system(size: 13)).foregroundColor(Theme.muted)
@@ -471,16 +472,31 @@ struct GiftShopSheet: View {
                         .frame(width: 44, height: 44).background(Theme.panel, in: Circle())
                 }.buttonStyle(BouncyButtonStyle())
                 Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Баланс").font(.system(size: 13)).foregroundColor(Theme.muted)
-                    HStack(spacing: 4) { LumenGem(size: 18); Text("\(lumens.balance)").font(.system(size: 16, weight: .black)).foregroundColor(Theme.text) }
-                }
+                // баланс — кнопка: открывает люмены
+                Button { wallet = true } label: {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("Баланс").font(.system(size: 13)).foregroundColor(Theme.muted)
+                        HStack(spacing: 4) {
+                            LumenGem(size: 18)
+                            Text("\(lumens.balance)").font(.system(size: 16, weight: .black)).foregroundColor(Theme.text)
+                            Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundColor(Theme.muted)
+                        }
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(Theme.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }.buttonStyle(BouncyButtonStyle())
             }
             .padding(.horizontal, 16).padding(.top, 8)
         }
         .task { await GiftStore.shared.load(); await Lumens.shared.load() }
         .sheet(item: $pick) { g in GiftDetailSheet(gift: g, to: user, onDone: { dismiss() }).environmentObject(model) }
         .sheet(isPresented: $info) { LumenInfoSheet().presentationDetents([.large]) }
+        .sheet(isPresented: $wallet, onDismiss: { Task { await Lumens.shared.load() } }) {
+            NavigationStack {
+                WalletView().environmentObject(model)
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Готово") { wallet = false } } }
+            }
+        }
     }
 
     private func chip(_ t: String, _ on: Bool, _ a: @escaping () -> Void) -> some View {
