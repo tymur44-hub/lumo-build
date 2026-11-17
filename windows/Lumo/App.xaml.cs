@@ -28,5 +28,6 @@ public partial class App : Application
         Win = new MainWindow();
         Notifications.Init(Win);
         Win.Activate();
+        Updater.Start();   // проверка обновлений
     }
 }

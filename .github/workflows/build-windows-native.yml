@@ -12,7 +12,7 @@ jobs:
       - name: Сборка
         working-directory: windows/Lumo
         shell: pwsh
-        run: msbuild Lumo.csproj /restore /t:Publish /m /v:m /p:Configuration=Release /p:Platform=x64 /p:RuntimeIdentifier=win-x64 /p:SelfContained=true "/p:PublishDir=$((Resolve-Path ..).Path)\out\"
+        run: msbuild Lumo.csproj /restore /t:Publish /m /v:m /p:Configuration=Release /p:Platform=x64 /p:RuntimeIdentifier=win-x64 /p:SelfContained=true /p:Version=1.0.${{ github.run_number }} "/p:PublishDir=$((Resolve-Path ..).Path)\out\"
       - name: Проверка запуска
         shell: pwsh
         working-directory: windows/out
@@ -48,7 +48,7 @@ jobs:
         shell: pwsh
         run: |
           Compress-Archive -Path windows/out/* -DestinationPath Lumo-Windows-x64.zip
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\iscc.exe" /Qp windows/installer.iss
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\iscc.exe" /Qp "/DAppVer=1.0.${{ github.run_number }}" windows/installer.iss
           Get-ChildItem windows/dist
       - uses: softprops/action-gh-release@v2
         with:

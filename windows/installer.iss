@@ -1,8 +1,13 @@
 ; Установщик Lumo для Windows (ставится в профиль пользователя, права администратора не нужны)
+#ifndef AppVer
+  #define AppVer "1.0.0"
+#endif
 [Setup]
 AppId={{6E3B7C51-4F2A-4C1E-9B8F-2D7A5C1E4B90}
 AppName=Lumo
-AppVersion=1.0.0
+AppVersion={#AppVer}
+CloseApplications=force
+RestartApplications=no
 AppPublisher=Lumo
 DefaultDirName={localappdata}\Programs\Lumo
 DefaultGroupName=Lumo
@@ -33,3 +38,5 @@ Name: "{userdesktop}\Lumo"; Filename: "{app}\Lumo.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\Lumo.exe"; Description: "Запустить Lumo"; Flags: nowait postinstall skipifsilent
+; обновление из приложения (тихая установка) — сразу запускаем новую версию
+Filename: "{app}\Lumo.exe"; Flags: nowait; Check: WizardSilent

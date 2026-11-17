@@ -60,6 +60,7 @@ public sealed class ShellView : Grid
 
         search.Margin = new Thickness(12, 0, 12, 8);
         var topBox = new StackPanel();
+        topBox.Children.Add(new UpdateBar());
         topBox.Children.Add(new MiniPlayerBar(false));
         topBox.Children.Add(new BirthdayBar(Open));
         topBox.Children.Add(search);

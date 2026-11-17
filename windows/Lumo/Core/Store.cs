@@ -124,7 +124,7 @@ public static class Store
         try
         {
             await Api.Rpc("lm_session_touch", J.O(("p_device", dev), ("p_name", "Windows · " + Environment.MachineName), ("p_platform", "windows"),
-                ("p_version", "1.0.0"), ("p_fresh", false)));
+                ("p_version", Updater.VersionText), ("p_fresh", false)));
         }
         catch { }
     }
