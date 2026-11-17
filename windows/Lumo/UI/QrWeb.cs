@@ -3,6 +3,7 @@ using Lumo.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using QRCoder;
+using Microsoft.Web.WebView2.Core;
 
 namespace Lumo.UI;
 
@@ -12,7 +13,7 @@ namespace Lumo.UI;
 /// </summary>
 public sealed class QrWeb : Grid, IFillPage
 {
-    readonly WebView2 web = new() { DefaultBackgroundColor = Microsoft.UI.Colors.Transparent };
+    readonly WebView2 web = new() { DefaultBackgroundColor = Windows.UI.Color.FromArgb(255, 0x0E, 0x0F, 0x22) };
     bool ready;
 
     public QrWeb()
@@ -57,6 +58,11 @@ public sealed class QrWeb : Grid, IFillPage
                     ["style"] = Prefs.Get("qr_style"),
                 };
                 await cw.ExecuteScriptAsync("render(" + j.ToJsonString() + ")");
+                if (Environment.GetEnvironmentVariable("LUMO_DEMO") == "1")
+                {
+                    await Task.Delay(1500);
+                    try { var dir = Path.Combine(Prefs.Dir, "shots"); Directory.CreateDirectory(dir); using var fs = File.Create(Path.Combine(dir, "web-qr.png")); await cw.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, fs.AsRandomAccessStream()); } catch (Exception ex) { App.Log("capture: " + ex.Message); }
+                }
             };
             cw.Navigate("https://lumo.web.local/qr.html");
         }

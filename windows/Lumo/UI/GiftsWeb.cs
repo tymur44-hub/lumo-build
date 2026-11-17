@@ -12,7 +12,7 @@ namespace Lumo.UI;
 /// </summary>
 public sealed class GiftsWeb : Grid, IFillPage
 {
-    readonly WebView2 web = new() { DefaultBackgroundColor = Microsoft.UI.Colors.Transparent };
+    readonly WebView2 web = new() { DefaultBackgroundColor = Windows.UI.Color.FromArgb(255, 0x0E, 0x0F, 0x22) };
     readonly string? to;
     readonly Action openWallet;
     readonly Action? done;
@@ -35,7 +35,15 @@ public sealed class GiftsWeb : Grid, IFillPage
             var cw = web.CoreWebView2;
             File.WriteAllText(Path.Combine(WebEnv.WebDir, "gifts.html"), Html);
             cw.WebMessageReceived += async (_, e) => await OnMsg(e.TryGetWebMessageAsString());
-            cw.NavigationCompleted += async (_, _) => await Push();
+            cw.NavigationCompleted += async (_, _) =>
+            {
+                await Push();
+                if (Environment.GetEnvironmentVariable("LUMO_DEMO") == "1")
+                {
+                    await Task.Delay(1500);
+                    try { var dir = Path.Combine(Prefs.Dir, "shots"); Directory.CreateDirectory(dir); using var fs = File.Create(Path.Combine(dir, "web-gifts.png")); await cw.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, fs.AsRandomAccessStream()); } catch (Exception ex) { App.Log("capture: " + ex.Message); }
+                }
+            };
             cw.Navigate("https://lumo.web.local/gifts.html");
         }
         catch (Exception e) { App.Log("gifts web: " + e); Children.Add(T.Txt("Не удалось открыть подарки: " + e.Message, 13, T.Danger)); }
