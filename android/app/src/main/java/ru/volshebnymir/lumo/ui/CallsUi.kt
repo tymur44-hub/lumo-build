@@ -19,6 +19,10 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
+import androidx.compose.ui.draw.shadow
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -134,16 +138,89 @@ private fun PulseRings(size: Int) {
 object CallsUi {
     /** окно звонка сейчас в режиме «картинка в картинке» */
     var pip by mutableStateOf(false)
+    /** звонок свёрнут внутри приложения (стрелка вниз) */
+    var minimized by mutableStateOf(false)
 
     @Composable
     fun Overlay() {
-        val show = Calls.state != Calls.State.Idle
-        AnimatedVisibility(show, enter = fadeIn() + slideInVertically { it / 6 }, exit = fadeOut()) { Screen() }
+        val inCall = Calls.state != Calls.State.Idle
+        LaunchedEffect(inCall, Calls.state == Calls.State.Incoming) { if (!inCall || Calls.state == Calls.State.Incoming) minimized = false }
+        val show = inCall && (!minimized || pip)
+        // разворачивается из окошка: увеличение + проявление; сворачивается — уезжает вверх и уменьшается
+        AnimatedVisibility(show,
+            enter = fadeIn(tween(260)) + scaleIn(initialScale = 0.35f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.85f, 0.12f), animationSpec = spring(0.82f, Spring.StiffnessMediumLow)),
+            exit = fadeOut(tween(220)) + scaleOut(targetScale = 0.3f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.85f, 0.08f), animationSpec = tween(320))) { Screen() }
+        AnimatedVisibility(inCall && minimized && !pip,
+            enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.6f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.85f, 0f)),
+            exit = fadeOut(tween(160)) + scaleOut(targetScale = 1.3f)) { Mini() }
+    }
+
+    /** Свёрнутый звонок: аудио — плашка сверху, видео — окошко, которое можно перетаскивать */
+    @Composable
+    private fun Mini() {
+        var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+        LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
+        val status = Calls.statusText.ifEmpty { Calls.startedAt?.let { Fmt.duration((now - it) / 1000.0) } ?: "Соединение…" }
+        if (!Calls.video) {
+            Box(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 14.dp, vertical = 4.dp)) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).background(Brush.horizontalGradient(listOf(Color(0xFF22C55E), Color(0xFF16A34A))))
+                    .bouncy { minimized = false }.padding(start = 8.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Call, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(Calls.peerName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
+                        Text(status, color = Color.White.copy(alpha = 0.85f), fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    }
+                    Box(Modifier.size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = if (Calls.muted) 0.4f else 0.18f)).bouncy { Calls.toggleMute() }, contentAlignment = Alignment.Center) {
+                        Icon(if (Calls.muted) Icons.Filled.MicOff else Icons.Filled.Mic, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Box(Modifier.size(34.dp).clip(CircleShape).background(P.danger).bouncy { Calls.endTapped() }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.CallEnd, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+        } else {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                val w = 118.dp; val h = 170.dp; val m = 12.dp
+                val maxX = with(density) { (maxWidth - w - m * 2).toPx() }
+                val maxY = with(density) { (maxHeight - h - m * 2 - 70.dp).toPx() }
+                var corner by remember { mutableIntStateOf(1) }
+                var drag by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+                val tx by animateFloatAsState((if (corner % 2 == 0) 0f else maxX) + drag.x, if (drag == androidx.compose.ui.geometry.Offset.Zero) spring(0.75f, Spring.StiffnessMediumLow) else snap(), label = "mx")
+                val ty by animateFloatAsState((if (corner < 2) with(density) { 50.dp.toPx() } else maxY) + drag.y, if (drag == androidx.compose.ui.geometry.Offset.Zero) spring(0.75f, Spring.StiffnessMediumLow) else snap(), label = "my")
+                Box(Modifier.padding(m).graphicsLayer { translationX = tx; translationY = ty }.size(w, h)
+                    .shadow(16.dp, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp)).background(Color.Black)
+                    .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
+                    .pointerInput(Unit) {
+                        androidx.compose.foundation.gestures.detectDragGestures(
+                            onDragEnd = {
+                                val baseX = if (corner % 2 == 0) 0f else maxX; val baseY = if (corner < 2) 50.dp.toPx() else maxY
+                                val l = baseX + drag.x < maxX / 2; val t = baseY + drag.y < maxY / 2
+                                corner = (if (t) 0 else 2) + (if (l) 0 else 1); drag = androidx.compose.ui.geometry.Offset.Zero
+                            },
+                            onDragCancel = { drag = androidx.compose.ui.geometry.Offset.Zero },
+                        ) { ch, d -> ch.consume(); drag += d }
+                    }
+                    .bouncy { minimized = false }) {
+                    val relay = Calls.relayImage
+                    if (Calls.remoteVideo != null && !Calls.peerCamOff && (Calls.p2p || Calls.reconnecting)) VideoView(Calls.remoteVideo, false, true, Modifier.fillMaxSize())
+                    else if (relay != null && !Calls.peerCamOff) Image(relay.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Avatar(Calls.peerName, Calls.peerAvatar, Calls.peerColor, 64.dp) }
+                    Text(status, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 7.dp, vertical = 3.dp))
+                }
+            }
+        }
     }
 
     @Composable
     private fun Screen() {
-        BackHandler { /* звонок сворачивается только кнопкой «Завершить» */ }
+        // «Назад» — свернуть звонок внутри приложения (разговор продолжается)
+        BackHandler(Calls.state != Calls.State.Incoming) { minimized = true }
         var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
         LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
         val active = Calls.state == Calls.State.Active
@@ -186,6 +263,12 @@ object CallsUi {
                 Spacer(Modifier.weight(1f))
                 if (!(videoOn && hide)) Controls() else Spacer(Modifier.height(150.dp))
                 Spacer(Modifier.height(30.dp))
+            }
+            // стрелка вниз — свернуть звонок, разговор продолжается
+            if (!pip && Calls.state != Calls.State.Incoming) Box(Modifier.align(Alignment.TopStart).statusBarsPadding().padding(12.dp)
+                .graphicsLayer { alpha = if (videoOn) uiAlpha else 1f }
+                .size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).bouncy { minimized = true }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.KeyboardArrowDown, null, tint = Color.White, modifier = Modifier.size(28.dp))
             }
             AnimatedVisibility(Calls.reconnecting && !pip, Modifier.align(Alignment.Center),
                 enter = scaleIn(initialScale = 0.85f) + fadeIn(), exit = scaleOut(targetScale = 0.85f) + fadeOut()) {

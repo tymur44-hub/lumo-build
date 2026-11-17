@@ -149,6 +149,24 @@ struct CallView: View {
                 Spacer()
             }
             .allowsHitTesting(false)
+            // стрелка вниз — свернуть звонок, разговор продолжается
+            if calls.state != .incoming {
+                VStack {
+                    HStack {
+                        Button { calls.minimize() } label: {
+                            Image(systemName: "chevron.down").font(.system(size: 17, weight: .bold)).foregroundColor(.white)
+                                .frame(width: 42, height: 42).background(.ultraThinMaterial, in: Circle())
+                                .environment(\.colorScheme, .dark)
+                        }
+                        .buttonStyle(BouncyButtonStyle())
+                        .padding(.leading, 16).padding(.top, 6)
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .opacity(hideUI ? 0 : 1)
+                .animation(.easeInOut(duration: 0.3), value: hideUI)
+            }
             if calls.video, let lv = calls.localVideo, !calls.camOff, calls.state != .incoming {
                 VStack {
                     HStack {

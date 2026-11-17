@@ -152,6 +152,7 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: model.toast)
         .fullScreenCover(isPresented: $calls.showUI) { CallView().environmentObject(calls) }
+        .overlay { MiniCallOverlay().environmentObject(calls) }
         .modifier(E2ESheets())
         .modifier(DNDSummaryModifier())
         .modifier(StreakCelebrationModifier())
