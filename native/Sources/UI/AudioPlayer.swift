@@ -34,10 +34,33 @@ final class AudioManager: ObservableObject {
     var progress: Double { duration > 0 ? time / duration : 0 }
 
     private init() {
-        endObs = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] _ in
-            self?.next()
+        // конец именно нашего трека (а не видео или голосового в чате) — следующий
+        endObs = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] n in
+            guard let self = self, let item = n.object as? AVPlayerItem, item === self.player?.currentItem else { return }
+            self.next()
+        }
+        let nc = NotificationCenter.default
+        // звонок, Siri, будильник — пауза; после — продолжаем, если система разрешила
+        nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
+            guard let self = self, self.track != nil else { return }
+            let type = (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
+            if type == .began { if self.playing { self.wasInterrupted = true; self.pause() } }
+            else if type == .ended {
+                let opts = (n.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt) ?? 0
+                if self.wasInterrupted, opts & AVAudioSession.InterruptionOptions.shouldResume.rawValue != 0, CallManager.shared.state == .idle { self.resume() }
+                self.wasInterrupted = false
+            }
+        }
+        // выдернули наушники / отключился Bluetooth — пауза, как в «Музыке»
+        nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] n in
+            guard let self = self, self.playing else { return }
+            let r = (n.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt).flatMap(AVAudioSession.RouteChangeReason.init)
+            if r == .oldDeviceUnavailable { self.pause() }
         }
     }
+    private var wasInterrupted = false
+    /// мягкая анимация для всего, что зависит от плеера (плашки, кнопки, список)
+    static let anim = Animation.spring(response: 0.42, dampingFraction: 0.88)
 
     /// Собрать очередь из всех аудио чата и начать с выбранного
     func play(_ m: Message, in messages: [Message]) {
@@ -67,20 +90,22 @@ final class AudioManager: ObservableObject {
     private func start(_ t: AudioTrack) {
         if track?.id == t.id, player != nil { resume(); return }
         teardown()
-        track = t
+        // голосовое или кружок — останавливаем, чтобы не играло одновременно
+        AudioPlayer.shared.stop()
+        withAnimation(Self.anim) { track = t }
         try? AVAudioSession.sharedInstance().setCategory(.playback)
         try? AVAudioSession.sharedInstance().setActive(true)
         let local = FileStore.shared.local(t.url, .file)
         let p = AVPlayer(url: local ?? t.url.px)
         player = p
         duration = 0; time = 0
-        timeObs = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.4, preferredTimescale: 600), queue: .main) { [weak self] tm in
+        timeObs = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] tm in
             guard let self = self else { return }
             self.time = tm.seconds
             if let d = p.currentItem?.duration.seconds, d.isFinite, d > 0 { self.duration = d }
             self.updateNowPlaying()
         }
-        p.play(); playing = true
+        p.play(); withAnimation(Self.anim) { playing = true }
         setupRemote()
         updateNowPlaying()
         // если файла нет локально — докачаем и подменим, чтобы играло стабильно
@@ -97,7 +122,7 @@ final class AudioManager: ObservableObject {
         if let o = timeObs { player?.removeTimeObserver(o); timeObs = nil }
         player = np
         np.seek(to: seek)
-        timeObs = np.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.4, preferredTimescale: 600), queue: .main) { [weak self] tm in
+        timeObs = np.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] tm in
             guard let self = self else { return }
             self.time = tm.seconds
             if let d = np.currentItem?.duration.seconds, d.isFinite, d > 0 { self.duration = d }
@@ -106,8 +131,12 @@ final class AudioManager: ObservableObject {
         if wasPlaying { np.play() }
     }
 
-    func resume() { player?.play(); playing = true; updateNowPlaying() }
-    func pause() { player?.pause(); playing = false; updateNowPlaying() }
+    func resume() {
+        guard player != nil else { if let t = track { start(t) }; return }
+        try? AVAudioSession.sharedInstance().setActive(true)
+        player?.play(); withAnimation(Self.anim) { playing = true }; updateNowPlaying()
+    }
+    func pause() { player?.pause(); withAnimation(Self.anim) { playing = false }; updateNowPlaying() }
 
     func seek(toFraction f: Double) {
         guard duration > 0 else { return }
@@ -131,7 +160,8 @@ final class AudioManager: ObservableObject {
 
     func stop() {
         teardown()
-        track = nil; playing = false; time = 0; duration = 0; queue = []
+        withAnimation(Self.anim) { track = nil; playing = false }
+        time = 0; duration = 0; queue = []
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         try? AVAudioSession.sharedInstance().setActive(false)
     }

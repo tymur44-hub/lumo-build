@@ -323,6 +323,7 @@ final class AppModel: ObservableObject {
 
     func logout() async {
         presence(false)
+        AudioManager.shared.stop()
         if let u = API.shared.userId { Accounts.shared.remove(u) }
         await API.shared.signOut()
         resetAfterLogout()

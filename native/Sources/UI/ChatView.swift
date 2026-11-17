@@ -144,8 +144,6 @@ struct ChatView: View {
     private var chatBody: some View {
         VStack(spacing: 0) {
             MiniPlayerBar(compact: true)
-                .padding(.horizontal, 10).padding(.top, 6)
-                .animation(.spring(response: 0.4, dampingFraction: 0.85), value: AudioManager.shared.track?.id)
             if chat?.type == "group", gcCount > 0 { GroupCallBanner(count: gcCount) { joinGroupCall(video: false) } }
             if let pid = chat?.pinnedMessageId { pinnedBar(pid) }
             PaidBar(chat: chat, chatId: chatId).environmentObject(model)
@@ -232,6 +230,7 @@ struct ChatView: View {
         }
         .onChange(of: text) { if editing == nil { model.setDraft(chatId, $0, publish: $0.isEmpty) } }
         .onDisappear {
+            ChatScrollMemory.save(chatId, atBottom ? nil : scrollInfo.anchorId)
             if editing == nil { model.setDraft(chatId, text) }
             if model.openChatId == chatId { model.openChatId = nil }
             AudioPlayer.shared.stop()
@@ -732,7 +731,12 @@ struct ChatView: View {
             .scaleEffect(x: -1, y: 1)
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
-            .onAppear { refreshMentions() }
+            .onAppear {
+                refreshMentions()
+                restoreSpot = ChatScrollMemory.take(chatId)
+                tryRestore(proxy)
+            }
+            .onChange(of: model.messages[chatId]?.count ?? 0) { _ in tryRestore(proxy) }
             .onChange(of: model.messages[chatId]?.last?.id) { _ in
                 refreshMentions()
                 if model.messages[chatId]?.last?.senderId == model.myId {
@@ -784,6 +788,22 @@ struct ChatView: View {
                 withAnimation(Motion.snappy) { proxy.scrollTo(id, anchor: .center) }
                 Task { try? await Task.sleep(nanoseconds: 1_600_000_000); if highlight == id { highlight = nil } }
             }
+        }
+    }
+
+    @State private var restoreSpot: Int?
+    /// вернуться туда, где листал (если вышел меньше 2 минут назад)
+    private func tryRestore(_ proxy: ScrollViewProxy) {
+        guard let id = restoreSpot else { return }
+        let list = model.messages[chatId] ?? []
+        guard list.contains(where: { $0.id == id }) else { return }
+        restoreSpot = nil
+        let me = model.myId
+        let fresh = list.filter { $0.id > id && $0.senderId != me }.count
+        DispatchQueue.main.async {
+            var t = Transaction(); t.disablesAnimations = true
+            withTransaction(t) { proxy.scrollTo(id, anchor: .top) }
+            if fresh > 0 { newBelow = fresh }
         }
     }
 
@@ -1757,6 +1777,20 @@ struct BigComposer: View {
 
 
 /// Что сейчас видно в ленте: самая старая видимая дата (для плавающей плашки) и непросмотренные упоминания
+/// Где остановился в чате: вернулся в течение 2 минут — на то же место, позже — в конец
+enum ChatScrollMemory {
+    private static var spots: [String: (id: Int, at: Date)] = [:]
+    static let keep: TimeInterval = 120
+    static func save(_ chat: String, _ id: Int?) {
+        if let id = id { spots[chat] = (id, Date()) } else { spots[chat] = nil }
+    }
+    static func take(_ chat: String) -> Int? {
+        guard let s = spots[chat] else { return nil }
+        spots[chat] = nil
+        return Date().timeIntervalSince(s.at) <= keep ? s.id : nil
+    }
+}
+
 final class ChatScrollInfo: ObservableObject {
     @Published var day: String?
     @Published var showDay = false
@@ -1772,6 +1806,8 @@ final class ChatScrollInfo: ObservableObject {
         update()
     }
     func disappear(_ id: Int) { visible[id] = nil }
+    /// самое нижнее (новое) видимое сообщение — по нему возвращаемся на то же место
+    var anchorId: Int? { visible.keys.max() }
 
     func setMentions(_ ids: [Int]) {
         let n = ids.filter { !seen.contains($0) && visible[$0] == nil }.sorted()

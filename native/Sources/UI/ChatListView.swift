@@ -107,8 +107,6 @@ struct ChatListView: View {
                 header
                     .padding(.horizontal, 14).padding(.top, 6)
                 MiniPlayerBar()
-                    .padding(.horizontal, 14).padding(.top, 8)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.85), value: AudioManager.shared.track?.id)
                 BirthdayBar()
                     .padding(.horizontal, 14).padding(.top, 8)
                 if !searchHidden || searchFocused || !query.isEmpty {

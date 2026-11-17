@@ -18,62 +18,111 @@ struct EqualizerIcon: View {
     }
 }
 
+/// Плавная смена «играть / пауза»: иконки перетекают друг в друга
+struct PlayPauseIcon: View {
+    let playing: Bool
+    var size: CGFloat = 16
+    var circle = false
+    var body: some View {
+        ZStack {
+            Image(systemName: circle ? "play.circle.fill" : "play.fill")
+                .scaleEffect(playing ? 0.4 : 1).opacity(playing ? 0 : 1)
+                .rotationEffect(.degrees(playing ? -90 : 0))
+            Image(systemName: circle ? "pause.circle.fill" : "pause.fill")
+                .scaleEffect(playing ? 1 : 0.4).opacity(playing ? 1 : 0)
+                .rotationEffect(.degrees(playing ? 0 : 90))
+        }
+        .font(.system(size: size, weight: .bold))
+        .animation(.spring(response: 0.32, dampingFraction: 0.72), value: playing)
+    }
+}
+
 /// Плашка «играет музыка» — показывается сверху списка чатов и под именем в чате
 struct MiniPlayerBar: View {
     @ObservedObject var audio = AudioManager.shared
     var compact = false
     @State private var showPlayer = false
+    @State private var drag: CGFloat = 0
 
     var body: some View {
-        if let t = audio.track {
-            Button { showPlayer = true } label: {
-                HStack(spacing: 11) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 9).fill(LinearGradient(colors: [Theme.a1, Theme.a2], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        EqualizerIcon(animating: audio.playing)
-                    }
-                    .frame(width: compact ? 30 : 36, height: compact ? 30 : 36)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(t.title).font(.system(size: compact ? 13 : 14, weight: .semibold)).foregroundColor(Theme.text).lineLimit(1)
-                        Text(audio.playing ? t.artist : "На паузе").font(.system(size: compact ? 11 : 12)).foregroundColor(Theme.muted).lineLimit(1)
-                    }
-                    Spacer(minLength: 4)
-                    Button { audio.toggle() } label: {
-                        Image(systemName: audio.playing ? "pause.fill" : "play.fill").font(.system(size: 16, weight: .bold))
-                            .foregroundColor(Theme.a1).frame(width: 34, height: 34).contentShape(Rectangle())
-                    }
-                    .buttonStyle(BouncyButtonStyle())
-                    Button { audio.next() } label: {
-                        Image(systemName: "forward.fill").font(.system(size: 14, weight: .bold))
-                            .foregroundColor(Theme.muted).frame(width: 30, height: 34).contentShape(Rectangle())
-                    }
-                    .buttonStyle(BouncyButtonStyle())
-                    if !compact {
-                        Button { audio.stop() } label: {
-                            Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.muted)
-                                .frame(width: 28, height: 34).contentShape(Rectangle())
-                        }
-                        .buttonStyle(BouncyButtonStyle())
-                    }
-                }
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(
-                    ZStack(alignment: .bottomLeading) {
-                        RoundedRectangle(cornerRadius: 14).fill(Theme.panel)
-                        GeometryReader { g in
-                            RoundedRectangle(cornerRadius: 2).fill(Theme.a1.opacity(0.7))
-                                .frame(width: g.size.width * audio.progress, height: 2.5)
-                                .frame(maxHeight: .infinity, alignment: .bottom)
-                        }
-                    }
-                )
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.line, lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+        Group {
+            if let t = audio.track {
+                bar(t)
+                    .padding(.horizontal, compact ? 10 : 14).padding(.top, compact ? 6 : 8)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.92, anchor: .top)),
+                        removal: .opacity.combined(with: .scale(scale: 0.9, anchor: .top))))
             }
-            .buttonStyle(.plain)
-            .sheet(isPresented: $showPlayer) { PlayerSheet().presentationDetents([.large]) }
-            .transition(.move(edge: .top).combined(with: .opacity))
         }
+        .animation(AudioManager.anim, value: audio.track?.id)
+        .sheet(isPresented: $showPlayer) { PlayerSheet().presentationDetents([.large]).presentationDragIndicator(.hidden) }
+    }
+
+    private func bar(_ t: AudioTrack) -> some View {
+        HStack(spacing: 11) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 9, style: .continuous).fill(LinearGradient(colors: [Theme.a1, Theme.a2], startPoint: .topLeading, endPoint: .bottomTrailing))
+                EqualizerIcon(animating: audio.playing)
+            }
+            .frame(width: compact ? 30 : 36, height: compact ? 30 : 36)
+            .scaleEffect(audio.playing ? 1 : 0.9)
+            .animation(AudioManager.anim, value: audio.playing)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(t.title).font(.system(size: compact ? 13 : 14, weight: .semibold)).foregroundColor(Theme.text).lineLimit(1)
+                Text(audio.playing ? t.artist : "На паузе").font(.system(size: compact ? 11 : 12)).foregroundColor(Theme.muted).lineLimit(1)
+                    .id(audio.playing).transition(.opacity)
+            }
+            .id(t.id)
+            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
+            Button { audio.toggle() } label: {
+                PlayPauseIcon(playing: audio.playing).foregroundColor(Theme.a1).frame(width: 34, height: 34).contentShape(Rectangle())
+            }
+            .buttonStyle(BouncyButtonStyle())
+            Button { audio.next() } label: {
+                Image(systemName: "forward.fill").font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Theme.muted).frame(width: 30, height: 34).contentShape(Rectangle())
+            }
+            .buttonStyle(BouncyButtonStyle())
+            if !compact {
+                Button { audio.stop() } label: {
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.muted)
+                        .frame(width: 28, height: 34).contentShape(Rectangle())
+                }
+                .buttonStyle(BouncyButtonStyle())
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(
+            ZStack(alignment: .bottomLeading) {
+                RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.panel)
+                GeometryReader { g in
+                    Capsule().fill(Theme.a1.opacity(0.75))
+                        .frame(width: max(0, g.size.width * audio.progress), height: 2.5)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                        .animation(.linear(duration: 0.25), value: audio.time)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        )
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.line, lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+        .contentShape(RoundedRectangle(cornerRadius: 14))
+        // свайп в сторону — закрыть плеер
+        .offset(x: drag)
+        .opacity(1 - min(0.6, abs(drag) / 300))
+        .gesture(
+            DragGesture(minimumDistance: 12)
+                .onChanged { v in if abs(v.translation.width) > abs(v.translation.height) { drag = v.translation.width } }
+                .onEnded { v in
+                    if abs(v.translation.width) > 110 || abs(v.predictedEndTranslation.width) > 260 {
+                        withAnimation(.easeOut(duration: 0.2)) { drag = v.translation.width > 0 ? 500 : -500 }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { audio.stop(); drag = 0 }
+                    } else { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { drag = 0 } }
+                }
+        )
+        .onTapGesture { UIImpactFeedbackGenerator(style: .light).impactOccurred(); showPlayer = true }
     }
 }
 
@@ -96,11 +145,16 @@ struct PlayerSheet: View {
                     VStack { Spacer(); EqualizerIcon(color: .white, animating: audio.playing).scaleEffect(2).padding(.bottom, 28) }
                 }
                 .frame(width: 240, height: 240)
-                .scaleEffect(audio.playing ? 1 : 0.92)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: audio.playing)
+                .scaleEffect(audio.playing ? 1 : 0.88)
+                .animation(.spring(response: 0.55, dampingFraction: 0.72), value: audio.playing)
 
-                Text(t.title).font(.system(size: 22, weight: .bold)).foregroundColor(Theme.text).lineLimit(1).padding(.top, 28).padding(.horizontal, 30)
-                Text(t.artist).font(.system(size: 15)).foregroundColor(Theme.muted).padding(.top, 2)
+                VStack(spacing: 2) {
+                    Text(t.title).font(.system(size: 22, weight: .bold)).foregroundColor(Theme.text).lineLimit(1).padding(.horizontal, 30)
+                    Text(t.artist).font(.system(size: 15)).foregroundColor(Theme.muted)
+                }
+                .padding(.top, 28)
+                .id(t.id)
+                .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
 
                 // перемотка
                 VStack(spacing: 4) {
@@ -124,7 +178,7 @@ struct PlayerSheet: View {
                     Button { audio.prev() } label: { Image(systemName: "backward.fill").font(.system(size: 26)) }
                         .buttonStyle(BouncyButtonStyle())
                     Button { audio.toggle() } label: {
-                        Image(systemName: audio.playing ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 68))
+                        PlayPauseIcon(playing: audio.playing, size: 68, circle: true).frame(width: 76, height: 76)
                     }
                     .buttonStyle(BouncyButtonStyle())
                     Button { audio.next() } label: { Image(systemName: "forward.fill").font(.system(size: 26)) }
@@ -140,7 +194,7 @@ struct PlayerSheet: View {
                     ScrollView {
                         LazyVStack(spacing: 2) {
                             ForEach(audio.queue) { q in
-                                Button { audio.playTrack(q) } label: {
+                                Button { UISelectionFeedbackGenerator().selectionChanged(); audio.playTrack(q) } label: {
                                     HStack(spacing: 10) {
                                         if q.id == t.id { EqualizerIcon(color: Theme.a1, animating: audio.playing).frame(width: 20) }
                                         else { Image(systemName: "music.note").font(.system(size: 13)).foregroundColor(Theme.muted).frame(width: 20) }
@@ -158,7 +212,9 @@ struct PlayerSheet: View {
                 Spacer(); Text("Ничего не играет").foregroundColor(Theme.muted); Spacer()
             }
         }
+        .animation(AudioManager.anim, value: audio.track?.id)
         .background(Theme.bg.ignoresSafeArea())
+        .onChange(of: audio.track == nil) { gone in if gone { dismiss() } }
     }
     private func fmt(_ s: Double) -> String {
         guard s.isFinite, s >= 0 else { return "0:00" }
@@ -183,9 +239,7 @@ struct AudioBubbleView: View {
             HStack(spacing: 11) {
                 ZStack {
                     Circle().fill(mine ? Color.white.opacity(0.22) : Theme.a1)
-                    Image(systemName: (isCurrent && audio.playing) ? "pause.fill" : "play.fill")
-                        .font(.system(size: 17, weight: .bold)).foregroundColor(mine ? .white : .white)
-                        .offset(x: (isCurrent && audio.playing) ? 0 : 1)
+                    PlayPauseIcon(playing: isCurrent && audio.playing, size: 17).foregroundColor(.white)
                 }
                 .frame(width: 44, height: 44)
                 VStack(alignment: .leading, spacing: 3) {
@@ -194,7 +248,8 @@ struct AudioBubbleView: View {
                         GeometryReader { g in
                             ZStack(alignment: .leading) {
                                 Capsule().fill((mine ? Color.white : Theme.a1).opacity(0.25)).frame(height: 3)
-                                Capsule().fill(mine ? Color.white : Theme.a1).frame(width: g.size.width * audio.progress, height: 3)
+                                Capsule().fill(mine ? Color.white : Theme.a1).frame(width: max(0, g.size.width * audio.progress), height: 3)
+                                    .animation(.linear(duration: 0.25), value: audio.time)
                             }
                         }
                         .frame(height: 3)
@@ -208,5 +263,6 @@ struct AudioBubbleView: View {
         }
         .buttonStyle(.plain)
         .frame(minWidth: 180)
+        .animation(AudioManager.anim, value: isCurrent)
     }
 }

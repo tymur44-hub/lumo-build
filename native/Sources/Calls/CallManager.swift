@@ -286,6 +286,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
     func startCall(chat: ChatItem, video v: Bool) {
         guard state == .idle else { AppModel.shared.say("Вы уже в звонке"); return }
         guard let peer = chat.peerId, let me = AppModel.shared.me, peer != me.id else { return }
+        AudioManager.shared.pause()   // музыку — на паузу на время звонка
         Task {
             guard await permissions(video: v) else { AppModel.shared.say("Нет доступа к микрофону"); return }
             callId = randomId()
@@ -421,6 +422,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
             peerAvatar = p.str("avatar")
             peerColor = p.int("color") ?? 0
             state = .incoming
+            AudioManager.shared.pause()
             statusText = video ? "Входящий видеозвонок" : "Входящий звонок"
             showUI = true
             sig(from, ["t": "ringing"])
@@ -525,6 +527,7 @@ final class CallManager: NSObject, ObservableObject, RTCPeerConnectionDelegate, 
         peerColor = 0
         video = false
         state = .incoming
+        AudioManager.shared.pause()
         statusText = "Входящий звонок"
         showUI = true
     }

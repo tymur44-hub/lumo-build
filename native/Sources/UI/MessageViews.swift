@@ -384,6 +384,7 @@ final class MiniNotePlayer: ObservableObject {
     func play(_ url: URL) {
         stop()
         AudioPlayer.shared.stop()
+        if AudioManager.shared.playing { AudioManager.shared.pause() }
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
         let p = AVPlayer(url: MediaCache.shared.local(url) ?? url.px)
         if MediaCache.shared.local(url) == nil { Task { _ = await MediaCache.shared.fetch(url) } }

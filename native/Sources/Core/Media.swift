@@ -154,6 +154,8 @@ final class AudioPlayer: NSObject, ObservableObject, WKScriptMessageHandler {
         }
         stop()
         guard let u = URL(string: url) else { return }
+        // голосовое поверх музыки — музыку на паузу
+        if AudioManager.shared.playing { AudioManager.shared.pause() }
         currentId = id
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
