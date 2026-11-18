@@ -304,7 +304,11 @@ struct Message: Identifiable, Equatable {
     static func == (a: Message, b: Message) -> Bool {
         a.id == b.id && a.editedAt == b.editedAt && a.deleted == b.deleted && a.body == b.body
             && a.pending == b.pending && a.mediaURL == b.mediaURL && a.metaStatus == b.metaStatus
+            && a.listenedCount == b.listenedCount
     }
+
+    /// Сколько человек прослушали голосовое или кружок (meta.lb) — чтобы точка «не прослушано» обновлялась
+    var listenedCount: Int { (meta["lb"] as? [Any])?.count ?? 0 }
 
     var metaStatus: String? { meta.str("status") }
     var duration: Double { meta.double("dur") ?? meta.double("duration") ?? 0 }
