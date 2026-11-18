@@ -35,8 +35,12 @@ public sealed class StatusEmoji : Grid
         {
             sprite = true;
             Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, size, size) };
-            var img = new Image { Source = new BitmapImage(new Uri(file)), Width = size * 8, Height = size * 6, Stretch = Stretch.Fill, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, RenderTransform = tr };
-            Children.Add(img);
+            // Лист кадров 8×6 кладём в Canvas: Grid обрезал картинку по своему размеру ещё до сдвига,
+            // и все кадры, кроме первого столбца, были пустыми — значок мигал и пропадал
+            var img = new Image { Source = new BitmapImage(new Uri(file)) { DecodePixelWidth = (int)Math.Ceiling(size * 8 * 2) }, Width = size * 8, Height = size * 6, Stretch = Stretch.Fill, RenderTransform = tr };
+            var cv = new Canvas { Width = size, Height = size };
+            cv.Children.Add(img);
+            Children.Add(cv);
             Loaded += (_, _) => { live.Add(new WeakReference<StatusEmoji>(this)); Hook(); };
             Unloaded += (_, _) => live.RemoveAll(w => !w.TryGetTarget(out var t) || t == this);
         }
