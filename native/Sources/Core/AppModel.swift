@@ -1975,7 +1975,15 @@ final class AppModel: ObservableObject {
                 self.showBanner(IncomingBanner(id: "m\(m.id)", chatId: m.chatId, title: title, body: body, avatarURL: av, color: col))
             }
             // системное уведомление — только когда приложение свёрнуто
-            if !self.isActive { Notifier.show(id: "m\(m.id)", title: title, body: body, chatId: m.chatId, urgent: urgent) }
+            if !self.isActive {
+                let pr = m.senderId.flatMap { self.profiles[$0] }
+                let snd = m.senderId.map { (id: $0, name: senderName, avatar: pr?.avatarURL, color: pr?.color ?? 0) }
+                let isGroup = !(c?.isPrivate ?? true) && c?.isChannel != true
+                let grp = isGroup ? (name: c?.displayName ?? "Группа", avatar: c?.avatarURL, color: c?.color ?? 0) : nil
+                let chSender = c?.isChannel == true ? (id: m.chatId, name: c?.displayName ?? "Канал", avatar: c?.avatarURL, color: c?.color ?? 0) : nil
+                Notifier.show(id: "m\(m.id)", title: title, body: body, chatId: m.chatId, urgent: urgent,
+                              sender: chSender ?? snd, group: grp)
+            }
         }
     }
 }

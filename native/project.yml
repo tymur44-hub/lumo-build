@@ -49,6 +49,7 @@ targets:
           UIImageName: LaunchLogo
           UIImageRespectsSafeAreaInsets: true
         UIBackgroundModes: [audio, voip]
+        NSUserActivityTypes: [INSendMessageIntent]
         NSCameraUsageDescription: "Камера нужна для видеозвонков, фото и видео"
         NSFaceIDUsageDescription: "Face ID нужен, чтобы быстро разблокировать Lumo"
         NSSpeechRecognitionUsageDescription: "Распознавание речи нужно для расшифровки голосовых сообщений и кружков"

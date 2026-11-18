@@ -44,7 +44,7 @@ final class AudioManager: ObservableObject {
         nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
             guard let self = self, self.track != nil else { return }
             let type = (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
-            if type == .began { if self.playing { self.wasInterrupted = true; self.pause() } }
+            if type == .began { if self.playing { self.wasInterrupted = true; self.pause(smooth: false) } }
             else if type == .ended {
                 let opts = (n.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt) ?? 0
                 if self.wasInterrupted, opts & AVAudioSession.InterruptionOptions.shouldResume.rawValue != 0, CallManager.shared.state == .idle { self.resume() }
@@ -55,7 +55,7 @@ final class AudioManager: ObservableObject {
         nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] n in
             guard let self = self, self.playing else { return }
             let r = (n.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt).flatMap(AVAudioSession.RouteChangeReason.init)
-            if r == .oldDeviceUnavailable { self.pause() }
+            if r == .oldDeviceUnavailable { self.pause(smooth: false) }
         }
     }
     private var wasInterrupted = false
@@ -105,7 +105,8 @@ final class AudioManager: ObservableObject {
             if let d = p.currentItem?.duration.seconds, d.isFinite, d > 0 { self.duration = d }
             self.updateNowPlaying()
         }
-        p.play(); withAnimation(Self.anim) { playing = true }
+        p.volume = 0
+        p.play(); fade(p, to: 1, over: 0.6); withAnimation(Self.anim) { playing = true }
         setupRemote()
         updateNowPlaying()
         // если файла нет локально — докачаем и подменим, чтобы играло стабильно
@@ -132,11 +133,32 @@ final class AudioManager: ObservableObject {
     }
 
     func resume() {
-        guard player != nil else { if let t = track { start(t) }; return }
+        guard let p = player else { if let t = track { start(t) }; return }
         try? AVAudioSession.sharedInstance().setActive(true)
-        player?.play(); withAnimation(Self.anim) { playing = true }; updateNowPlaying()
+        if fadeTimer == nil { p.volume = 0 }
+        p.play(); fade(p, to: 1, over: 0.5); withAnimation(Self.anim) { playing = true }; updateNowPlaying()
     }
-    func pause() { player?.pause(); withAnimation(Self.anim) { playing = false }; updateNowPlaying() }
+    /// Пауза: звук плавно затихает. Для звонка или отключения наушников — сразу (smooth: false)
+    func pause(smooth: Bool = true) {
+        withAnimation(Self.anim) { playing = false }; updateNowPlaying()
+        guard let p = player else { return }
+        if smooth { fade(p, to: 0, over: 0.4) { [weak self] in if self?.playing == false { p.pause() } } }
+        else { fadeTimer?.invalidate(); fadeTimer = nil; p.pause() }
+    }
+
+    // MARK: плавное появление и затухание звука
+    private var fadeTimer: Timer?
+    private func fade(_ p: AVPlayer, to target: Float, over dur: Double, done: (() -> Void)? = nil) {
+        fadeTimer?.invalidate()
+        let from = p.volume, steps = max(1, Int(dur / 0.02)); var i = 0
+        fadeTimer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] t in
+            i += 1
+            let k = Float(i) / Float(steps)
+            let e = k * k * (3 - 2 * k)   // мягкая кривая
+            p.volume = from + (target - from) * e
+            if i >= steps { t.invalidate(); if self?.fadeTimer === t { self?.fadeTimer = nil }; p.volume = target; done?() }
+        }
+    }
 
     func seek(toFraction f: Double) {
         guard duration > 0 else { return }
@@ -159,6 +181,12 @@ final class AudioManager: ObservableObject {
     }
 
     func stop() {
+        // плавно гасим звук уходящего плеера, а интерфейс закрываем сразу
+        if let p = player, playing {
+            if let o = timeObs { p.removeTimeObserver(o); timeObs = nil }
+            player = nil
+            fade(p, to: 0, over: 0.35) { p.pause() }
+        }
         teardown()
         withAnimation(Self.anim) { track = nil; playing = false }
         time = 0; duration = 0; queue = []
@@ -168,6 +196,7 @@ final class AudioManager: ObservableObject {
 
     private func teardown() {
         if let o = timeObs { player?.removeTimeObserver(o); timeObs = nil }
+        if player != nil { fadeTimer?.invalidate(); fadeTimer = nil }
         player?.pause(); player = nil
     }
 
