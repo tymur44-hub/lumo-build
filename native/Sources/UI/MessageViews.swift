@@ -16,7 +16,7 @@ struct VoiceView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Button {
-                    if let u = m.mediaURL { player.toggle(id: m.id, url: u) }
+                    if let u = m.mediaURL { player.toggle(id: m.id, url: u); Listened.mark(m, mine: mine) }
                 } label: {
                     Image(systemName: isCurrent && player.playing ? "pause.fill" : "play.fill")
                         .font(.system(size: 17, weight: .bold))
@@ -27,8 +27,12 @@ struct VoiceView: View {
                 .disabled(m.mediaURL == nil)
                 VStack(alignment: .leading, spacing: 5) {
                     WaveBars(wave: m.wave, progress: isCurrent ? player.progress : 0, mine: mine)
-                    Text(isCurrent && player.position > 0 ? Fmt.duration(player.position) : Fmt.duration(m.duration))
-                        .font(.caption).foregroundColor(mine ? .white.opacity(0.75) : Theme.muted)
+                    HStack(spacing: 5) {
+                        Text(isCurrent && player.position > 0 ? Fmt.duration(player.position) : Fmt.duration(m.duration))
+                            .font(.caption).foregroundColor(mine ? .white.opacity(0.75) : Theme.muted)
+                        if Listened.unheard(m, mine: mine) { UnheardDot(mine: mine) }
+                    }
+                    .animation(.spring(response: 0.3), value: Listened.unheard(m, mine: mine))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 TranscribeButton(m: m, mine: mine, ext: "m4a", text: $text)
@@ -210,6 +214,7 @@ struct PlayerLayerView: UIViewRepresentable {
 /// Видеосообщение-кружок: нажали — играет прямо в чате
 struct VideoNoteView: View {
     let url: URL
+    var onPlay: (() -> Void)? = nil
     @State private var player: AVPlayer?
     @State private var thumb: UIImage?
     @State private var big = false
@@ -260,6 +265,7 @@ struct VideoNoteView: View {
                 progress = 0
                 p.play()
                 setBig(true)
+                onPlay?()
             }
         }
         .onReceive(tick) { _ in

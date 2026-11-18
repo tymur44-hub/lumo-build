@@ -468,7 +468,15 @@ struct MessageRow: View {
         } else if m.kind == "video_note" {
             VStack(alignment: mine ? .trailing : .leading, spacing: 4) {
                 HStack(alignment: .bottom, spacing: 8) {
-                    if let u = m.mediaURL.flatMap(URL.init(string:)) { VideoNoteView(url: u) }
+                    if let u = m.mediaURL.flatMap(URL.init(string:)) {
+                        VideoNoteView(url: u) { Listened.mark(m, mine: mine) }
+                            .overlay(alignment: .bottomTrailing) {
+                                if Listened.unheard(m, mine: mine) {
+                                    Circle().fill(Theme.a1).frame(width: 12, height: 12)
+                                        .overlay(Circle().stroke(Theme.bg, lineWidth: 2.5)).padding(14)
+                                }
+                            }
+                    }
                     else { ZStack { Circle().fill(Theme.panel2); ProgressView() }.frame(width: 210, height: 210) }
                     TranscribeButton(m: m, mine: false, ext: "mp4", text: $noteText)
                 }
