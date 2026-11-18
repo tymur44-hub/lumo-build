@@ -66,7 +66,15 @@ object Push {
         }
         if (body.isBlank()) body = "Новое сообщение"
         val quiet = ru.volshebnymir.lumo.ui.Dnd.active
-        Notifier.message(ctx, id, title, body, chat, quiet = quiet)
+        // фото для уведомления: из пуша, а если его там нет — фото чата (собеседника, группы или канала)
+        var av = data["av"]?.takeIf { it.startsWith("http") }
+        var col = data["col"]?.toIntOrNull() ?: 0
+        if (av == null) runCatching {
+            var c = AppModel.chat(chat)
+            if (c == null && AppModel.loggedIn) { kotlinx.coroutines.runBlocking { kotlinx.coroutines.withTimeoutOrNull(4000) { AppModel.loadChats() } }; c = AppModel.chat(chat) }
+            if (c != null) { av = c.displayAvatar; col = c.displayColor }
+        }
+        Notifier.message(ctx, id, title, body, chat, quiet = quiet, avatar = av, color = col, faceName = data["title"])
     }
 }
 

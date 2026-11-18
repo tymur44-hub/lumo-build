@@ -56,12 +56,69 @@ object Notifier {
         }
     }
 
-    fun message(ctx: Context, id: Int, title: String, body: String, chatId: String, quiet: Boolean = false, urgent: Boolean = false) {
-        val n = NotificationCompat.Builder(ctx, if (urgent) CH_URGENT else if (quiet) CH_QUIET else CH_MSG)
+    private val faces = java.util.concurrent.ConcurrentHashMap<String, android.graphics.Bitmap>()
+
+    /** Круглое фото профиля для уведомления: скачанное фото или буква на цветном круге */
+    fun face(url: String?, name: String, color: Int): android.graphics.Bitmap {
+        val key = url ?: "l:$name:$color"
+        faces[key]?.let { return it }
+        var src: android.graphics.Bitmap? = null
+        if (!url.isNullOrBlank()) runCatching {
+            val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            c.connectTimeout = 4000; c.readTimeout = 5000
+            c.inputStream.use { src = android.graphics.BitmapFactory.decodeStream(it) }
+        }
+        val side = 192
+        val out = android.graphics.Bitmap.createBitmap(side, side, android.graphics.Bitmap.Config.ARGB_8888)
+        val cv = android.graphics.Canvas(out)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        val s0 = src
+        if (s0 != null) {
+            val sc = maxOf(side.toFloat() / s0.width, side.toFloat() / s0.height)
+            val w = s0.width * sc; val h = s0.height * sc
+            val shader = android.graphics.BitmapShader(s0, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
+            shader.setLocalMatrix(android.graphics.Matrix().apply { setScale(sc, sc); postTranslate((side - w) / 2, (side - h) / 2) })
+            paint.shader = shader
+            cv.drawCircle(side / 2f, side / 2f, side / 2f, paint)
+        } else {
+            val pal = intArrayOf(0xFFFF7A6B.toInt(), 0xFFA48BFF.toInt(), 0xFF36B8FF.toInt(), 0xFF25C99A.toInt(), 0xFFFFB347.toInt(), 0xFFFF6BB5.toInt(), 0xFF5BC0FF.toInt(), 0xFF9CCC65.toInt())
+            paint.color = pal[((color % 8) + 8) % 8]
+            cv.drawCircle(side / 2f, side / 2f, side / 2f, paint)
+            paint.color = android.graphics.Color.WHITE; paint.textSize = 86f; paint.typeface = android.graphics.Typeface.DEFAULT_BOLD; paint.textAlign = android.graphics.Paint.Align.CENTER
+            val t = name.trim().take(1).uppercase().ifEmpty { "?" }
+            cv.drawText(t, side / 2f, side / 2f - (paint.descent() + paint.ascent()) / 2, paint)
+        }
+        if (s0 != null) faces[key] = out
+        return out
+    }
+
+    /** Уведомление о сообщении с фото отправителя (или группы/канала). Фото качается в фоне. */
+    fun message(ctx: Context, id: Int, title: String, body: String, chatId: String, quiet: Boolean = false, urgent: Boolean = false,
+                avatar: String? = null, color: Int = 0, faceName: String? = null, sender: String? = null) {
+        Thread {
+            val pic = runCatching { face(avatar, faceName ?: title, color) }.getOrNull()
+            build(ctx, id, title, body, chatId, quiet, urgent, pic, sender)
+        }.start()
+    }
+
+    private fun build(ctx: Context, id: Int, title: String, body: String, chatId: String, quiet: Boolean, urgent: Boolean,
+                      pic: android.graphics.Bitmap?, sender: String?) {
+        val b0 = NotificationCompat.Builder(ctx, if (urgent) CH_URGENT else if (quiet) CH_QUIET else CH_MSG)
+        if (pic != null) {
+            b0.setLargeIcon(pic)
+            // стиль переписки: фото собеседника слева от текста
+            val who = androidx.core.app.Person.Builder().setName(sender ?: title).setKey(chatId + ":" + (sender ?: title))
+                .setIcon(androidx.core.graphics.drawable.IconCompat.createWithBitmap(pic)).build()
+            val me = androidx.core.app.Person.Builder().setName("Вы").build()
+            val text = if (sender != null && body.startsWith("$sender: ")) body.removePrefix("$sender: ") else body
+            val st = NotificationCompat.MessagingStyle(me).addMessage(text, System.currentTimeMillis(), who)
+            if (sender != null) { st.conversationTitle = title; st.isGroupConversation = true }
+            b0.setStyle(st)
+        } else b0.setStyle(NotificationCompat.BigTextStyle().bigText(body))
+        val n = b0
             .setSilent(quiet && !urgent)
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle(title).setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setAutoCancel(true)
             .setGroup(chatId)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

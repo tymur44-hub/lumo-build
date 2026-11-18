@@ -266,7 +266,7 @@ object Calls {
         val me = AppModel.me ?: return
         if (peer == me.id) return
         if (!micOk) { AppModel.say("Нет доступа к микрофону"); return }
-        ru.volshebnymir.lumo.ui.Music.pause()
+        ru.volshebnymir.lumo.ui.Music.pause(smooth = false)
         callId = randomId(); role = "caller"; peerId = peer; chatId = chat.id
         secInit(peer)
         video = v && camOk; speaker = video; muted = false; camOff = false; peerCamOff = false
@@ -320,7 +320,7 @@ object Calls {
             video = p.bool("video"); speaker = video; muted = false; camOff = false; peerCamOff = false
             peerName = AppModel.aliases[from]?.takeIf { it.isNotBlank() } ?: p.str("name") ?: "Lumo"; peerAvatar = p.str("avatar"); peerColor = p.int("color") ?: 0
             state = State.Incoming
-            ru.volshebnymir.lumo.ui.Music.pause()
+            ru.volshebnymir.lumo.ui.Music.pause(smooth = false)
             statusText = if (video) "Входящий видеозвонок" else "Входящий звонок"
             log("ring_in", jsonOf("from" to from))
             sig(from, jsonOf("t" to "ringing"))

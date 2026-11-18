@@ -75,7 +75,7 @@ object Music {
         p.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
         p.setHandleAudioBecomingNoisy(true)
         p.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
+            override fun onIsPlayingChanged(isPlaying: Boolean) { if (!fadingOut) playing = isPlaying }
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) duration = p.duration.coerceAtLeast(0)
                 if (state == Player.STATE_ENDED) next()
@@ -99,7 +99,8 @@ object Music {
         val local = FileStore.local(t.url, DataKind.File)
         val src = local?.path ?: (ru.volshebnymir.lumo.core.Net.px(t.url) ?: t.url)
         p.setMediaItem(MediaItem.fromUri(src))
-        p.prepare(); p.play()
+        p.volume = 0f
+        p.prepare(); p.play(); fade(p, 1f, 600)
         if (local == null) AppModel.scope.launch { FileStore.fetch(t.url, DataKind.File) }
         ticker?.cancel()
         ticker = AppModel.scope.launch {
@@ -111,8 +112,37 @@ object Music {
     }
 
     fun toggle() { if (playing) pause() else resume() }
-    fun resume() { val p = exo; if (p == null) track?.let { start(it) } else p.play() }
-    fun pause() { exo?.pause() }
+    fun resume() {
+        val p = exo ?: run { track?.let { start(it) }; return }
+        fadingOut = false
+        if (fadeJob == null) p.volume = 0f
+        p.play(); playing = true; fade(p, 1f, 500)
+    }
+    /** Пауза с плавным затуханием (кнопка, плеер). Сразу — при звонке, наушниках и т.п. */
+    fun pause(smooth: Boolean = true) {
+        val p = exo ?: return
+        if (!smooth) { fadeJob?.cancel(); fadeJob = null; fadingOut = false; p.pause(); return }
+        fadingOut = true; playing = false
+        fade(p, 0f, 400) { if (fadingOut) { p.pause(); fadingOut = false } }
+    }
+
+    // плавное появление и затухание звука
+    private var fadeJob: kotlinx.coroutines.Job? = null
+    private var fadingOut = false
+    private fun fade(p: ExoPlayer, to: Float, ms: Long, done: (() -> Unit)? = null) {
+        fadeJob?.cancel()
+        val from = p.volume; val steps = (ms / 20).toInt().coerceAtLeast(1)
+        fadeJob = AppModel.scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            for (i in 1..steps) {
+                val k = i.toFloat() / steps; val e = k * k * (3 - 2 * k)
+                if (exo !== p) return@launch
+                p.volume = from + (to - from) * e
+                delay(20)
+            }
+            fadeJob = null
+            done?.invoke()
+        }
+    }
     fun seek(f: Float) { val p = exo ?: return; if (duration > 0) { val t = (duration * f).toLong(); p.seekTo(t); position = t } }
     fun next() {
         val i = queue.indexOfFirst { it.id == track?.id }
@@ -125,7 +155,16 @@ object Music {
     }
     fun stop() {
         ticker?.cancel(); ticker = null
-        exo?.release(); exo = null
+        fadeJob?.cancel(); fadeJob = null; fadingOut = false
+        // плавно гасим звук уходящего плеера, интерфейс закрываем сразу
+        exo?.let { old ->
+            exo = null
+            val from = old.volume
+            AppModel.scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                if (old.isPlaying) for (i in 1..17) { old.volume = from * (1 - i / 17f); delay(20) }
+                old.release()
+            }
+        }
         track = null; playing = false; position = 0; duration = 0; queue = emptyList()
     }
 }

@@ -1221,7 +1221,12 @@ object AppModel {
                 else -> { body = "$sender: $body"; ch.displayName }
             }
             if (m.kind == "capsule") body = "Капсула времени"
-            Notifier.message(ctx, m.id, if (urgent) "Срочно · $title" else title, body, m.chatId, quiet = quiet, urgent = urgent)
+            val pr = m.senderId?.let { profiles[it] }
+            val grp = ch != null && !ch.isPrivate && !ch.isChannel
+            val av = if (ch == null || ch.isPrivate) (pr?.avatarUrl ?: ch?.displayAvatar) else ch.displayAvatar
+            val col = if (ch == null || ch.isPrivate) (pr?.color ?: ch?.displayColor ?: 0) else ch.displayColor
+            Notifier.message(ctx, m.id, if (urgent) "Срочно · $title" else title, body, m.chatId, quiet = quiet, urgent = urgent,
+                avatar = av, color = col, faceName = if (ch == null || ch.isPrivate) sender else ch.displayName, sender = if (grp) sender else null)
         }
     }
 
