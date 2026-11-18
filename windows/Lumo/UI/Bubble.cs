@@ -155,7 +155,14 @@ public sealed class BubbleView : Grid
                 g.Children.Add(pl);
                 var d = T.Txt(Fmt.Duration(m.Duration), 12, T.White); d.HorizontalAlignment = HorizontalAlignment.Center; d.VerticalAlignment = VerticalAlignment.Bottom; d.Margin = new Thickness(0, 0, 0, 14);
                 g.Children.Add(d);
-                g.Tapped += (_, e) => { e.Handled = true; owner.ShowVideo(m, true); };
+                Border? nd = null;
+                if (Listened.Unheard(m, mine))
+                {
+                    nd = new Border { Width = 15, Height = 15, CornerRadius = new CornerRadius(7.5), Background = T.ChatBg, Padding = new Thickness(2.5), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 18, 18), Child = Listened.Dot(mine, 10) };
+                    ((Border)nd.Child).Background = T.Accent;
+                    g.Children.Add(nd);
+                }
+                g.Tapped += (_, e) => { e.Handled = true; Listened.Mark(m, mine, nd); owner.ShowVideo(m, true); };
                 return g;
             }
             case "voice": return new VoiceView(m, mine);
@@ -538,10 +545,13 @@ public sealed class VoiceView : Grid
     readonly FontIcon icon;
     readonly ProgressBar bar = new() { Minimum = 0, Maximum = 1, Height = 4, MinWidth = 150, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock time;
+    readonly bool mine;
+    readonly Border? dot;
 
     public VoiceView(Message m, bool mine)
     {
         this.m = m;
+        this.mine = mine;
         ColumnSpacing = 10;
         ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -556,7 +566,10 @@ public sealed class VoiceView : Grid
         bar.Background = mine ? T.B(0x44FFFFFF) : T.B(0x33FFFFFF);
         sp.Children.Add(bar);
         time = T.Txt(Fmt.Duration(m.Duration), 12, mine ? T.OutMuted : T.Muted);
-        sp.Children.Add(time);
+        var tr = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        tr.Children.Add(time);
+        if (Listened.Unheard(m, mine)) { dot = Listened.Dot(mine); tr.Children.Add(dot); }
+        sp.Children.Add(tr);
         Grid.SetColumn(sp, 1); Children.Add(sp);
     }
 
@@ -589,6 +602,7 @@ public sealed class VoiceView : Grid
         }
         if (playing != null) { playing.icon.Glyph = "\uE768"; playing.bar.Value = 0; }
         playing = this;
+        Listened.Mark(m, mine, dot);
         player.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(Net.Px(m.MediaUrl)!));
         player.Play();
         icon.Glyph = "\uE769";
