@@ -51,7 +51,7 @@ public static class Notifications
                 if (!File.Exists(file))
                 {
                     using var cts = new CancellationTokenSource(5000);
-                    var bytes = await Lumo.Core.Net.Http.GetByteArrayAsync(Lumo.Core.Net.Px(url) ?? url, cts.Token);
+                    var bytes = await Lumo.Core.Api.Http.GetByteArrayAsync(Lumo.Core.Net.Px(url) ?? url, cts.Token);
                     await File.WriteAllBytesAsync(file, bytes);
                 }
                 face = file;
