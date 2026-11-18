@@ -1157,8 +1157,8 @@ case 'sticker': bcls+=' stk'; inner=`<div class="big">${m.body&&m.body.startsWit
 case 'image': bcls+=' media'; inner=`${nameHtml?`<div class="cap">${nameHtml}${fw}</div>`:fw?`<div class="cap">${fw}</div>`:''}${replyHtml(m)}<img class="ph" src="${esc(m.media_url)}" data-view="${esc(m.media_url)}" loading="lazy" ${meta.w?`width="${meta.w}" height="${meta.h}"`:''}>${m.body?`<div class="cap"><div class="txt">${richText(m.body)}</div>${metaHtml(m)}</div>`:metaHtml(m,'ov')}`; break;
 case 'video': bcls+=' media'; inner=`${nameHtml||fw?`<div class="cap">${nameHtml}${fw}</div>`:''}${replyHtml(m)}<video class="ph" data-lsrc="${esc(m.media_url)}#t=0.1" preload="none" playsinline data-view="${esc(m.media_url)}" data-vid="1"></video>${m.body?`<div class="cap"><div class="txt">${richText(m.body)}</div>${metaHtml(m)}</div>`:metaHtml(m,'ov')}`; break;
 case 'file': inner=`${nameHtml}${fw}${replyHtml(m)}<a class="file" href="${esc(m.media_url)}" target="_blank" download="${esc(meta.name||'file')}"><span class="fi">${ic('dl')}</span><span style="min-width:0"><div class="fn">${esc(meta.name||'Файл')}</div><div class="fs">${fmtSize(meta.size)}</div></span></a>${m.body?`<div class="txt">${richText(m.body)}</div>`:''}${metaHtml(m)}`; break;
-case 'voice': inner=`${nameHtml}${fw}${replyHtml(m)}<div class="voice" data-voice="${m.id}"><button class="pp">${ic('play')}</button><div style="flex:1;min-width:0"><div class="wave">${waveHtml(meta.wave)}</div><div class="vd">${fmtDur(meta.dur)}</div></div></div>${metaHtml(m)}`; break;
-case 'video_note': bcls+=' vnb'; inner=`${fw}<div class="vn" data-vn="${m.id}"><video src="${esc(m.media_url)}#t=0.1" preload="metadata" playsinline loop muted></video><svg class="ring" viewBox="0 0 252 252"><circle cx="126" cy="126" r="123" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="773" stroke-dashoffset="773" stroke-linecap="round"/></svg><span class="muteic">${ic('play')}</span><span class="vnd">${fmtDur(meta.dur)}</span></div>${metaHtml(m)}`; break;
+case 'voice': inner=`${nameHtml}${fw}${replyHtml(m)}<div class="voice" data-voice="${m.id}"><button class="pp">${ic('play')}</button><div style="flex:1;min-width:0"><div class="wave">${waveHtml(meta.wave)}</div><div class="vdw"><div class="vd">${fmtDur(meta.dur)}</div>${lsDot(m)}</div></div></div>${metaHtml(m)}`; break;
+case 'video_note': bcls+=' vnb'; inner=`${fw}<div class="vn" data-vn="${m.id}"><video src="${esc(m.media_url)}#t=0.1" preload="metadata" playsinline loop muted></video><svg class="ring" viewBox="0 0 252 252"><circle cx="126" cy="126" r="123" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="773" stroke-dashoffset="773" stroke-linecap="round"/></svg><span class="muteic">${ic('play')}</span><span class="vnd">${fmtDur(meta.dur)}</span>${lsDot(m)}</div>${metaHtml(m)}`; break;
 case 'call': { const miss=meta.status!=='ended'; const out=me;
 inner=`<div class="callm"><span class="ci ${miss?'miss':''}">${ic(meta.video?'video':'phone')}</span><div><div style="font-weight:700">${miss?(out?'Отменённый':(meta.status==='rejected'?'Отклонённый':'Пропущенный')):(out?'Исходящий':'Входящий')} ${meta.video?'видеозвонок':'звонок'}</div><div style="font-size:13px;opacity:.75">${meta.status==='ended'?fmtDur(meta.duration):(meta.status==='rejected'?'отклонён':'без ответа')}</div></div></div>${metaHtml(m)}`; break; }
 default:{ const big=isOnlyEmoji(m.body)&&!m.reply_to; if(big){ bcls+=' stk'; inner=`<div class="big">${bemoHtml(m.body)}</div>${metaHtml(m)}`; }
@@ -1545,7 +1545,7 @@ const m=findMsg(+id); box.querySelector('.vd').textContent = playing&&playing.id
 function updVnUI(id){ const box=$(`[data-vn="${id}"]`); if(!box) return; const v=box.querySelector('video'); const isP=playing&&playing.id==id;
 box.querySelector('.muteic').style.opacity=isP?0:1; const c=box.querySelector('.ring circle'); const dd=durOf(v,id); c.style.strokeDashoffset=isP&&dd?String(773*(1-Math.min(1,v.currentTime/dd))):'773'; }
 function playVoice(id, seek){
-const m=findMsg(+id); if(!m) return;
+const m=findMsg(+id); if(!m) return; lsMark(m);
 if(playing&&playing.id==id&&playing.type==='voice'){ if(seek!=null){ const dd=durOf(playing.el,id); if(dd) try{ playing.el.currentTime=Math.max(0,Math.min(dd-0.05,seek*dd)); }catch{} playing.el.play().catch(()=>{}); } else if(playing.el.paused) playing.el.play(); else playing.el.pause(); updVoiceUI(); return; }
 stopPlaying(); const a=new Audio(pxu(m.media_url)); playing={id:+id,el:a,type:'voice'};
 a.ontimeupdate=()=>updVoiceUI(+id); a.onpause=()=>updVoiceUI(+id); a.onplay=()=>updVoiceUI(+id);
@@ -1559,7 +1559,7 @@ if(n&&n.sender_id!==S.me.id){ n.kind==='voice'?playVoice(n.id):playVn(n.id); } }
 function playVn(id){
 const box=$(`[data-vn="${id}"]`); if(!box) return; const v=box.querySelector('video');
 if(playing&&playing.id==id){ if(v.paused){v.play();} else { v.pause(); } return; }
-stopPlaying(); v.muted=false; v.loop=false; v.currentTime=0; playing={id:+id,el:v,type:'vn'};
+stopPlaying(); lsMark(findMsg(+id)); v.muted=false; v.loop=false; v.currentTime=0; playing={id:+id,el:v,type:'vn'};
 v.ontimeupdate=()=>updVnUI(id); v.onended=()=>{ playing=null; v.muted=true; v.currentTime=0; updVnUI(id); playNextVoice(+id); };
 v.onerror=()=>{ toast('Этот браузер не может воспроизвести кружок'); };
 v.play().catch(()=>{ v.muted=true; v.play().catch(()=>{}); }); updVnUI(id);
@@ -1783,7 +1783,7 @@ bumpChat(m); updateTitle();
 async function onUpdMsg(m){
 if(E2E.is(m.body)) await E2E.dec(m);
 if(m.deleted){ dropMsgs(m.chat_id,[m.id]); }
-const list=S.msgs.get(m.chat_id); if(list&&!m.deleted){ const i=list.findIndex(x=>x.id===m.id); if(i>=0){ list[i]=m; if(m.chat_id===S.cur) rerenderOne(m.id); } }
+const list=S.msgs.get(m.chat_id); if(list&&!m.deleted){ const i=list.findIndex(x=>x.id===m.id); if(i>=0){ const lbo=lsOnlyLb(list[i],m); list[i]=m; if(m.chat_id===S.cur){ if(lbo) lsRefresh(m); else rerenderOne(m.id); } } }
 if(replyCache.has(m.id)) replyCache.set(m.id,m);
 const c=S.chatMap.get(m.chat_id); if(c&&c.last_id===m.id){ c.last_body=m.body; c.last_deleted=m.deleted; renderList(); }
 if(c&&c.pinned_message_id===m.id&&m.chat_id===S.cur) renderPin();
@@ -2683,6 +2683,24 @@ function bindPremium(){ const me=S.me;
   const pb=$('#pmBot'); if(pb) pb.onclick=e=>{ e.preventDefault(); openByUsername('lumo_premium'); };
   document.querySelectorAll('[data-pf]').forEach(el=>el.onclick=()=>{ if(!me.premium) return; const k=el.dataset.pf; if(k==='emo') emojiStatusDlg(); else if(k==='px') profExtraDlg(); else if(k==='lock') setSPage('privacy'); else if(k==='look') setSPage('look'); else if(k==='bot') openByUsername('botfather'); });
   if(me.premium) sb.rpc('lm_my_premium').then(({data})=>{ const el=$('#pmSt'); if(!el||!data) return; el.textContent=data.owner?'Вы владелец Lumo — Premium включён навсегда':(data.until?('Premium активен до '+new Date(data.until).toLocaleDateString('ru-RU')):'Premium активен'); }); }
+
+/* ===== точка «не прослушано» у голосовых и кружков (meta.lb — кто прослушал) ===== */
+(function(){ if(document.getElementById('lscss')) return; const st=document.createElement('style'); st.id='lscss'; st.textContent=`
+.vdw{display:flex;align-items:center;gap:6px}.lsd{width:7px;height:7px;border-radius:50%;background:var(--a1);flex:none;transition:transform .25s,opacity .25s}
+.m.me .voice .lsd{background:#fff}.lsd.gone{transform:scale(0);opacity:0}
+.vn .lsd{position:absolute;right:20px;bottom:20px;width:13px;height:13px;border:2.5px solid var(--bg);box-sizing:content-box;background:var(--a1)}`; document.head.appendChild(st); })();
+const LS_LOCAL=new Set(), LS_SENT=new Set();
+function lsUnheard(m){ if(!m||(m.kind!=='voice'&&m.kind!=='video_note')||!(m.id>0)||!S.me) return false;
+  const lb=Array.isArray(m.meta&&m.meta.lb)?m.meta.lb:[];
+  if(m.sender_id===S.me.id){ const c=S.chatMap.get(m.chat_id); if(c&&c.type==='private'&&c.peer_id===S.me.id) return false; return lb.length===0; }
+  return !LS_LOCAL.has(m.id)&&!lb.includes(S.me.id); }
+function lsDot(m){ return lsUnheard(m)?`<span class="lsd" data-lsd="${m.id}"></span>`:''; }
+function lsMark(m){ if(!m||!S.me||m.sender_id===S.me.id||!lsUnheard(m)) return; LS_LOCAL.add(m.id);
+  document.querySelectorAll(`[data-lsd="${m.id}"]`).forEach(d=>{ d.classList.add('gone'); setTimeout(()=>d.remove(),300); });
+  if(LS_SENT.has(m.id)) return; LS_SENT.add(m.id); try{ sb.rpc('lm_voice_listen',{p_msg:m.id}).then(()=>{},()=>{}); }catch{} }
+function lsOnlyLb(a,b){ try{ if(!a||!b||a.body!==b.body||a.media_url!==b.media_url||a.deleted!==b.deleted||a.edited_at!==b.edited_at) return false;
+  const x=Object.assign({},a.meta||{}), y=Object.assign({},b.meta||{}); delete x.lb; delete y.lb; return JSON.stringify(x)===JSON.stringify(y); }catch{ return false; } }
+function lsRefresh(m){ if(!lsUnheard(m)) document.querySelectorAll(`[data-lsd="${m.id}"]`).forEach(d=>{ d.classList.add('gone'); setTimeout(()=>d.remove(),300); }); }
 
 let pmPlan=0;
 const PM_PLANS=[{t:'На 2 года',sub:'24 месяца \u00b7 2\u00a0490\u00a0\u20bd',per:'104\u00a0\u20bd/месяц',price:'2\u00a0490\u00a0\u20bd',tail:'на 2 года'},{t:'Ежегодно',badge:'\u221238%',sub:'12 месяцев \u00b7 1\u00a0490\u00a0\u20bd',per:'124\u00a0\u20bd/месяц',price:'1\u00a0490\u00a0\u20bd',tail:'на год'},{t:'Ежемесячно',sub:'',per:'199\u00a0\u20bd/месяц',price:'199\u00a0\u20bd',tail:'в месяц'}];
