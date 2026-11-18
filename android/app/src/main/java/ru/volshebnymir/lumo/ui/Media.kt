@@ -298,10 +298,11 @@ fun WaveBars(wave: List<Int>, progress: Float, mine: Boolean, modifier: Modifier
 @Composable
 fun VoiceBubble(m: Message, mine: Boolean) {
     val p = P
+    val unheard = Listened.unheard(m, mine)
     val cur = Voice.current == m.id
     LaunchedEffect(cur, Voice.playing) { while (cur && Voice.playing) { Voice.tick(); delay(80) } }
     Row(Modifier.width(252.dp).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(42.dp).clip(CircleShape).background(if (mine) Color.White.copy(alpha = 0.22f) else p.a1).bouncy { Voice.toggle(m) }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(42.dp).clip(CircleShape).background(if (mine) Color.White.copy(alpha = 0.22f) else p.a1).bouncy { Voice.toggle(m); Listened.mark(m, mine) }, contentAlignment = Alignment.Center) {
             Icon(if (cur && Voice.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(26.dp))
         }
         Spacer(Modifier.width(10.dp))
@@ -310,6 +311,9 @@ fun VoiceBubble(m: Message, mine: Boolean) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (cur) Fmt.duration(Voice.position.toDouble()) else Fmt.duration(m.duration), fontSize = 12.sp,
                     color = if (mine) Color.White.copy(alpha = 0.8f) else p.muted)
+                androidx.compose.animation.AnimatedVisibility(unheard, enter = androidx.compose.animation.scaleIn() + androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.scaleOut() + androidx.compose.animation.fadeOut()) {
+                    Box(Modifier.padding(start = 5.dp).size(7.dp).clip(CircleShape).background(if (mine) Color.White else p.a1))
+                }
                 if (cur) {
                     Spacer(Modifier.width(8.dp))
                     Text(if (Voice.speed == 1f) "1×" else if (Voice.speed == 1.5f) "1.5×" else "2×", fontSize = 11.sp, fontWeight = FontWeight.Bold,
@@ -346,23 +350,26 @@ fun TranscribeButton(mine: Boolean) {
 
 /** Видеокружок: по нажатию воспроизводится со звуком и плавно увеличивается */
 @Composable
-fun VideoNoteBubble(m: Message) {
+fun VideoNoteBubble(m: Message, mine: Boolean = false) {
     Row(verticalAlignment = Alignment.Bottom) {
-        VideoNoteCircle(m)
+        Box {
+            VideoNoteCircle(m) { Listened.mark(m, mine) }
+            if (Listened.unheard(m, mine)) Box(Modifier.align(Alignment.BottomEnd).padding(14.dp).size(13.dp).clip(CircleShape).background(P.bg).padding(2.5.dp).clip(CircleShape).background(P.a1))
+        }
         Spacer(Modifier.width(8.dp))
         TranscribeButton(false)
     }
 }
 
 @Composable
-private fun VideoNoteCircle(m: Message) {
+private fun VideoNoteCircle(m: Message, onPlay: () -> Unit = {}) {
     val p = P
     val ctx = LocalContext.current
     var playing by remember { mutableStateOf(false) }
     var prog by remember { mutableFloatStateOf(0f) }
     val size by animateDpAsState(if (playing) 270.dp else 210.dp, tween(280), label = "vn")
     val src = m.localPath ?: m.mediaUrl
-    Box(Modifier.size(size).clip(CircleShape).background(p.panel2).bouncy { playing = !playing }, contentAlignment = Alignment.Center) {
+    Box(Modifier.size(size).clip(CircleShape).background(p.panel2).bouncy { playing = !playing; if (playing) onPlay() }, contentAlignment = Alignment.Center) {
         if (playing && src != null) {
             val player = remember {
                 ru.volshebnymir.lumo.core.LumoPlayer.build(ctx).apply {

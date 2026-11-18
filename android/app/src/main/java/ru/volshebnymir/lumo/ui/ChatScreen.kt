@@ -939,7 +939,7 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
             }
             "text" -> if (bigEmo) NotoEmojiRow(m.body ?: "")
             "voice" -> VoiceBubble(m, mine)
-            "video_note" -> VideoNoteBubble(m)
+            "video_note" -> VideoNoteBubble(m, mine)
             "sticker" -> if (m.meta.has("anim")) AnimatedEmoji(m.body ?: "", 96.dp) else if (!m.mediaUrl.isNullOrEmpty()) AsyncImage(m.mediaUrl, null, Modifier.size(150.dp)) else StickerBody(m.body, 96.dp)
             "file" -> if (Music.isAudio(m.fileName)) AudioBubble(m, mine, fg, sub) else Row(verticalAlignment = Alignment.CenterVertically) {
                 val upF = AppModel.upProgress[m.id]
