@@ -185,7 +185,12 @@ final class AudioManager: ObservableObject {
         if let p = player, playing {
             if let o = timeObs { p.removeTimeObserver(o); timeObs = nil }
             player = nil
-            fade(p, to: 0, over: 0.35) { p.pause() }
+            fadeTimer?.invalidate(); fadeTimer = nil
+            let from = p.volume; var i = 0
+            Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { t in
+                i += 1; p.volume = from * (1 - Float(i) / 17)
+                if i >= 17 { t.invalidate(); p.pause() }
+            }
         }
         teardown()
         withAnimation(Self.anim) { track = nil; playing = false }
