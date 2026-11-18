@@ -51,7 +51,7 @@ public static class Music
         mp.PlaybackSession.PlaybackStateChanged += (s, _) =>
         {
             var pl = s.PlaybackState == MediaPlaybackState.Playing;
-            ui?.TryEnqueue(() => { if (Playing != pl) { Playing = pl; Changed?.Invoke(); } });
+            ui?.TryEnqueue(() => { if (fadingOut) return; if (Playing != pl) { Playing = pl; Changed?.Invoke(); } });
         };
         mp.MediaEnded += (_, _) => ui?.TryEnqueue(Next);
         return mp;
@@ -71,14 +71,48 @@ public static class Music
         Current = t; Position = 0; Length = 0;
         var p = P();
         p.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(Net.Px(t.Url)!));
-        p.Play();
+        fadingOut = false; p.Volume = 0;
+        p.Play(); FadeTo(p, 1, 600);
         Playing = true;
         Changed?.Invoke();
     }
 
     public static void Toggle() { if (Playing) Pause(); else Resume(); }
-    public static void Resume() { if (mp == null) { if (Current != null) Start(Current); return; } mp.Play(); }
-    public static void Pause() => mp?.Pause();
+    public static void Resume()
+    {
+        if (mp == null) { if (Current != null) Start(Current); return; }
+        fadingOut = false;
+        if (fade == null) mp.Volume = 0;
+        mp.Play(); FadeTo(mp, 1, 500);
+        if (!Playing) { Playing = true; Changed?.Invoke(); }
+    }
+    /// <summary>Пауза с плавным затуханием; smooth: false — сразу (звонок)</summary>
+    public static void Pause(bool smooth = true)
+    {
+        var p = mp; if (p == null) return;
+        if (!smooth) { fade?.Stop(); fade = null; fadingOut = false; p.Pause(); return; }
+        fadingOut = true;
+        if (Playing) { Playing = false; Changed?.Invoke(); }
+        FadeTo(p, 0, 400, () => { if (fadingOut) { p.Pause(); fadingOut = false; } });
+    }
+
+    // плавное появление и затухание звука
+    static Microsoft.UI.Xaml.DispatcherTimer? fade;
+    static bool fadingOut;
+    static void FadeTo(MediaPlayer p, double to, int ms, Action? done = null)
+    {
+        fade?.Stop();
+        var from = p.Volume; var steps = Math.Max(1, ms / 20); var i = 0;
+        var t = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
+        t.Tick += (_, _) =>
+        {
+            i++;
+            var k = (double)i / steps; var e = k * k * (3 - 2 * k);
+            try { p.Volume = from + (to - from) * e; } catch { }
+            if (i >= steps) { t.Stop(); if (fade == t) fade = null; done?.Invoke(); }
+        };
+        fade = t; t.Start();
+    }
     public static void Seek(double f) { if (mp == null || Length <= 0) return; Position = Length * f; mp.PlaybackSession.Position = TimeSpan.FromSeconds(Position); Tick?.Invoke(); }
     public static void Next()
     {
@@ -94,7 +128,20 @@ public static class Music
     }
     public static void Stop()
     {
-        mp?.Pause(); mp?.Dispose(); mp = null;
+        fade?.Stop(); fade = null; fadingOut = false;
+        // плавно гасим звук уходящего плеера, интерфейс закрываем сразу
+        var old = mp; mp = null;
+        if (old != null)
+        {
+            if (Playing)
+            {
+                var from = old.Volume; var i = 0;
+                var t = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
+                t.Tick += (_, _) => { i++; try { old.Volume = from * (1 - i / 17.0); } catch { } if (i >= 17) { t.Stop(); try { old.Pause(); old.Dispose(); } catch { } } };
+                t.Start();
+            }
+            else { old.Pause(); old.Dispose(); }
+        }
         Current = null; Playing = false; Position = 0; Length = 0; Queue = new();
         Changed?.Invoke();
     }

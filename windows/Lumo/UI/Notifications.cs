@@ -33,13 +33,39 @@ public static class Notifications
         if (win != null && Lumo.Core.Prefs.GetBool("notify_flash", true)) Flash(win.Hwnd);
         if (!ok) return;
         if (!Lumo.Core.Prefs.GetBool("notify_preview", true) && chatId != "call") body = "Новое сообщение";
+        _ = ShowAsync(chatId, title, body);
+    }
+
+    /// <summary>Фото собеседника (группы, канала) вместо значка приложения — круглое, как в мобильной версии</summary>
+    static async Task ShowAsync(string chatId, string title, string body)
+    {
+        string? face = null;
         try
         {
-            var n = new AppNotificationBuilder()
+            var c = Lumo.Core.Store.Chat(chatId);
+            var url = c?.DisplayAvatar;
+            if (!string.IsNullOrEmpty(url) && url.StartsWith("http"))
+            {
+                var dir = Path.Combine(Lumo.Core.Prefs.Dir, "faces"); Directory.CreateDirectory(dir);
+                var file = Path.Combine(dir, Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(url)))[..16] + ".img");
+                if (!File.Exists(file))
+                {
+                    using var cts = new CancellationTokenSource(5000);
+                    var bytes = await Lumo.Core.Net.Http.GetByteArrayAsync(Lumo.Core.Net.Px(url) ?? url, cts.Token);
+                    await File.WriteAllBytesAsync(file, bytes);
+                }
+                face = file;
+            }
+        }
+        catch (Exception e) { App.Log("notify face: " + e.Message); }
+        try
+        {
+            var b = new AppNotificationBuilder()
                 .AddArgument("chat", chatId)
                 .AddText(title.Length > 120 ? title[..120] : title)
-                .AddText(body.Length > 300 ? body[..300] + "…" : body)
-                .BuildNotification();
+                .AddText(body.Length > 300 ? body[..300] + "…" : body);
+            if (face != null) b.SetAppLogoOverride(new Uri(face), AppNotificationImageCrop.Circle);
+            var n = b.BuildNotification();
             n.Group = chatId.Length > 16 ? chatId[..16] : chatId;
             AppNotificationManager.Default.Show(n);
         }
