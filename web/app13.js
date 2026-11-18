@@ -4762,8 +4762,11 @@ function musHtml(p){ if(!p||!p.profile_music||!p.profile_music.url) return ''; c
   return `<div class="tgmus ${AU.u===m.url?'on':''}" data-mu="${esc(m.url)}"><span class="pb">${ic(AU.u===m.url?'pause':'play','f')}</span><span class="tx"><b>${esc(m.title||'Без названия')}</b>${m.artist?`<span>${esc(m.artist)}</span>`:''}</span><span class="wv"><i></i><i></i><i></i><i></i></span>${ic('tnote')}</div>`; }
 document.addEventListener('click',e=>{ const t=e.target.closest&&e.target.closest('[data-mu]'); if(!t) return; e.stopPropagation(); const u=t.dataset.mu;
   const sync=()=>document.querySelectorAll('[data-mu]').forEach(x=>{ const on=AU.u===x.dataset.mu; x.classList.toggle('on',on); x.querySelector('.pb').innerHTML=ic(on?'pause':'play','f'); });
-  if(AU.u===u){ AU.a&&AU.a.pause(); AU.u=null; sync(); return; }
-  if(AU.a) AU.a.pause(); AU.a=new Audio(pxu(u)); AU.u=u; AU.a.onended=()=>{ AU.u=null; sync(); }; AU.a.play().catch(()=>{ AU.u=null; sync(); }); sync(); },true);
+  if(AU.u===u){ AU.a&&auFade(AU.a,0,400,x=>x.pause()); AU.u=null; sync(); return; }
+  if(AU.a) auFade(AU.a,0,350,x=>x.pause()); const na=new Audio(pxu(u)); na.volume=0; AU.a=na; AU.u=u; na.onended=()=>{ AU.u=null; sync(); }; na.play().then(()=>auFade(na,1,600)).catch(()=>{ AU.u=null; sync(); }); sync(); },true);
+/* музыка включается и выключается плавно */
+function auFade(a,to,ms,done){ if(!a) return; clearInterval(a._fd); const from=a.volume, n=Math.max(1,Math.round(ms/20)); let i=0;
+  a._fd=setInterval(()=>{ i++; const k=i/n, e=k*k*(3-2*k); try{ a.volume=Math.max(0,Math.min(1,from+(to-from)*e)); }catch{} if(i>=n){ clearInterval(a._fd); a._fd=null; done&&done(a); } },20); }
 window.tgDecor=(host,p,mine)=>{ if(!host||!p) return; host.querySelector(':scope>.tgbg')?.remove(); host.querySelector(':scope>.tgmus')?.remove();
   const bg=(p.profile_bg===null||p.profile_bg===undefined)?null:+p.profile_bg; const pat=p.profile_pattern||null;
   host.classList.toggle('tgsty',bg!==null);
