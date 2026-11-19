@@ -148,7 +148,13 @@ struct VicePlaque: View {
 
 struct ViceIntro: View {
     var onDone: () -> Void
-    @State private var p1 = false, p2 = false, p3 = false, logo = false, stamp = false, flash = false, out = false
+    @State private var p1 = false
+    @State private var p2 = false
+    @State private var p3 = false
+    @State private var logo = false
+    @State private var stamp = false
+    @State private var flash = false
+    @State private var out = false
 
     var body: some View {
         GeometryReader { g in
