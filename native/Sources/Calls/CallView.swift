@@ -78,6 +78,7 @@ final class AspectVideoView: UIView, RTCVideoViewDelegate {
 
 struct CallView: View {
     @EnvironmentObject var calls: CallManager
+    @ObservedObject private var vice = ViceState.shared
     @State private var now = Date()
     /// в видеозвонке кнопки сами прячутся через 5 секунд, касание экрана возвращает их
     @State private var uiShown = true
@@ -90,7 +91,12 @@ struct CallView: View {
 
     var body: some View {
         ZStack {
-            AuroraBackground(intensity: calls.state == .active ? 0.8 : 1, speed: calls.state == .active ? 0.7 : 1.4)
+            if vice.on {
+                // временная тема: входящий — закат над океаном, разговор — ночная неоновая сетка
+                if calls.state == .incoming { ViceCallSunset() } else { ViceNightWall().ignoresSafeArea() }
+            } else {
+                AuroraBackground(intensity: calls.state == .active ? 0.8 : 1, speed: calls.state == .active ? 0.7 : 1.4)
+            }
             if calls.video && calls.state == .active { PiPAnchor().frame(width: 2, height: 2).opacity(0.01).allowsHitTesting(false) }
             if showRemote {
                 RTCVideoView(track: calls.remoteVideo).ignoresSafeArea()
@@ -105,15 +111,26 @@ struct CallView: View {
                         }
                     }
                     .frame(height: 60)
+                    if vice.on && calls.state == .incoming {
+                        VicePlaque(text: calls.video ? "Входящий видеозвонок" : "Входящий звонок").scaleEffect(1.25)
+                    }
                     ZStack {
                         if calls.state != .active { PulseRings(size: 130) }
                         AvatarView(name: calls.peerName, url: calls.peerAvatar, color: calls.peerColor, size: 130)
-                            .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 2))
-                            .shadow(color: Theme.a1.opacity(0.6), radius: 28)
+                            .overlay(Circle().stroke(vice.on ? Vice.sun : Color.white.opacity(0.35), lineWidth: vice.on ? 4 : 2))
+                            .overlay(Circle().stroke(Color(hex: 0x0c0620), lineWidth: vice.on ? 2 : 0).padding(-3))
+                            .shadow(color: vice.on ? Vice.pink.opacity(0.7) : Theme.a1.opacity(0.6), radius: 28)
                     }
                     .frame(height: 170)
-                    Text(calls.peerName).font(.system(size: 30, weight: .bold)).foregroundColor(.white)
+                    if vice.on {
+                        Text(calls.peerName.uppercased()).viceTitle(38).lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 20)
+                    } else {
+                        Text(calls.peerName).font(.system(size: 30, weight: .bold)).foregroundColor(.white)
+                    }
                     Text(statusLine).font(.headline).foregroundColor(.white.opacity(0.75))
+                    if vice.on && calls.state == .active && banner == nil {
+                        VicePlaque(text: "Отличная связь").transition(.scale.combined(with: .opacity))
+                    }
                 } else {
                     HStack {
                         Text(calls.peerName + " · " + statusLine)
@@ -259,7 +276,9 @@ struct CallView: View {
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundColor(fg)
                     .frame(width: 62, height: 62)
-                    .background(Circle().fill(color))
+                    .background(Circle().fill(vice.on && color == .white ? Vice.sun : color))
+                    // временная тема: включённые кнопки и «Завершить» — с комикс-тенью
+                    .background(Circle().fill(Color(hex: 0x0c0620)).offset(x: 3, y: 3).opacity(vice.on && (color == .white || color == Theme.danger) ? 1 : 0))
                     .id(icon)
                     .transition(.scale.combined(with: .opacity))
             }

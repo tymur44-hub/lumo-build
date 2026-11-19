@@ -17,6 +17,7 @@ struct CallGroup: Identifiable {
 struct CallsView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var calls: CallManager
+    @ObservedObject private var vice = ViceState.shared
     @State private var onlyMissed = false
     @State private var editing = false
     @State private var showNew = false
@@ -43,6 +44,9 @@ struct CallsView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            if vice.on {
+                Text("ЗВОНКИ").viceTitle(32).frame(maxWidth: .infinity).padding(.bottom, 6)
+            }
             ScrollView {
                 LazyVStack(spacing: 0, pinnedViews: []) {
                     Button { showNew = true } label: {
@@ -71,6 +75,7 @@ struct CallsView: View {
                 }
             }
         }
+        .background(alignment: .top) { if vice.on { ViceSky(height: 240).ignoresSafeArea(edges: .top) } }
         .background(Theme.bg.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .animation(.easeInOut(duration: 0.22), value: onlyMissed)

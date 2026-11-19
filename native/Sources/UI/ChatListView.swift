@@ -167,6 +167,7 @@ struct ChatListView: View {
                 if !storiesOpen { storyStack.transition(.scale(scale: 0.5).combined(with: .opacity)) }
                 if vice.on {
                     Text("ЧАТЫ").viceTitle(24).lineLimit(1).minimumScaleFactor(0.75)
+                    ViceStars(n: min(5, model.chats.filter { $0.unread > 0 && !$0.muted }.count))
                 } else {
                     Text("Чаты").font(.system(size: 18, weight: .bold)).foregroundColor(Theme.text)
                         .lineLimit(1).minimumScaleFactor(0.75)
@@ -346,9 +347,19 @@ struct ChatListView: View {
                 }
                 .frame(maxWidth: fstore.folders.isEmpty ? .infinity : nil).frame(height: 38)
                 .padding(.horizontal, fstore.folders.isEmpty ? 0 : 14)
-                .foregroundColor(Theme.text)
+                .foregroundColor(vice.on ? (folder == f && customFolder == nil ? Vice.night : .white) : Theme.text)
                 .background {
-                    if folder == f && customFolder == nil { Capsule().fill(Theme.text.opacity(0.08)).matchedGeometryEffect(id: "fold", in: foldNS) }
+                    if folder == f && customFolder == nil {
+                        if vice.on {
+                            // временная тема: выбранная папка — жёлтая плашка с тенью
+                            RoundedRectangle(cornerRadius: 10).fill(Vice.sun)
+                                .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: 0x0c0620)).offset(x: 2, y: 2))
+                                .rotationEffect(.degrees(-2)).padding(.horizontal, 4)
+                                .matchedGeometryEffect(id: "fold", in: foldNS)
+                        } else {
+                            Capsule().fill(Theme.text.opacity(0.08)).matchedGeometryEffect(id: "fold", in: foldNS)
+                        }
+                    }
                 }
                 .contentShape(Capsule())
             }

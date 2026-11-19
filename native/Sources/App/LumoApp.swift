@@ -116,6 +116,7 @@ struct RootView: View {
     @AppStorage("lm_perms_done") private var permsDone = false
     @ObservedObject private var savedAccounts = Accounts.shared
     @ObservedObject private var rc = RemoteConfig.shared
+    @State private var viceIntro = Vice.on
 
     var body: some View {
         ZStack {
@@ -134,6 +135,8 @@ struct RootView: View {
             PlaqueOverlay()
             if !permsDone { PermissionsView { withAnimation(Motion.snappy) { permsDone = true } }.transition(.opacity) }
             MiniNoteOverlay()
+            // временная тема: комикс-вступление при запуске
+            if viceIntro { ViceIntro { viceIntro = false }.zIndex(30) }
             if rc.needsUpdate { UpdateRequiredScreen().transition(.opacity).zIndex(10) }
             if let t = model.toast {
                 VStack {

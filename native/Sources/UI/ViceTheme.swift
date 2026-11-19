@@ -143,3 +143,138 @@ struct VicePlaque: View {
             .rotationEffect(.degrees(-2))
     }
 }
+
+// MARK: - Вступление при запуске: комикс-панели, LUMO и плашка VICE NIGHTS
+
+struct ViceIntro: View {
+    var onDone: () -> Void
+    @State private var p1 = false, p2 = false, p3 = false, logo = false, stamp = false, flash = false, out = false
+
+    var body: some View {
+        GeometryReader { g in
+            let w = g.size.width, h = g.size.height
+            ZStack {
+                Color(hex: 0x140a2e)
+                panel { ViceSky(height: h * 0.46).frame(maxHeight: .infinity, alignment: .bottom) }
+                    .frame(width: w * 0.68, height: h * 0.46)
+                    .rotationEffect(.degrees(p1 ? -4 : -12))
+                    .offset(x: p1 ? -w * 0.2 : -w * 0.6, y: p1 ? -h * 0.28 : -h * 0.4)
+                    .opacity(p1 ? 1 : 0)
+                panel { VicePalmArt() }
+                    .frame(width: w * 0.56, height: h * 0.44)
+                    .rotationEffect(.degrees(p2 ? 5 : 14))
+                    .offset(x: p2 ? w * 0.26 : w * 0.8, y: p2 ? -h * 0.02 : 0)
+                    .opacity(p2 ? 1 : 0)
+                panel { ViceNightWall() }
+                    .frame(width: w * 0.76, height: h * 0.4)
+                    .rotationEffect(.degrees(p3 ? 3 : -6))
+                    .offset(x: p3 ? -w * 0.16 : -w * 0.4, y: p3 ? h * 0.33 : h * 0.6)
+                    .opacity(p3 ? 1 : 0)
+                VStack(spacing: 14) {
+                    Text("LUMO")
+                        .font(.system(size: min(w * 0.3, 150), weight: .black).width(.condensed))
+                        .foregroundStyle(LinearGradient(colors: [Color(hex: 0xffe58a), Color(hex: 0xffb347), Color(hex: 0xff4f8b)], startPoint: .top, endPoint: .bottom))
+                        .shadow(color: Color(hex: 0x140a2e), radius: 0, x: 3, y: 3)
+                        .shadow(color: Color(hex: 0x140a2e), radius: 0, x: 7, y: 7)
+                        .shadow(color: Color(hex: 0xff4f8b).opacity(0.6), radius: 24)
+                        .rotationEffect(.degrees(logo ? -4 : -10))
+                        .scaleEffect(logo ? 1 : 2.6)
+                        .opacity(logo ? 1 : 0)
+                    VicePlaque(text: "Vice Nights")
+                        .scaleEffect(stamp ? 1.5 : 2.4)
+                        .rotationEffect(.degrees(stamp ? 5 : 12))
+                        .opacity(stamp ? 1 : 0)
+                }
+                Color.white.opacity(flash ? 0.85 : 0).allowsHitTesting(false)
+            }
+            .frame(width: w, height: h)
+            .mask(Rectangle().offset(x: out ? w * 1.1 : 0))
+        }
+        .ignoresSafeArea()
+        .contentShape(Rectangle())
+        .onTapGesture { finish() }
+        .accessibilityHidden(true)
+        .onAppear {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.72).delay(0.05)) { p1 = true }
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.72).delay(0.2)) { p2 = true }
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.72).delay(0.35)) { p3 = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                flash = true
+                withAnimation(.easeOut(duration: 0.35)) { flash = false }
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.55)) { logo = true }
+            }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.5).delay(1.0)) { stamp = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.15) { finish() }
+        }
+    }
+
+    private func finish() {
+        guard !out else { return }
+        withAnimation(.easeInOut(duration: 0.5)) { out = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { onDone() }
+    }
+
+    private func panel<C: View>(@ViewBuilder _ c: () -> C) -> some View {
+        c().clipped()
+            .overlay(Rectangle().stroke(Color(hex: 0x0c0620), lineWidth: 4))
+            .padding(5).background(Color.white)
+            .shadow(color: .black.opacity(0.35), radius: 0, x: 10, y: 10)
+    }
+}
+
+/// Неоновые пальмы для вступления
+struct VicePalmArt: View {
+    var body: some View {
+        Canvas { ctx, size in
+            let w = size.width, h = size.height
+            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(hex: 0x0f0828)))
+            ctx.fill(Path(ellipseIn: CGRect(x: w * 0.55, y: h * 0.12, width: w * 0.36, height: w * 0.36)), with: .color(Color(hex: 0xff4f8b).opacity(0.18)))
+            func palm(_ x: CGFloat, _ top: CGFloat, _ c: Color, _ lw: CGFloat, _ len: CGFloat) {
+                var t = Path(); t.move(to: CGPoint(x: x, y: h)); t.addQuadCurve(to: CGPoint(x: x + 22, y: top), control: CGPoint(x: x + 4, y: (h + top) / 2))
+                ctx.stroke(t, with: .color(c), style: StrokeStyle(lineWidth: lw, lineCap: .round))
+                let tip = CGPoint(x: x + 22, y: top)
+                for a: CGFloat in [-160, -125, -95, -60, -25, 10] {
+                    let r: CGFloat = a * .pi / 180
+                    var l = Path(); l.move(to: tip)
+                    l.addQuadCurve(to: CGPoint(x: tip.x + cos(r) * len, y: tip.y + sin(r) * len * 0.55 + len * 0.3),
+                                   control: CGPoint(x: tip.x + cos(r) * len * 0.6, y: tip.y + sin(r) * len * 0.6 - 8))
+                    ctx.stroke(l, with: .color(c), style: StrokeStyle(lineWidth: lw * 0.85, lineCap: .round))
+                }
+            }
+            palm(w * 0.5, h * 0.36, Color(hex: 0xff4f8b), 6, w * 0.3)
+            palm(w * 0.2, h * 0.62, Color(hex: 0x2fd6d0).opacity(0.85), 5, w * 0.2)
+        }
+    }
+}
+
+/// Звёзды «уровня розыска» — сколько чатов с непрочитанными (до пяти)
+struct ViceStars: View {
+    let n: Int
+    @State private var pulse = false
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(0..<5, id: \.self) { i in
+                Image(systemName: "star.fill").font(.system(size: 11, weight: .bold))
+                    .foregroundColor(i < n ? Vice.sun : Color.white.opacity(0.3))
+                    .shadow(color: i < n ? Vice.sun.opacity(0.9) : .clear, radius: 3)
+                    .scaleEffect(i < n && pulse ? 1.15 : 1)
+                    .animation(.easeInOut(duration: 0.7).repeatForever().delay(Double(i) * 0.12), value: pulse)
+            }
+        }
+        .onAppear { pulse = true }
+        .accessibilityLabel("Чатов с непрочитанными: \(n)")
+    }
+}
+
+/// Закат с океаном для входящего звонка
+struct ViceCallSunset: View {
+    var body: some View {
+        GeometryReader { g in
+            ZStack(alignment: .top) {
+                ViceNightWall()
+                ViceSky(height: g.size.height * 0.82)
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
