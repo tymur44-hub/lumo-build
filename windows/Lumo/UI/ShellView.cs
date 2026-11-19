@@ -49,6 +49,21 @@ public sealed class ShellView : Grid
         head.Children.Add(meBtn);
         var title = T.Txt("Чаты", 20, bold: true); title.VerticalAlignment = VerticalAlignment.Center; title.Margin = new Thickness(12, 0, 0, 0);
         Grid.SetColumn(title, 1); head.Children.Add(title);
+        // временная тема: закат за шапкой и неоновый заголовок
+        UIElement? sky = null;
+        void ApplyVice()
+        {
+            if (sky != null) { left.Children.Remove(sky); sky = null; }
+            if (Vice.On)
+            {
+                sky = Vice.Sky(); Grid.SetRowSpan((FrameworkElement)sky, 5); left.Children.Insert(0, sky);
+                title.Text = "ЧАТЫ"; title.FontFamily = Vice.TitleFont; title.FontSize = 26; title.CharacterSpacing = 40;
+            }
+            else { title.Text = "Чаты"; title.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI"); title.FontSize = 20; title.CharacterSpacing = 0; }
+        }
+        ApplyVice();
+        Vice.Changed += () => DispatcherQueue.TryEnqueue(ApplyVice);
+        _ = Vice.Refresh();
         var tools = new StackPanel { Orientation = Orientation.Horizontal };
         var newBtn = T.IconButton("\uE710", "Новый чат, группа или канал", () => { });
         newBtn.Click += (_, _) => NewMenu().ShowAt(newBtn);

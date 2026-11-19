@@ -47,6 +47,27 @@ public sealed class LookWeb : Grid, IFillPage
     public LookWeb()
     {
         Background = T.ChatBg;
+        RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        if (Vice.Available)
+        {
+            // временная тема: переключатель над страницей оформления
+            var row = new Grid { Margin = new Thickness(16, 12, 16, 4), Padding = new Thickness(14, 10, 10, 10), CornerRadius = new CornerRadius(14), Background = T.Panel2 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var ic = new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(9), Background = Vice.OutBrush, Child = T.Icon("\uE706", 16, T.White) };
+            row.Children.Add(ic);
+            var tx = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            tx.Children.Add(T.Txt("Vice Nights", 15, bold: true));
+            tx.Children.Add(T.Txt("Закат, неон и пальмы — до 1 декабря", 12.5, T.Muted));
+            Grid.SetColumn(tx, 1); row.Children.Add(tx);
+            var sw = new ToggleSwitch { IsOn = !Vice.Off, OnContent = "", OffContent = "", MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
+            sw.Toggled += (_, _) => Vice.SetOff(!sw.IsOn);
+            Grid.SetColumn(sw, 2); row.Children.Add(sw);
+            Children.Add(row);
+        }
+        Grid.SetRow(web, 1);
         Children.Add(web);
         Loaded += async (_, _) => { if (!ready) await Init(); };
     }
@@ -99,11 +120,14 @@ public sealed class WallLayer : Grid
     WebView2? web;
     int shown = -1;
 
+    UIElement? vice;
+
     public WallLayer()
     {
         IsHitTestVisible = false;
-        Loaded += (_, _) => { Look.Changed += Apply; Apply(); };
-        Unloaded += (_, _) => { Look.Changed -= Apply; Drop(); };
+        Action again = () => { shown = -1; Apply(); };
+        Loaded += (_, _) => { Look.Changed += Apply; Vice.Changed += again; Apply(); };
+        Unloaded += (_, _) => { Look.Changed -= Apply; Vice.Changed -= again; Drop(); };
     }
 
     void Drop() { if (web != null) { Children.Remove(web); try { web.Close(); } catch { } web = null; } shown = -1; }
@@ -112,7 +136,15 @@ public sealed class WallLayer : Grid
     {
         var n = Look.Wall;
         if (n == shown) return;
-        if (n == 0 || (Look.IsPremium(n) && Store.Me?.Premium != true)) { Drop(); shown = n; return; }
+        if (n == 0 || (Look.IsPremium(n) && Store.Me?.Premium != true))
+        {
+            Drop(); shown = n;
+            // временная тема вместо стандартного фона (свои обои не трогаем)
+            if (vice != null) { Children.Remove(vice); vice = null; }
+            if (Vice.On) { vice = Vice.NightWall(); Children.Insert(0, vice); }
+            return;
+        }
+        if (vice != null) { Children.Remove(vice); vice = null; }
         shown = n;
         try
         {

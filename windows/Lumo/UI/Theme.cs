@@ -27,7 +27,7 @@ public static class T
     }
 
     public static Brush Accent => Grad(0xFF7C5CFF, 0xFF22C1FF);
-    public static Brush Out => Grad(0xFF6A4CF5, 0xFF3A7BFF);
+    public static Brush Out => Vice.On ? Vice.OutBrush : Grad(0xFF6A4CF5, 0xFF3A7BFF);
 
     static readonly (uint, uint)[] pairs =
     {

@@ -324,9 +324,13 @@ public sealed class ChatView : Grid
             var day = m.CreatedAt.LocalDateTime.Date;
             if (prevDay == null || prevDay.Value.LocalDateTime.Date != day)
             {
-                var pill = new Border { Background = T.B(0x26FFFFFF), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 4, 12, 4), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 6) };
-                pill.Child = T.Txt(Fmt.Day(m.CreatedAt), 12.5);
-                children.Add(pill);
+                if (Vice.On) children.Add(Vice.Plaque(Fmt.Day(m.CreatedAt)));
+                else
+                {
+                    var pill = new Border { Background = T.B(0x26FFFFFF), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 4, 12, 4), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 6) };
+                    pill.Child = T.Txt(Fmt.Day(m.CreatedAt), 12.5);
+                    children.Add(pill);
+                }
                 prev = null;
             }
             prevDay = m.CreatedAt;
