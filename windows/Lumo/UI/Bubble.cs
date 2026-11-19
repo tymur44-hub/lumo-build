@@ -119,6 +119,25 @@ public sealed class BubbleView : Grid
         return g;
     }
 
+    /// <summary>Подарок в чате: картинка, название, редкость и номер</summary>
+    FrameworkElement GiftCard(Message m, Brush fg)
+    {
+        var id = m.Meta.Str("gift_id") ?? "";
+        var rarity = m.Meta.Str("rarity") ?? "";
+        var sp = new StackPanel { Spacing = 6, Width = 220 };
+        var box = new Border { Width = 200, Height = 200, CornerRadius = new CornerRadius(18), HorizontalAlignment = HorizontalAlignment.Center };
+        box.Child = Gifts.Art(id, 200);
+        if (Gifts.Svg(id) == null && !File.Exists(Path.Combine(AppContext.BaseDirectory, "Assets", "gifts", "gift_" + id + ".png")))
+            ((Func<Task>)(async () => { try { await Gifts.LoadCatalog(); box.Child = Gifts.Art(id, 200); } catch { } }))();
+        sp.Children.Add(box);
+        sp.Children.Add(T.Txt(m.Meta.Str("name") ?? "Подарок", 15, fg, bold: true));
+        var serial = m.Meta.Long("serial"); var supply = m.Meta.Long("supply");
+        var line = Gifts.RarityName(rarity) + (serial is > 0 ? " · №" + serial + (supply is > 0 ? " из " + supply : "") : "");
+        var tag = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(8, 3, 8, 3), Background = Gifts.RarityBrush(rarity), HorizontalAlignment = HorizontalAlignment.Left, Child = T.Txt(line, 12, T.White, bold: true) };
+        sp.Children.Add(tag);
+        return sp;
+    }
+
     FrameworkElement Content(Message m, bool big)
     {
         var fg = mine ? T.White : T.Text;
@@ -168,6 +187,7 @@ public sealed class BubbleView : Grid
             case "voice": return new VoiceView(m, mine);
             case "game": return GameCard(m);
             case "dice": return ThrowCard(m);
+            case "gift": return GiftCard(m, fg);
             case "file": return Music.IsAudio(m.FileName) && !m.Pending ? new AudioView(m, mine, fg) : FileView(m, fg);
             case "call":
             {
