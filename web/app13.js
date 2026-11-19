@@ -2792,6 +2792,7 @@ body.vice #splash .mark{background:linear-gradient(135deg,#ff4f8b,#ff8a3d);box-s
   const offNow=()=>{ try{ return localStorage.getItem('vice_off')==='1'; }catch{ return false; } };
   const meta=document.querySelector('meta[name="theme-color"]'); const meta0=meta&&meta.getAttribute('content');
   function intro(){
+    if(window.LUMO_VICE_INDEX) return;   // вступление уже показывает страница при запуске
     try{ if(sessionStorage.getItem('vice_intro')) return; sessionStorage.setItem('vice_intro','1'); }catch{}
     if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const o=document.createElement('div'); o.id='vintro'; o.setAttribute('aria-hidden','true');
