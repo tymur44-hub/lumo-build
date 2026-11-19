@@ -2758,6 +2758,17 @@ body.vice #composer .cbox{box-shadow:0 0 0 1px rgba(47,214,208,.45),0 0 18px rgb
 body.vice #toast{border:2px solid #140a2e;box-shadow:4px 4px 0 #140a2e;background:#ffd36b;color:#140a2e}
 /* заставка при запуске */
 body.vice #splash{visibility:hidden!important}
+/* звонки */
+body.vice #call{background:${NIGHT} center/cover no-repeat,linear-gradient(180deg,#1a0b3a,#2b0f4f 45%,#4a1559 72%,#6b1d55)}
+body.vice #call:has(#cAcc){background:${SKY} center bottom/100% 82% no-repeat,${NIGHT} center/cover no-repeat,#140a2e}
+body.vice #call .cinfo h2{font-family:Anton,Impact,sans-serif;font-weight:400;font-size:42px;letter-spacing:1px;text-transform:uppercase;text-shadow:0 3px 0 #2a0f52,0 0 18px rgba(255,79,139,.8)}
+body.vice #call .cinfo .av{box-shadow:0 0 0 4px #ffd36b,0 0 0 7px #0c0620,0 0 40px rgba(255,79,139,.7)}
+body.vice #call:has(#cAcc) .cinfo::before{content:'ВХОДЯЩИЙ ЗВОНОК';display:inline-block;margin-bottom:18px;padding:5px 14px;background:#ffd36b;color:#140a2e;font-family:Anton,Impact,sans-serif;font-size:17px;letter-spacing:1.2px;border-radius:6px;box-shadow:4px 4px 0 #0c0620;transform:rotate(-3deg);text-shadow:none}
+body.vice #call .cinfo p:has(#ctime)::after{content:'ОТЛИЧНАЯ СВЯЗЬ';display:block;width:max-content;margin:12px auto 0;padding:4px 12px;background:#ffd36b;color:#140a2e;font-family:Anton,Impact,sans-serif;font-size:14px;letter-spacing:1px;border-radius:6px;box-shadow:3px 3px 0 #0c0620;transform:rotate(-2deg);text-shadow:none;opacity:1}
+body.vice #call .cbtns button{background:rgba(22,10,48,.45);border:1px solid rgba(255,255,255,.22)}
+body.vice #call .cbtns button.off{background:#ffd36b;color:#140a2e;border:0;box-shadow:3px 3px 0 #0c0620}
+body.vice #call .cbtns button.end{background:linear-gradient(135deg,#ff3b5c,#ff8a3d);border:0;box-shadow:0 0 0 2px #0c0620,4px 4px 0 2px #0c0620}
+body.vice #call .cbtns button.acc{background:#2bd67b;border:0;box-shadow:0 0 0 2px #0c0620,4px 4px 0 2px #0c0620}
 /* переключатель в «Оформлении» */
 .vicesw{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:var(--panel2);margin:10px 14px;cursor:pointer}
 .vicesw .ic{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#ff4f8b,#ff8a3d);display:flex;align-items:center;justify-content:center;flex:none}
