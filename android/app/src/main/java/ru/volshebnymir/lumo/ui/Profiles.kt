@@ -962,6 +962,19 @@ fun AppearanceScreen() {
     val p = P
     Column(Modifier.fillMaxSize().background(p.bg).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         TopBar("Оформление")
+        if (Vice.available) Card {
+            Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(Vice.outBrush), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.WbTwilight, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                }
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    Text("Vice Nights", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text("Закат, неон и пальмы — до 1 декабря", color = p.muted, fontSize = 12.5.sp)
+                }
+                androidx.compose.material3.Switch(!Vice.off, { Vice.setOff(!it) },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Vice.pink))
+            }
+        }
         Card {
             Text("Тема", color = p.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
             Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

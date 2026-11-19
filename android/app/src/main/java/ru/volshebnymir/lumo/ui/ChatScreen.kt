@@ -746,6 +746,7 @@ private fun PinnedBar(chat: ChatItem?, chatId: String, onTap: (Int) -> Unit) {
 @Composable
 private fun DayChip(d: Date) {
     val p = P
+    if (Vice.on) { Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) { VicePlaque(Fmt.day(d)) }; return }
     Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
         Text(Fmt.day(d), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.38f)).padding(horizontal = 12.dp, vertical = 4.dp))
@@ -882,7 +883,7 @@ private fun Bubble(m: Message, chat: ChatItem?, mine: Boolean, showName: Boolean
     val shape = if (mine) RoundedCornerShape(r, r, if (tail) small else r, r) else RoundedCornerShape(r, r, r, if (tail) small else r)
     val fg = if (mine) Color.White else p.text
     val sub = if (mine) Color.White.copy(alpha = 0.75f) else p.muted
-    val mod = if (bare) Modifier else Modifier.clip(shape).background(if (mine) (Extra.bubBrush(m.chatId) ?: p.out) else SolidColor(p.bubble))
+    val mod = if (bare) Modifier else Modifier.clip(shape).background(if (mine) (Extra.bubBrush(m.chatId) ?: (if (Vice.on) Vice.outBrush else p.out)) else SolidColor(p.bubble))
         .padding(if (m.kind == "image" || m.kind == "video") 4.dp else 10.dp, if (m.kind == "image" || m.kind == "video") 4.dp else 7.dp)
     Column(mod) {
         val pad = if (m.kind == "image" || m.kind == "video") Modifier.padding(horizontal = 6.dp, vertical = 2.dp) else Modifier

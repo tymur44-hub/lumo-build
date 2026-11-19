@@ -74,6 +74,7 @@ fun ChatWallBackground(chatId: String) {
         WallLayer(cw.preset, p)
         if (cw.dim > 0) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = cw.dim / 100f)))
     } else if (Extra.wall != 0 && (!wallIsPremium(Extra.wall) || AppModel.isPremium)) WallLayer(Extra.wall, p)
+    else if (Vice.on) ViceNightWall()   // временная тема вместо стандартного фона (свои обои не трогаем)
 }
 
 /** Обои для этого чата: только для себя или для себя и собеседника (как в Telegram) */

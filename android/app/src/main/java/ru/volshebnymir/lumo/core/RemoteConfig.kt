@@ -70,6 +70,14 @@ object RemoteConfig {
             a.optString("url").ifBlank { null }, a.optString("button").ifBlank { null })
     }
 
+    /** id временной темы (look.event), пока её срок не вышел */
+    val eventTheme: String? get() {
+        val e = look.optJSONObject("event") ?: return null
+        val id = e.optString("id").ifBlank { return null }
+        e.optString("until").ifBlank { null }?.let { u -> runCatching { java.time.Instant.parse(u) }.getOrNull()?.let { if (it.isBefore(java.time.Instant.now())) return null } }
+        return id
+    }
+
     // оформление
     private fun hex(s: String?): Long? {
         val h = s?.removePrefix("#") ?: return null

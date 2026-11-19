@@ -439,7 +439,7 @@ fun ChatListScreen() {
         }
     }
     if (emojiDlg) EmojiPickerDialog { emojiDlg = false }
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+    Column(Modifier.fillMaxSize().then(if (Vice.on) Modifier.viceSky() else Modifier).statusBarsPadding()) {
         NetStatusBar()
         MiniPlayerBar()
         BirthdayBar()
@@ -458,7 +458,8 @@ fun ChatListScreen() {
                 androidx.compose.animation.AnimatedVisibility(!storiesOpen && AppModel.stories.isNotEmpty(),
                     enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.5f),
                     exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.5f)) { StoryStack() }
-                Text("Чаты", color = p.text, fontWeight = FontWeight.Bold, fontSize = 19.sp, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 6.dp))
+                if (Vice.on) Text("ЧАТЫ", style = viceTitleStyle, fontSize = 25.sp, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 6.dp))
+                else Text("Чаты", color = p.text, fontWeight = FontWeight.Bold, fontSize = 19.sp, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 6.dp))
                 val me = AppModel.me
                 if (me?.premium == true) Box(Modifier.padding(start = 6.dp).clip(CircleShape).bouncy { emojiDlg = true }.padding(2.dp)) {
                     val es = me.emojiStatus
