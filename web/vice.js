@@ -56,7 +56,7 @@ body.vice #toast{border:2px solid #140a2e;box-shadow:4px 4px 0 #140a2e;backgroun
 body.vice #splash{visibility:hidden!important}
 /* звонки */
 body.vice #call{background:${NIGHT} center/cover no-repeat,linear-gradient(180deg,#1a0b3a,#2b0f4f 45%,#4a1559 72%,#6b1d55)}
-body.vice #call:has(#cAcc){background:${SKY} center bottom/100% 82% no-repeat,${NIGHT} center/cover no-repeat,#140a2e}
+body.vice #call:has(#cAcc){background:${SKY} center bottom/cover no-repeat,${NIGHT} center/cover no-repeat,#140a2e}
 body.vice #call .cinfo h2{font-family:Anton,Impact,sans-serif;font-weight:400;font-size:42px;letter-spacing:1px;text-transform:uppercase;text-shadow:0 3px 0 #2a0f52,0 0 18px rgba(255,79,139,.8)}
 body.vice #call .cinfo .av{box-shadow:0 0 0 4px #ffd36b,0 0 0 7px #0c0620,0 0 40px rgba(255,79,139,.7)}
 body.vice #call:has(#cAcc) .cinfo::before{content:'ВХОДЯЩИЙ ЗВОНОК';display:inline-block;margin-bottom:18px;padding:5px 14px;background:#ffd36b;color:#140a2e;font-family:Anton,Impact,sans-serif;font-size:17px;letter-spacing:1.2px;border-radius:6px;box-shadow:4px 4px 0 #0c0620;transform:rotate(-3deg);text-shadow:none}
