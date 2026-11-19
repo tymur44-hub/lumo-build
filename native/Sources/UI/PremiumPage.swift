@@ -394,7 +394,13 @@ struct AppIconSheet: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var cur: String? = UIApplication.shared.alternateIconName
-    private let icons: [(String?, String, String)] = [
+    private var icons: [(String?, String, String)] {
+        var l = baseIcons
+        // иконка события Vice Nights — бесплатно для всех, пока идёт событие (или если уже стоит)
+        if Vice.available || UIApplication.shared.alternateIconName == "AppIcon-vice" { l.insert(("AppIcon-vice", "Vice Nights", "IconPrev-vice"), at: 1) }
+        return l
+    }
+    private let baseIcons: [(String?, String, String)] = [
         (nil, "Классика", "IconPrev-classic"), ("AppIcon-gold", "Золото", "IconPrev-gold"), ("AppIcon-aurora", "Аврора", "IconPrev-aurora"),
         ("AppIcon-midnight", "Полночь", "IconPrev-midnight"), ("AppIcon-sakura", "Сакура", "IconPrev-sakura"), ("AppIcon-neon", "Неон", "IconPrev-neon"),
     ]
@@ -429,7 +435,7 @@ struct AppIconSheet: View {
     }
 
     private func pick(_ name: String?) {
-        if name != nil && !model.isPremium { model.askPremium(); return }
+        if name != nil && name != "AppIcon-vice" && !model.isPremium { model.askPremium(); return }
         UIApplication.shared.setAlternateIconName(name) { err in
             DispatchQueue.main.async {
                 if let err = err { model.say(err.localizedDescription) } else { cur = name }

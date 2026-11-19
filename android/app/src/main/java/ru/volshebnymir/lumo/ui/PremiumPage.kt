@@ -423,6 +423,7 @@ private val ICONS = listOf(
     Triple("Midnight", "Полночь", ru.volshebnymir.lumo.R.drawable.ic_alt_midnight),
     Triple("Sakura", "Сакура", ru.volshebnymir.lumo.R.drawable.ic_alt_sakura),
     Triple("Neon", "Неон", ru.volshebnymir.lumo.R.drawable.ic_alt_neon),
+    Triple("Vice", "Vice Nights", ru.volshebnymir.lumo.R.drawable.ic_alt_vice),
 )
 
 private fun iconComponent(ctx: android.content.Context, k: String) = android.content.ComponentName(ctx.packageName, "ru.volshebnymir.lumo.Icon$k")
@@ -452,11 +453,11 @@ fun AppIconDialog(onClose: () -> Unit) {
         Column(Modifier.clip(RoundedCornerShape(26.dp)).background(p.panel).padding(18.dp)) {
             Text("Иконка приложения", color = p.text, fontWeight = FontWeight.Black, fontSize = 20.sp)
             Text("Иконка на экране телефона поменяется. Лаунчер может обновить её через несколько секунд.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
-            ICONS.chunked(3).forEach { row ->
+            ICONS.filter { it.first != "Vice" || Vice.available || cur == "Vice" }.chunked(3).forEach { row ->
                 Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     row.forEach { (k, title, res) ->
                         Column(Modifier.clip(RoundedCornerShape(16.dp)).bouncy {
-                            if (k != "Classic" && !AppModel.isPremium) AppModel.askPremium()
+                            if (k != "Classic" && k != "Vice" && !AppModel.isPremium) AppModel.askPremium()
                             else { applyIcon(ctx, k); cur = k }
                         }.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(res), null,
