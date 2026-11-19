@@ -82,6 +82,7 @@ public sealed class MainWindow : Window
         Grid.SetRowSpan(toast, 2);
         root.Children.Add(toast);
         Content = root;
+        if (Vice.On) ShowViceIntro();
 
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         try
@@ -298,5 +299,33 @@ public sealed class MainWindow : Window
         toastCts?.Cancel(); var c = new CancellationTokenSource(); toastCts = c;
         try { await Task.Delay(2600, c.Token); } catch { return; }
         toast.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>Временная тема Vice Nights: комикс-вступление поверх окна при запуске</summary>
+    void ShowViceIntro()
+    {
+        try
+        {
+            var web = new Microsoft.UI.Xaml.Controls.WebView2 { DefaultBackgroundColor = Windows.UI.Color.FromArgb(255, 0x14, 0x0A, 0x2E) };
+            Grid.SetRowSpan(web, 2);
+            root.Children.Add(web);
+            void Close() { if (root.Children.Contains(web)) { root.Children.Remove(web); try { web.Close(); } catch { } } }
+            var guard = DispatcherQueue.CreateTimer(); guard.Interval = TimeSpan.FromSeconds(6); guard.IsRepeating = false; guard.Tick += (_, _) => Close(); guard.Start();
+            _ = Task.Run(async () =>
+            {
+                await Task.Yield();
+                DispatcherQueue.TryEnqueue(async () =>
+                {
+                    try
+                    {
+                        await WebEnv.Setup(web);
+                        web.CoreWebView2.WebMessageReceived += (_, _) => Close();
+                        web.CoreWebView2.Navigate("https://lumo.app.local/vice-intro.html");
+                    }
+                    catch { Close(); }
+                });
+            });
+        }
+        catch (Exception e) { App.Log("vice intro: " + e.Message); }
     }
 }

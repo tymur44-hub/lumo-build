@@ -45,7 +45,7 @@ public sealed class CallHost
             var cw = web.CoreWebView2;
             cw.Settings.AreDefaultContextMenusEnabled = false;
             cw.WebMessageReceived += (_, e) => OnMessage(e.WebMessageAsJson);
-            web.Source = new Uri("https://lumo.app.local/call.html");
+            web.Source = new Uri("https://lumo.app.local/call.html" + (Vice.On ? "#vice" : ""));
         }
         catch (Exception e)
         {

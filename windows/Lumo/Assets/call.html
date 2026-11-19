@@ -49,6 +49,23 @@ html,body{height:100%;background:transparent;color:var(--text);font-family:"Sego
 #gtitle{position:absolute;left:0;right:0;top:22px;text-align:center;font-size:17px;font-weight:600;display:none}
 #call.grp #gtitle{display:block}
 #code{position:absolute;left:50%;transform:translateX(-50%);top:18px;font-size:12px;color:var(--muted);background:rgba(0,0,0,.3);padding:5px 12px;border-radius:99px;display:none}
+
+/* временная тема Vice Nights (до 1 декабря) */
+#call.vice{background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800' preserveAspectRatio='xMidYMid slice'><g stroke='%232fd6d0' stroke-opacity='.18'><path d='M0 500H800M0 520H800M0 550H800M0 590H800M0 640H800M0 700H800M0 770H800'/></g><g stroke='%23ff4f8b' stroke-opacity='.16'><path d='M400 500V800M370 500L190 800M340 500L-20 800M430 500L610 800M460 500L820 800M310 500L-230 800M490 500L1030 800'/></g><g stroke='%23ff9a3d' stroke-opacity='.18' fill='none' stroke-linecap='round'><path stroke-width='7' d='M640 500C640 420 634 340 620 250'/><path stroke-width='6' d='M620 250C600 236 572 240 556 258M620 250C640 228 672 228 692 242M620 250C610 222 590 210 570 212M620 250C646 254 662 274 668 296M620 250C602 262 588 284 586 306'/></g></svg>") center/cover no-repeat,linear-gradient(180deg,#1a0b3a,#2b0f4f 45%,#4a1559 72%,#6b1d55)}
+#call.vice.inc{background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 390 260' preserveAspectRatio='xMidYMax slice'><defs><linearGradient id='s' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%232a0f52'/><stop offset='.35' stop-color='%236d2483'/><stop offset='.62' stop-color='%23ff4f8b'/><stop offset='.84' stop-color='%23ff9a3d'/><stop offset='1' stop-color='%23ffd36b'/></linearGradient><linearGradient id='u' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%23ffe58a'/><stop offset='1' stop-color='%23ff8a3d'/></linearGradient><clipPath id='c'><circle cx='195' cy='238' r='62'/></clipPath></defs><rect width='390' height='260' fill='url(%23s)'/><g clip-path='url(%23c)'><rect x='130' y='176' width='130' height='90' fill='url(%23u)'/><g fill='%23ff4f8b' opacity='.9'><rect x='130' y='222' width='130' height='3'/><rect x='130' y='232' width='130' height='4'/><rect x='130' y='243' width='130' height='5'/><rect x='130' y='254' width='130' height='6'/></g></g><path fill='%231a0b33' d='M0 260 L0 236 L26 236 L26 222 L44 222 L44 232 L62 232 L62 204 L78 204 L78 232 L110 232 L110 226 L128 226 L128 244 L262 244 L262 212 L274 212 L274 194 L284 194 L284 212 L298 212 L298 230 L330 230 L330 218 L350 218 L350 234 L390 234 L390 260 Z'/><g stroke='%23120826' fill='none' stroke-linecap='round'><path stroke-width='5' d='M34 260 C36 230 40 190 48 156'/><path stroke-width='4.5' d='M48 156 C34 148 18 152 6 162 M48 156 C60 144 80 144 92 152 M48 156 C42 140 30 132 18 132 M48 156 C62 156 76 166 82 178 M48 156 C36 162 26 174 24 188'/><path stroke-width='5' d='M352 260 C350 234 346 206 338 176'/><path stroke-width='4.5' d='M338 176 C326 166 310 168 300 178 M338 176 C350 162 368 162 380 170 M338 176 C332 160 320 152 308 152 M338 176 C352 178 362 188 368 200'/></g></svg>") center bottom/100% 82% no-repeat,url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800' preserveAspectRatio='xMidYMid slice'><g stroke='%232fd6d0' stroke-opacity='.18'><path d='M0 500H800M0 520H800M0 550H800M0 590H800M0 640H800M0 700H800M0 770H800'/></g><g stroke='%23ff4f8b' stroke-opacity='.16'><path d='M400 500V800M370 500L190 800M340 500L-20 800M430 500L610 800M460 500L820 800M310 500L-230 800M490 500L1030 800'/></g><g stroke='%23ff9a3d' stroke-opacity='.18' fill='none' stroke-linecap='round'><path stroke-width='7' d='M640 500C640 420 634 340 620 250'/><path stroke-width='6' d='M620 250C600 236 572 240 556 258M620 250C640 228 672 228 692 242M620 250C610 222 590 210 570 212M620 250C646 254 662 274 668 296M620 250C602 262 588 284 586 306'/></g></svg>") center/cover no-repeat,#140a2e}
+#call.vice #name{font-family:"Bahnschrift SemiBold Condensed",Bahnschrift,Impact,sans-serif;font-size:42px;font-weight:700;text-transform:uppercase;letter-spacing:1px;text-shadow:0 3px 0 #2a0f52,0 0 18px rgba(255,79,139,.8)}
+#call.vice #status{color:#fff;opacity:.85}
+#call.vice #av{box-shadow:0 0 0 4px #ffd36b,0 0 0 7px #0c0620,0 0 40px rgba(255,79,139,.7)}
+#call.vice #av.pulse{animation:vpulse 1.8s ease-out infinite}
+@keyframes vpulse{0%{box-shadow:0 0 0 4px #ffd36b,0 0 0 7px #0c0620,0 0 0 7px rgba(47,214,208,.6)}100%{box-shadow:0 0 0 4px #ffd36b,0 0 0 7px #0c0620,0 0 0 44px rgba(47,214,208,0)}}
+#call.vice #who::before{content:'';display:none}
+#call.vice.inc #who::before{content:'ВХОДЯЩИЙ ЗВОНОК';display:inline-block;margin-bottom:6px;padding:5px 14px;background:#ffd36b;color:#140a2e;font-family:"Bahnschrift SemiBold Condensed",Bahnschrift,Impact,sans-serif;font-size:17px;font-weight:700;letter-spacing:1.2px;border-radius:6px;box-shadow:4px 4px 0 #0c0620;transform:rotate(-3deg)}
+#call.vice.good:not(.vid):not(.inc) #status::after{content:'ОТЛИЧНАЯ СВЯЗЬ';display:block;width:max-content;margin:12px auto 0;padding:4px 12px;background:#ffd36b;color:#140a2e;font-family:"Bahnschrift SemiBold Condensed",Bahnschrift,Impact,sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;border-radius:6px;box-shadow:3px 3px 0 #0c0620;transform:rotate(-2deg)}
+#call.vice .b{background:rgba(22,10,48,.45);border:1px solid rgba(255,255,255,.22)}
+#call.vice .b.off{background:#ffd36b;color:#140a2e;border:0;box-shadow:3px 3px 0 #0c0620}
+#call.vice .b.red{background:linear-gradient(135deg,#ff3b5c,#ff8a3d);border:0;box-shadow:0 0 0 2px #0c0620,4px 4px 0 2px #0c0620}
+#call.vice .b.green{background:#2bd67b;border:0;box-shadow:0 0 0 2px #0c0620,4px 4px 0 2px #0c0620}
+#call.vice .lab{color:#fff;opacity:.85}
 </style>
 </head>
 <body>
@@ -279,7 +296,7 @@ function btn(id,cls,icon,label,fn){ return `<div class="bw"><button class="b ${c
 function callUI(){
   const box=$('#call');
   if(!C.st){ if(G){ gUI(); return; } box.className=''; post({op:'hide'}); return; }
-  box.className='on';
+  box.className='on'+(location.hash.includes('vice')?' vice':'')+(C.st==='incoming'?' inc':'')+(C.st==='active'&&C.everUp&&!C.reconn?' good':'');
   const av=$('#av'); const c=AV[((C.peerColor||0)%8+8)%8];
   av.style.background=C.peerAvatar?`url("${C.peerAvatar}") center/cover`:`linear-gradient(135deg,${c[0]},${c[1]})`;
   av.textContent=C.peerAvatar?'':initials(C.peerName);

@@ -48,7 +48,22 @@ public sealed class ShellView : Grid
         meBtn.Click += (_, _) => ShowSettings();
         head.Children.Add(meBtn);
         var title = T.Txt("Чаты", 20, bold: true); title.VerticalAlignment = VerticalAlignment.Center; title.Margin = new Thickness(12, 0, 0, 0);
-        Grid.SetColumn(title, 1); head.Children.Add(title);
+        var titleRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Spacing = 8 };
+        titleRow.Children.Add(title);
+        // временная тема: звёзды «уровня розыска» — сколько чатов с непрочитанными
+        var stars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+        for (int i = 0; i < 5; i++) stars.Children.Add(new FontIcon { Glyph = "\uE735", FontSize = 12 });
+        ToolTipService.SetToolTip(stars, "Уровень розыска: чаты с непрочитанными");
+        void SyncStars()
+        {
+            stars.Visibility = Vice.On ? Visibility.Visible : Visibility.Collapsed;
+            if (!Vice.On) return;
+            var n = Math.Min(5, Store.Chats.Count(c => c.Unread > 0 && !c.Muted));
+            for (int i = 0; i < 5; i++) ((FontIcon)stars.Children[i]).Foreground = i < n ? T.B(0xFFFFD36B) : T.B(0x4DFFFFFF);
+        }
+        titleRow.Children.Add(stars);
+        Store.ChatsChanged += () => DispatcherQueue.TryEnqueue(SyncStars);
+        Grid.SetColumn(titleRow, 1); head.Children.Add(titleRow);
         // временная тема: закат за шапкой и неоновый заголовок
         UIElement? sky = null;
         void ApplyVice()
@@ -60,6 +75,7 @@ public sealed class ShellView : Grid
                 title.Text = "ЧАТЫ"; title.FontFamily = Vice.TitleFont; title.FontSize = 26; title.CharacterSpacing = 40;
             }
             else { title.Text = "Чаты"; title.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI"); title.FontSize = 20; title.CharacterSpacing = 0; }
+            SyncStars();
         }
         ApplyVice();
         Vice.Changed += () => DispatcherQueue.TryEnqueue(ApplyVice);
