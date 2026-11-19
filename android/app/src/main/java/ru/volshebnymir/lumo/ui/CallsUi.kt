@@ -23,6 +23,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -237,7 +238,8 @@ object CallsUi {
         Box(Modifier.fillMaxSize().pointerInput(Unit) {
             awaitPointerEventScope { while (true) { awaitPointerEvent(PointerEventPass.Initial); lastTouch = System.currentTimeMillis(); now = lastTouch } }
         }.clickable(remember { MutableInteractionSource() }, null) {}) {
-            AuroraBackground(if (active) 0.7f else 1.4f)
+            // временная тема: входящий — закат над океаном, разговор — ночная неоновая сетка
+            if (Vice.on) { if (active) ViceNightWall() else ViceCallSunset() } else AuroraBackground(if (active) 0.7f else 1.4f)
             if (showRemote) VideoView(Calls.remoteVideo, false, false, Modifier.fillMaxSize())
             else if (showRelay && relay != null) Image(relay.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             if (!(pip && videoOn)) Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().graphicsLayer { alpha = if (videoOn) uiAlpha else 1f },
@@ -247,13 +249,16 @@ object CallsUi {
                         val cc = Calls.callCode
                         if (cc != null && active) CallCodeBadge(cc)
                     }
+                    if (Vice.on && Calls.state == Calls.State.Incoming) VicePlaque(if (Calls.video) "Входящий видеозвонок" else "Входящий звонок")
                     Box(Modifier.height(220.dp), contentAlignment = Alignment.Center) {
                         if (!active) PulseRings(130)
-                        Box(Modifier.border(2.dp, Color.White.copy(alpha = 0.35f), CircleShape)) { Avatar(Calls.peerName, Calls.peerAvatar, Calls.peerColor, 130.dp) }
+                        Box(Modifier.border(if (Vice.on) 4.dp else 2.dp, if (Vice.on) Vice.sun else Color.White.copy(alpha = 0.35f), CircleShape)) { Avatar(Calls.peerName, Calls.peerAvatar, Calls.peerColor, 130.dp) }
                     }
-                    Text(Calls.peerName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 30.sp)
+                    if (Vice.on) Text(Calls.peerName.uppercase(), style = viceTitleStyle, fontSize = 38.sp, maxLines = 1)
+                    else Text(Calls.peerName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 30.sp)
                     Spacer(Modifier.height(6.dp))
                     Text(status, color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+                    if (Vice.on && active && !Calls.reconnecting) { Spacer(Modifier.height(10.dp)); VicePlaque("Отличная связь") }
                 } else {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("${Calls.peerName} · $status", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.weight(1f))
@@ -318,7 +323,9 @@ object CallsUi {
     @Composable
     private fun Round(icon: ImageVector, on: Boolean, label: String, bg: Color? = null, onClick: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(64.dp).clip(CircleShape).background(bg ?: if (on) Color.White else Color.White.copy(alpha = 0.18f)).bouncy(onClick), contentAlignment = Alignment.Center) {
+            val comic = Vice.on && (on || bg != null)
+            Box(Modifier.size(64.dp).then(if (comic) Modifier.drawBehind { drawCircle(Color(0xFF0C0620), size.minDimension / 2, center + Offset(3.dp.toPx(), 3.dp.toPx())) } else Modifier)
+                .clip(CircleShape).background(bg ?: if (on) (if (Vice.on) Vice.sun else Color.White) else Color.White.copy(alpha = 0.18f)).bouncy(onClick), contentAlignment = Alignment.Center) {
                 Icon(icon, null, tint = if (on && bg == null) Color.Black else Color.White, modifier = Modifier.size(28.dp))
             }
             Spacer(Modifier.height(6.dp))

@@ -244,7 +244,7 @@ fun CallsHistoryScreen(tab: Boolean = false) {
         val last = groups.lastOrNull()
         if (last != null && last[0].second.id == r.second.id && day(last[0].first.createdAt) == day(r.first.createdAt)) last.add(r) else groups.add(mutableListOf(r))
     }
-    Column(Modifier.fillMaxSize().background(p.bg)) {
+    Column(Modifier.fillMaxSize().background(p.bg).then(if (tab && Vice.on) Modifier.viceSky(250.dp) else Modifier)) {
         if (tab) {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.clip(RoundedCornerShape(22.dp)).background(p.panel).bouncy { editing = !editing }.padding(horizontal = 18.dp, vertical = 11.dp)) {
@@ -261,6 +261,7 @@ fun CallsHistoryScreen(tab: Boolean = false) {
                 Spacer(Modifier.weight(1f))
                 RoundIcon(Icons.Filled.AddIcCall, 44.dp, tint = p.text, bg = p.panel) { showNew = true }
             }
+            if (Vice.on) Text("ЗВОНКИ", style = viceTitleStyle, fontSize = 32.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp))
         } else TopBar("Звонки")
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if (tab) 100.dp else 0.dp)) {
             if (tab) item {

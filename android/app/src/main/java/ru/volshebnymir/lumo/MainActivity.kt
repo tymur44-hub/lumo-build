@@ -1,5 +1,7 @@
 package ru.volshebnymir.lumo
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.Intent
@@ -49,6 +51,9 @@ class MainActivity : FragmentActivity() {
                 androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalUriHandler provides ru.volshebnymir.lumo.ui.Browser.handler) { Root() }
                 ru.volshebnymir.lumo.ui.BrowserHost()
                 ru.volshebnymir.lumo.ui.PayHost()
+                // временная тема: комикс-вступление при запуске
+                var viceIntro by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.volshebnymir.lumo.ui.Vice.on) }
+                if (viceIntro) ru.volshebnymir.lumo.ui.ViceIntro { viceIntro = false }
             }
             ru.volshebnymir.lumo.ui.AccountFlip.Overlay()
             // во время звонка окно Lumo показывается поверх экрана блокировки и включает экран
