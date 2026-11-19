@@ -27,7 +27,9 @@ body.vice .vstars{display:inline-flex}
 .vstars svg.on:nth-child(2){animation-delay:.12s}.vstars svg.on:nth-child(3){animation-delay:.24s}.vstars svg.on:nth-child(4){animation-delay:.36s}.vstars svg.on:nth-child(5){animation-delay:.48s}
 @keyframes vstar{50%{transform:scale(1.18)}}
 /* поиск */
-body.vice #qbox #q,body.vice #q{background:var(--vglass)!important;color:#fff!important;border:1px solid var(--vline)!important;-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6)}
+body.vice #qbox .search{background:var(--vglass)!important;border:1px solid var(--vline)!important;box-shadow:none!important;-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6)}
+body.vice #q{background:transparent!important;color:#fff!important;border:0!important;box-shadow:none!important;outline:0}
+body.vice #qbox .search svg,body.vice #qbox [data-i] svg{color:rgba(255,255,255,.85)}
 body.vice #q::placeholder{color:rgba(255,255,255,.75)}
 body.vice #qbox svg{color:#fff}
 /* папки: стеклянная полоса, активная — жёлтая плашка */
