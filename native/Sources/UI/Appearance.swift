@@ -4,6 +4,7 @@ import SwiftUI
 struct ChatWallpaper: View {
     let index: Int
     var custom: ChatWall? = nil
+    @ObservedObject private var vice = ViceState.shared
 
     private static let premWalls: [(UInt32, UInt32)] = [(0x1b2a49, 0x3b1f4a), (0x0f3d3e, 0x1b6b4a), (0x4a1f2e, 0x7a3b1f), (0x1f2a4a, 0x2e6ba8)]
 
@@ -11,6 +12,8 @@ struct ChatWallpaper: View {
         let idx = custom?.preset ?? index
         ZStack {
             Theme.chatBg
+            // временная тема: ночная сцена вместо стандартного фона (свои обои не трогаем)
+            if Vice.on && custom == nil && idx == 0 { ViceNightWall() }
             if let c = custom, let u = c.url.flatMap(URL.init(string:)) {
                 GeometryReader { g in
                     CachedImage(url: u) { im in
@@ -80,6 +83,7 @@ struct AppearanceView: View {
     @EnvironmentObject var look: Appearance
     @EnvironmentObject var model: AppModel
     @State private var showIcons = false
+    @ObservedObject private var vice = ViceState.shared
 
     var body: some View {
         ScrollView {
@@ -102,6 +106,24 @@ struct AppearanceView: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 22))
                 .padding(.horizontal, 14)
+
+                if Vice.available {
+                    SectionTitle(text: "Временная тема")
+                    SettingsGroup {
+                        Toggle(isOn: Binding(get: { !ViceState.shared.off }, set: { v in withAnimation(.easeInOut(duration: 0.35)) { ViceState.shared.off = !v } })) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "sun.horizon.fill").font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                                    .frame(width: 30, height: 30).background(RoundedRectangle(cornerRadius: 8).fill(Vice.outGrad))
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("Vice Nights").font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                                    Text("Закат, неон и пальмы — до 1 декабря").font(.system(size: 12.5)).foregroundColor(Theme.muted)
+                                }
+                            }
+                        }
+                        .tint(Vice.pink)
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                    }
+                }
 
                 SectionTitle(text: "Тема")
                 HStack(spacing: 6) {

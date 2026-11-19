@@ -14,6 +14,8 @@ enum ChatFolder: String, CaseIterable {
 
 struct ChatListView: View {
     @EnvironmentObject var model: AppModel
+    @ObservedObject private var vice = ViceState.shared
+    @ObservedObject private var rcfg = RemoteConfig.shared
     @State private var query = ""
     @State private var results: [SearchResult] = []
     @State private var searching = false
@@ -133,6 +135,7 @@ struct ChatListView: View {
             .animation(.easeInOut(duration: 0.25), value: model.netStatus)
             .animation(.spring(response: 0.32, dampingFraction: 0.86), value: searchHidden)
             .animation(.spring(response: 0.4, dampingFraction: 0.82), value: storiesOpen)
+            .background(alignment: .top) { if vice.on { ViceSky().ignoresSafeArea(edges: .top) } }
             .background(Theme.bg.ignoresSafeArea())
             .onChange(of: query) { q in runSearch(q) }
             .onAppear { fstore.use(model.myId) }
@@ -162,8 +165,12 @@ struct ChatListView: View {
             }
             HStack(spacing: 5) {
                 if !storiesOpen { storyStack.transition(.scale(scale: 0.5).combined(with: .opacity)) }
-                Text("Чаты").font(.system(size: 18, weight: .bold)).foregroundColor(Theme.text)
-                    .lineLimit(1).minimumScaleFactor(0.75)
+                if vice.on {
+                    Text("ЧАТЫ").viceTitle(24).lineLimit(1).minimumScaleFactor(0.75)
+                } else {
+                    Text("Чаты").font(.system(size: 18, weight: .bold)).foregroundColor(Theme.text)
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                }
                 if model.me?.premium == true {
                     // эмодзи-статус рядом с «Чаты»; нажатие — выбрать другой
                     Button { showEmoji = true } label: {

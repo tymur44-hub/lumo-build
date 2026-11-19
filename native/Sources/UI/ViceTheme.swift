@@ -1,0 +1,143 @@
+import SwiftUI
+
+/// Временная тема «Vice Nights» (до 1 декабря): закат над океаном, неон, пальмы.
+/// Основные формы и «жидкое стекло» Lumo остаются — тема только добавляет краски.
+/// Включает и выключает сервер (look.event), пользователь может отключить её в «Оформлении».
+enum Vice {
+    static let pink = Color(hex: 0xff4f8b), orange = Color(hex: 0xff8a3d), sun = Color(hex: 0xffd36b)
+    static let teal = Color(hex: 0x2fd6d0), night = Color(hex: 0x140a2e), violet = Color(hex: 0x7b3ff2)
+    static let outGrad = LinearGradient(colors: [Color(hex: 0xff4f8b), Color(hex: 0xff8a3d)], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let offKey = "vice_off"
+
+    /// тема идёт на сервере (срок не вышел)
+    static var available: Bool { RemoteConfig.shared.eventTheme == "vice" }
+    static var on: Bool { available && !UserDefaults.standard.bool(forKey: offKey) }
+}
+
+/// Наблюдатель для перерисовки при включении/выключении темы
+final class ViceState: ObservableObject {
+    static let shared = ViceState()
+    @Published var off: Bool = UserDefaults.standard.bool(forKey: Vice.offKey) { didSet { UserDefaults.standard.set(off, forKey: Vice.offKey) } }
+    @MainActor var on: Bool { Vice.available && !off }
+}
+
+/// Небо на закате за шапкой списка чатов: градиент, солнце, город и пальмы, плавно уходит в фон
+struct ViceSky: View {
+    var height: CGFloat = 250
+    @Environment(\.colorScheme) private var scheme
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 20)) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, size in
+                let w = size.width, h = size.height
+                // небо
+                ctx.fill(Path(CGRect(x: 0, y: 0, width: w, height: h)), with: .linearGradient(
+                    Gradient(stops: [.init(color: Color(hex: 0x2a0f52), location: 0), .init(color: Color(hex: 0x8a2c8f), location: 0.38),
+                                     .init(color: Color(hex: 0xff4f8b), location: 0.66), .init(color: Color(hex: 0xff9a3d), location: 0.86),
+                                     .init(color: Color(hex: 0xffd36b), location: 1)]),
+                    startPoint: .zero, endPoint: CGPoint(x: 0, y: h)))
+                // солнце с полосами, медленно «дышит»
+                let r = w * 0.2 * (1 + 0.015 * sin(t * 0.8)), cx = w / 2, cy = h * 0.78
+                var sunCtx = ctx
+                sunCtx.clip(to: Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)))
+                sunCtx.fill(Path(CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)), with: .linearGradient(
+                    Gradient(colors: [Color(hex: 0xffe58a), Color(hex: 0xff8a3d)]), startPoint: CGPoint(x: cx, y: cy - r), endPoint: CGPoint(x: cx, y: cy + r)))
+                for i in 0..<5 {
+                    let y = cy + r * (0.15 + CGFloat(i) * 0.18)
+                    sunCtx.fill(Path(CGRect(x: cx - r, y: y, width: r * 2, height: 2 + CGFloat(i))), with: .color(Color(hex: 0xff4f8b).opacity(0.85)))
+                }
+                // город
+                var city = Path()
+                city.move(to: CGPoint(x: 0, y: h))
+                let blocks: [(CGFloat, CGFloat)] = [(0, 0.16), (0.07, 0.24), (0.12, 0.13), (0.18, 0.34), (0.22, 0.18), (0.3, 0.12), (0.62, 0.15), (0.66, 0.32), (0.69, 0.4), (0.72, 0.28), (0.78, 0.14), (0.85, 0.22), (0.9, 0.11), (1, 0.11)]
+                for (i, b) in blocks.enumerated() {
+                    let x = w * b.0, top = h - h * b.1
+                    city.addLine(to: CGPoint(x: x, y: i == 0 ? top : city.currentPoint!.y))
+                    city.addLine(to: CGPoint(x: x, y: top))
+                }
+                city.addLine(to: CGPoint(x: w, y: h)); city.closeSubpath()
+                ctx.fill(city, with: .color(Color(hex: 0x1a0b33)))
+                // пальмы, листья чуть покачиваются
+                func palm(_ x: CGFloat, _ base: CGFloat, _ top: CGFloat, _ lean: CGFloat, _ ph: Double) {
+                    var trunk = Path()
+                    trunk.move(to: CGPoint(x: x, y: base))
+                    let tip = CGPoint(x: x + lean, y: top)
+                    trunk.addQuadCurve(to: tip, control: CGPoint(x: x + lean * 0.2, y: (base + top) / 2))
+                    ctx.stroke(trunk, with: .color(Color(hex: 0x120826)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    let sway = CGFloat(sin(t * 1.3 + ph)) * 3
+                    for a in [-160.0, -125.0, -95.0, -60.0, -25.0, 10.0] {
+                        let rad = a * .pi / 180, len: CGFloat = 40
+                        let end = CGPoint(x: tip.x + cos(rad) * len + sway, y: tip.y + sin(rad) * len * 0.55 + 14)
+                        var leaf = Path(); leaf.move(to: tip)
+                        leaf.addQuadCurve(to: end, control: CGPoint(x: tip.x + cos(rad) * len * 0.6 + sway, y: tip.y + sin(rad) * len * 0.6 - 6))
+                        ctx.stroke(leaf, with: .color(Color(hex: 0x120826)), style: StrokeStyle(lineWidth: 4.5, lineCap: .round))
+                    }
+                }
+                palm(w * 0.1, h, h * 0.36, 10, 0)
+                palm(w * 0.88, h, h * 0.46, -12, 1.7)
+            }
+        }
+        .frame(height: height)
+        .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.7), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Ночная сцена для фона переписки: градиент, неоновая сетка и пальма
+struct ViceNightWall: View {
+    var body: some View {
+        Canvas { ctx, size in
+            let w = size.width, h = size.height
+            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .linearGradient(
+                Gradient(colors: [Color(hex: 0x1a0b3a), Color(hex: 0x2b0f4f), Color(hex: 0x4a1559), Color(hex: 0x6b1d55)]),
+                startPoint: .zero, endPoint: CGPoint(x: 0, y: h)))
+            // перспективная сетка внизу
+            let horizon = h * 0.62
+            for i in 0..<9 {
+                let k = CGFloat(i) / 8, y = horizon + (h - horizon) * k * k
+                var l = Path(); l.move(to: CGPoint(x: 0, y: y)); l.addLine(to: CGPoint(x: w, y: y))
+                ctx.stroke(l, with: .color(Color(hex: 0x2fd6d0).opacity(0.18)), lineWidth: 1)
+            }
+            for i in -6...6 {
+                var l = Path(); l.move(to: CGPoint(x: w / 2 + CGFloat(i) * 14, y: horizon)); l.addLine(to: CGPoint(x: w / 2 + CGFloat(i) * w * 0.28, y: h))
+                ctx.stroke(l, with: .color(Color(hex: 0xff4f8b).opacity(0.16)), lineWidth: 1)
+            }
+            // пальма
+            let x = w * 0.78, base = horizon, top = h * 0.3
+            var trunk = Path(); trunk.move(to: CGPoint(x: x, y: base)); trunk.addQuadCurve(to: CGPoint(x: x - 14, y: top), control: CGPoint(x: x, y: (base + top) / 2))
+            ctx.stroke(trunk, with: .color(Color(hex: 0xff9a3d).opacity(0.18)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+            for a in [-165.0, -130.0, -95.0, -60.0, -20.0, 15.0] {
+                let rad = a * .pi / 180, tip = CGPoint(x: x - 14, y: top)
+                var leaf = Path(); leaf.move(to: tip)
+                leaf.addQuadCurve(to: CGPoint(x: tip.x + cos(rad) * 70, y: tip.y + sin(rad) * 38 + 22), control: CGPoint(x: tip.x + cos(rad) * 42, y: tip.y + sin(rad) * 42 - 8))
+                ctx.stroke(leaf, with: .color(Color(hex: 0xff9a3d).opacity(0.18)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+extension Text {
+    /// Заголовок в стиле темы: узкий жирный капслок с неоновым свечением
+    func viceTitle(_ size: CGFloat) -> some View {
+        self.font(.system(size: size, weight: .black).width(.condensed))
+            .foregroundColor(.white)
+            .shadow(color: Color(hex: 0xff4f8b).opacity(0.8), radius: 8)
+            .shadow(color: Color(hex: 0x2a0f52), radius: 0, x: 0, y: 2)
+    }
+}
+
+/// Плашка-«стикер» как на загрузочных экранах: жёлтая, с чёрной обводкой и тенью, чуть наклонена
+struct VicePlaque: View {
+    let text: String
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: 12.5, weight: .black).width(.condensed)).tracking(0.8)
+            .foregroundColor(Color(hex: 0x140a2e))
+            .padding(.horizontal, 11).padding(.vertical, 4)
+            .background(RoundedRectangle(cornerRadius: 7).fill(Color(hex: 0x0c0620)).offset(x: 2.5, y: 2.5))
+            .background(RoundedRectangle(cornerRadius: 7).fill(Vice.sun))
+            .rotationEffect(.degrees(-2))
+    }
+}

@@ -59,7 +59,10 @@ final class ExtraStore: ObservableObject {
     }
 
     @MainActor func bubFill(_ chat: String) -> AnyShapeStyle {
-        guard AppModel.shared.isPremium, let i = bub[chat], i > 0, i < ExtraStore.bubs.count, let c = ExtraStore.bubs[i] else { return AnyShapeStyle(Theme.out) }
+        guard AppModel.shared.isPremium, let i = bub[chat], i > 0, i < ExtraStore.bubs.count, let c = ExtraStore.bubs[i] else {
+            // временная тема: закатный градиент своих сообщений (форма пузыря та же)
+            return Vice.on ? AnyShapeStyle(Vice.outGrad) : AnyShapeStyle(Theme.out)
+        }
         return AnyShapeStyle(LinearGradient(colors: [Color(hex: c.0), Color(hex: c.1)], startPoint: .topLeading, endPoint: .bottomTrailing))
     }
 

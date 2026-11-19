@@ -53,6 +53,15 @@ final class RemoteConfig: ObservableObject {
                         url: (a["url"] as? String).flatMap { URL(string: $0) }, button: a["button"] as? String)
     }
 
+    // MARK: временная тема (событие) — look.event {id, title, until}
+    /// id активной временной темы, если её срок ещё не вышел
+    var eventTheme: String? {
+        guard let e = look["event"] as? JSON, let id = e["id"] as? String, !id.isEmpty else { return nil }
+        if let u = e["until"] as? String, let t = ISO8601DateFormatter().date(from: u), t < Date() { return nil }
+        return id
+    }
+    var eventTitle: String { ((look["event"] as? JSON)?["title"] as? String) ?? "Тема" }
+
     // MARK: оформление
     static func hex(_ v: Any?) -> UInt32? {
         guard var s = v as? String else { return nil }

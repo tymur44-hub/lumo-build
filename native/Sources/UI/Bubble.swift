@@ -97,7 +97,13 @@ func isOnlyEmoji(_ t: String?) -> Bool {
 
 struct DayLabel: View {
     let date: Date
+    @ObservedObject private var vice = ViceState.shared
     var body: some View {
+        if vice.on {
+            VicePlaque(text: Fmt.day(date)).frame(maxWidth: .infinity).padding(.vertical, 8)
+        } else { plain }
+    }
+    private var plain: some View {
         Text(Fmt.day(date))
             .font(.system(size: 13, weight: .semibold))
             .padding(.horizontal, 12).padding(.vertical, 5)
