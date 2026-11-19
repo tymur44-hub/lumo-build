@@ -27,8 +27,15 @@ struct ViceSky: View {
     @Environment(\.colorScheme) private var scheme
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 20)) { tl in
-            let t = tl.date.timeIntervalSinceReferenceDate
-            Canvas { ctx, size in
+            Canvas { ctx, size in ViceSky.draw(&ctx, size, tl.date.timeIntervalSinceReferenceDate) }
+        }
+        .frame(height: height)
+        .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.7), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private static func draw(_ ctx: inout GraphicsContext, _ size: CGSize, _ t: Double) {
                 let w = size.width, h = size.height
                 // небо
                 ctx.fill(Path(CGRect(x: 0, y: 0, width: w, height: h)), with: .linearGradient(
@@ -37,7 +44,8 @@ struct ViceSky: View {
                                      .init(color: Color(hex: 0xffd36b), location: 1)]),
                     startPoint: .zero, endPoint: CGPoint(x: 0, y: h)))
                 // солнце с полосами, медленно «дышит»
-                let r = w * 0.2 * (1 + 0.015 * sin(t * 0.8)), cx = w / 2, cy = h * 0.78
+                let r: CGFloat = w * 0.2 * (1 + 0.015 * CGFloat(sin(t * 0.8)))
+                let cx: CGFloat = w / 2, cy: CGFloat = h * 0.78
                 var sunCtx = ctx
                 sunCtx.clip(to: Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)))
                 sunCtx.fill(Path(CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)), with: .linearGradient(
@@ -65,8 +73,8 @@ struct ViceSky: View {
                     trunk.addQuadCurve(to: tip, control: CGPoint(x: x + lean * 0.2, y: (base + top) / 2))
                     ctx.stroke(trunk, with: .color(Color(hex: 0x120826)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
                     let sway = CGFloat(sin(t * 1.3 + ph)) * 3
-                    for a in [-160.0, -125.0, -95.0, -60.0, -25.0, 10.0] {
-                        let rad = a * .pi / 180, len: CGFloat = 40
+                    for a: CGFloat in [-160, -125, -95, -60, -25, 10] {
+                        let rad: CGFloat = a * .pi / 180, len: CGFloat = 40
                         let end = CGPoint(x: tip.x + cos(rad) * len + sway, y: tip.y + sin(rad) * len * 0.55 + 14)
                         var leaf = Path(); leaf.move(to: tip)
                         leaf.addQuadCurve(to: end, control: CGPoint(x: tip.x + cos(rad) * len * 0.6 + sway, y: tip.y + sin(rad) * len * 0.6 - 6))
@@ -75,12 +83,6 @@ struct ViceSky: View {
                 }
                 palm(w * 0.1, h, h * 0.36, 10, 0)
                 palm(w * 0.88, h, h * 0.46, -12, 1.7)
-            }
-        }
-        .frame(height: height)
-        .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.7), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
 
@@ -107,8 +109,8 @@ struct ViceNightWall: View {
             let x = w * 0.78, base = horizon, top = h * 0.3
             var trunk = Path(); trunk.move(to: CGPoint(x: x, y: base)); trunk.addQuadCurve(to: CGPoint(x: x - 14, y: top), control: CGPoint(x: x, y: (base + top) / 2))
             ctx.stroke(trunk, with: .color(Color(hex: 0xff9a3d).opacity(0.18)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
-            for a in [-165.0, -130.0, -95.0, -60.0, -20.0, 15.0] {
-                let rad = a * .pi / 180, tip = CGPoint(x: x - 14, y: top)
+            for a: CGFloat in [-165, -130, -95, -60, -20, 15] {
+                let rad: CGFloat = a * .pi / 180, tip = CGPoint(x: x - 14, y: top)
                 var leaf = Path(); leaf.move(to: tip)
                 leaf.addQuadCurve(to: CGPoint(x: tip.x + cos(rad) * 70, y: tip.y + sin(rad) * 38 + 22), control: CGPoint(x: tip.x + cos(rad) * 42, y: tip.y + sin(rad) * 42 - 8))
                 ctx.stroke(leaf, with: .color(Color(hex: 0xff9a3d).opacity(0.18)), style: StrokeStyle(lineWidth: 5, lineCap: .round))

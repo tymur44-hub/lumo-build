@@ -42,7 +42,7 @@ object Vice {
     private val prefs get() = AppModel.ctx.getSharedPreferences("lumo_vice", android.content.Context.MODE_PRIVATE)
     var off by mutableStateOf(runCatching { prefs.getBoolean("off", false) }.getOrDefault(false))
         private set
-    fun setOff(v: Boolean) { off = v; runCatching { prefs.edit().putBoolean("off", v).apply() } }
+    fun changeOff(v: Boolean) { off = v; runCatching { prefs.edit().putBoolean("off", v).apply() } }
     val available: Boolean get() = RemoteConfig.eventTheme == "vice"
     val on: Boolean get() = available && !off
     /** узкий жирный шрифт заголовков */

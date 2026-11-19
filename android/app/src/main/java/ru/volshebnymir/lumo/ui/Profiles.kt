@@ -971,7 +971,7 @@ fun AppearanceScreen() {
                     Text("Vice Nights", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                     Text("Закат, неон и пальмы — до 1 декабря", color = p.muted, fontSize = 12.5.sp)
                 }
-                androidx.compose.material3.Switch(!Vice.off, { Vice.setOff(!it) },
+                androidx.compose.material3.Switch(!Vice.off, { Vice.changeOff(!it) },
                     colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Vice.pink))
             }
         }
