@@ -1832,10 +1832,16 @@ struct FloatingDayPill: View {
     var body: some View {
         ZStack {
             if info.showDay, let d = info.day {
-                Text(d)
-                    .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.text)
-                    .padding(.horizontal, 12).frame(height: 28)
-                    .lumoGlass(Capsule())
+                Group {
+                    if Vice.on {
+                        VicePlaque(text: d).padding(.vertical, 4)
+                    } else {
+                        Text(d)
+                            .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.text)
+                            .padding(.horizontal, 12).frame(height: 28)
+                            .lumoGlass(Capsule())
+                    }
+                }
                     .id(d)
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }

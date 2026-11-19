@@ -336,7 +336,8 @@ fun ChatScreen(chatId: String) {
                 }
                 androidx.compose.animation.AnimatedVisibility(dayShown && topDay != null && list.firstVisibleItemIndex > 2, Modifier.align(Alignment.TopCenter).padding(top = 6.dp),
                     enter = fadeIn() + scaleIn(initialScale = 0.9f), exit = fadeOut()) {
-                    Text(topDay ?: "", color = p.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    if (Vice.on) VicePlaque(topDay ?: "")
+                    else Text(topDay ?: "", color = p.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.glassChip(RoundedCornerShape(14.dp)).padding(horizontal = 12.dp, vertical = 5.dp))
                 }
                 // непрочитанные упоминания меня (@юзернейм) — кнопка «@» над кнопкой «вниз»

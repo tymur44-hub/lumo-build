@@ -138,8 +138,12 @@ struct VicePlaque: View {
             .font(.system(size: 12.5, weight: .black).width(.condensed)).tracking(0.8)
             .foregroundColor(Color(hex: 0x140a2e))
             .padding(.horizontal, 11).padding(.vertical, 4)
-            .background(RoundedRectangle(cornerRadius: 7).fill(Color(hex: 0x0c0620)).offset(x: 2.5, y: 2.5))
-            .background(RoundedRectangle(cornerRadius: 7).fill(Vice.sun))
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7).fill(Color(hex: 0x0c0620)).offset(x: 2.5, y: 2.5)
+                    RoundedRectangle(cornerRadius: 7).fill(Vice.sun)
+                }
+            )
             .rotationEffect(.degrees(-2))
     }
 }
