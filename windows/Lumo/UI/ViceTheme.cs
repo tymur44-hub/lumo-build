@@ -48,11 +48,8 @@ public static class Vice
     const string Ns = "xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'";
 
     /// <summary>Небо на закате за шапкой списка чатов: солнце, город и пальмы, плавно уходит в фон</summary>
-    public static UIElement Sky() => (UIElement)XamlReader.Load($@"
+    public static UIElement Sky() => Safe(() => (UIElement)XamlReader.Load($@"
 <Grid {Ns} Height='230' VerticalAlignment='Top' IsHitTestVisible='False'>
-  <Grid.OpacityMask>
-    <LinearGradientBrush StartPoint='0,0' EndPoint='0,1'><GradientStop Color='#FF000000' Offset='0.65'/><GradientStop Color='#00000000' Offset='1'/></LinearGradientBrush>
-  </Grid.OpacityMask>
   <Rectangle>
     <Rectangle.Fill>
       <LinearGradientBrush StartPoint='0,0' EndPoint='0,1'>
@@ -75,10 +72,15 @@ public static class Vice
       <Path Stroke='#120826' StrokeThickness='4.5' StrokeStartLineCap='Round' StrokeEndLineCap='Round' Data='M328 134 C316 124 300 126 290 136 M328 134 C340 120 358 120 370 128 M328 134 C322 118 310 110 298 110 M328 134 C342 136 352 146 358 158'/>
     </Canvas>
   </Viewbox>
-</Grid>");
+  <Rectangle Height='80' VerticalAlignment='Bottom'>
+    <Rectangle.Fill>
+      <LinearGradientBrush StartPoint='0,0' EndPoint='0,1'><GradientStop Color='#0013142A' Offset='0'/><GradientStop Color='#FF13142A' Offset='1'/></LinearGradientBrush>
+    </Rectangle.Fill>
+  </Rectangle>
+</Grid>"));
 
     /// <summary>Ночная сцена для фона переписки: градиент, неоновая сетка и пальма</summary>
-    public static UIElement NightWall() => (UIElement)XamlReader.Load($@"
+    public static UIElement NightWall() => Safe(() => (UIElement)XamlReader.Load($@"
 <Grid {Ns} IsHitTestVisible='False'>
   <Rectangle>
     <Rectangle.Fill>
@@ -95,7 +97,13 @@ public static class Vice
       <Path Stroke='#2EFF9A3D' StrokeThickness='6' StrokeStartLineCap='Round' StrokeEndLineCap='Round' Data='M620 250 C600 236 572 240 556 258 M620 250 C640 228 672 228 692 242 M620 250 C610 222 590 210 570 212 M620 250 C646 254 662 274 668 296 M620 250 C602 262 588 284 586 306'/>
     </Canvas>
   </Viewbox>
-</Grid>");
+</Grid>"));
+
+    static UIElement Safe(Func<UIElement> f)
+    {
+        try { return f(); }
+        catch (Exception e) { App.Log("vice: " + e.Message); return new Grid { IsHitTestVisible = false }; }
+    }
 
     /// <summary>Плашка-«стикер» для даты, как на загрузочных экранах: жёлтая, с обводкой и тенью</summary>
     public static UIElement Plaque(string text)
