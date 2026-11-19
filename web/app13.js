@@ -2757,8 +2757,7 @@ body.vice .m.me .b{box-shadow:0 2px 12px rgba(255,79,139,.28)}
 body.vice #composer .cbox{box-shadow:0 0 0 1px rgba(47,214,208,.45),0 0 18px rgba(47,214,208,.22)}
 body.vice #toast{border:2px solid #140a2e;box-shadow:4px 4px 0 #140a2e;background:#ffd36b;color:#140a2e}
 /* заставка при запуске */
-body.vice #splash{background:${SKY} center bottom/cover no-repeat,#2a0f52}
-body.vice #splash .mark{background:linear-gradient(135deg,#ff4f8b,#ff8a3d);box-shadow:0 0 0 3px #140a2e,6px 6px 0 3px #140a2e,0 0 60px rgba(255,79,139,.6)}
+body.vice #splash{visibility:hidden!important}
 /* переключатель в «Оформлении» */
 .vicesw{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:var(--panel2);margin:10px 14px;cursor:pointer}
 .vicesw .ic{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#ff4f8b,#ff8a3d);display:flex;align-items:center;justify-content:center;flex:none}
@@ -2792,9 +2791,9 @@ body.vice #splash .mark{background:linear-gradient(135deg,#ff4f8b,#ff8a3d);box-s
   const offNow=()=>{ try{ return localStorage.getItem('vice_off')==='1'; }catch{ return false; } };
   const meta=document.querySelector('meta[name="theme-color"]'); const meta0=meta&&meta.getAttribute('content');
   function intro(){
-    if(window.LUMO_VICE_INDEX) return;   // вступление уже показывает страница при запуске
-    try{ if(sessionStorage.getItem('vice_intro')) return; sessionStorage.setItem('vice_intro','1'); }catch{}
-    if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // вступление показывает сама страница при запуске; здесь — только если она его не показала, а Lumo ещё грузится
+    if(document.getElementById('vintro')||document.documentElement.classList.contains('vice')) return;
+    const sp=document.getElementById('splash'); if(!sp||sp.classList.contains('out')) return;
     const o=document.createElement('div'); o.id='vintro'; o.setAttribute('aria-hidden','true');
     o.innerHTML='<div class="pn p1"></div><div class="pn p2"></div><div class="pn p3"></div><div class="fl"></div><div class="lg"><b>LUMO</b><i>VICE NIGHTS</i></div>';
     const done=()=>o.remove(); o.addEventListener('animationend',e=>{ if(e.animationName==='viOut') done(); }); o.onclick=done; setTimeout(done,3200);
