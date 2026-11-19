@@ -18,6 +18,7 @@ public static class Vice
     {
         get
         {
+            if (Environment.GetEnvironmentVariable("LUMO_DEMO") == "1") return true;   // скриншоты сборки
             if (Prefs.Get("vice_id") != "vice") return false;
             return DateTimeOffset.TryParse(Prefs.Get("vice_until"), out var u) ? u > DateTimeOffset.UtcNow : true;
         }
