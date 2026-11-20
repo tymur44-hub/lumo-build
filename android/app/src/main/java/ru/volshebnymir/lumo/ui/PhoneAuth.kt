@@ -162,7 +162,7 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
         }
     }
 
-    Box(Modifier.fillMaxSize().background(p.bg)) {
+    Box(Modifier.fillMaxSize().background(p.bg).then(if (Vice.on) Modifier.viceSky(260.dp) else Modifier)) {
         if (step == PStep.Done) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { SuccessBurst(if (bind) "Номер привязан" else "Готово") }
         } else Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
@@ -192,15 +192,16 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
                             Text("🇷🇺 +7", color = p.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.width(10.dp))
                             Box(Modifier.weight(1f)) {
-                                val shown = formatDigits(digits)
                                 if (digits.isEmpty()) Text("900 123-45-67", color = p.muted, fontSize = 20.sp)
-                                BasicTextField(shown, { v ->
+                                // в поле лежат только цифры, пробел и дефисы дорисовываются — курсор не сбивается
+                                BasicTextField(digits, { v ->
                                     var d = v.filter { it.isDigit() }
                                     if (d.length > 10 && (d.startsWith("7") || d.startsWith("8"))) d = d.drop(1)
                                     digits = d.take(10); err = null
                                 }, singleLine = true, modifier = Modifier.fillMaxWidth().focusRequester(focus),
                                     textStyle = TextStyle(color = p.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold), cursorBrush = SolidColor(p.a1),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                    visualTransformation = PhoneMask)
                             }
                         }
                         GradientButton("Получить код", busy, digits.length == 10) { sendCode() }
@@ -256,6 +257,25 @@ fun PhoneAuthScreen(bind: Boolean, required: Boolean = false, onClose: () -> Uni
 }
 
 private fun Modifier.graphicsScale(s: Float) = this.then(Modifier.graphicsLayer(scaleX = s, scaleY = s))
+
+/** Маска 900 123-45-67 поверх сырых цифр с правильным переносом позиции курсора */
+private object PhoneMask : androidx.compose.ui.text.input.VisualTransformation {
+    override fun filter(text: androidx.compose.ui.text.AnnotatedString): androidx.compose.ui.text.input.TransformedText {
+        val raw = text.text
+        val out = formatDigits(raw)
+        val map = object : androidx.compose.ui.text.input.OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                val o = offset.coerceIn(0, raw.length)
+                return (o + (if (o > 3) 1 else 0) + (if (o > 6) 1 else 0) + (if (o > 8) 1 else 0)).coerceAtMost(out.length)
+            }
+            override fun transformedToOriginal(offset: Int): Int {
+                val t = offset.coerceIn(0, out.length)
+                return out.substring(0, t).count { it.isDigit() }.coerceAtMost(raw.length)
+            }
+        }
+        return androidx.compose.ui.text.input.TransformedText(androidx.compose.ui.text.AnnotatedString(out), map)
+    }
+}
 
 private fun formatDigits(d: String): String {
     val sb = StringBuilder()

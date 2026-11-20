@@ -227,6 +227,8 @@ private fun ScreenContent(s: Screen?) {
 
 @Composable
 fun MainScreen() {
+    // после входа сразу подтягиваем настройки с сервера (временная тема и т.п.)
+    LaunchedEffect(Unit) { runCatching { ru.volshebnymir.lumo.core.RemoteConfig.refresh(force = true) } }
     val p = P
     LaunchedEffect(Unit) { AppModel.start() }
     BackHandler(AppModel.stack.isNotEmpty()) { navInstant = false; AppModel.pop() }
